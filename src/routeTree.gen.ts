@@ -13,7 +13,6 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedBoardsRouteImport } from './routes/_authenticated/boards'
-import { Route as ApiPublicBootstrapAdminRouteImport } from './routes/api/public/bootstrap-admin'
 import { Route as AuthenticatedBBoardIdRouteImport } from './routes/_authenticated/b.$boardId'
 
 const AuthRoute = AuthRouteImport.update({
@@ -35,11 +34,6 @@ const AuthenticatedBoardsRoute = AuthenticatedBoardsRouteImport.update({
   path: '/boards',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const ApiPublicBootstrapAdminRoute = ApiPublicBootstrapAdminRouteImport.update({
-  id: '/api/public/bootstrap-admin',
-  path: '/api/public/bootstrap-admin',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AuthenticatedBBoardIdRoute = AuthenticatedBBoardIdRouteImport.update({
   id: '/b/$boardId',
   path: '/b/$boardId',
@@ -51,14 +45,12 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/boards': typeof AuthenticatedBoardsRoute
   '/b/$boardId': typeof AuthenticatedBBoardIdRoute
-  '/api/public/bootstrap-admin': typeof ApiPublicBootstrapAdminRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/boards': typeof AuthenticatedBoardsRoute
   '/b/$boardId': typeof AuthenticatedBBoardIdRoute
-  '/api/public/bootstrap-admin': typeof ApiPublicBootstrapAdminRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -67,18 +59,12 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/boards': typeof AuthenticatedBoardsRoute
   '/_authenticated/b/$boardId': typeof AuthenticatedBBoardIdRoute
-  '/api/public/bootstrap-admin': typeof ApiPublicBootstrapAdminRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/auth'
-    | '/boards'
-    | '/b/$boardId'
-    | '/api/public/bootstrap-admin'
+  fullPaths: '/' | '/auth' | '/boards' | '/b/$boardId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/boards' | '/b/$boardId' | '/api/public/bootstrap-admin'
+  to: '/' | '/auth' | '/boards' | '/b/$boardId'
   id:
     | '__root__'
     | '/'
@@ -86,14 +72,12 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/boards'
     | '/_authenticated/b/$boardId'
-    | '/api/public/bootstrap-admin'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
-  ApiPublicBootstrapAdminRoute: typeof ApiPublicBootstrapAdminRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -126,13 +110,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBoardsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/api/public/bootstrap-admin': {
-      id: '/api/public/bootstrap-admin'
-      path: '/api/public/bootstrap-admin'
-      fullPath: '/api/public/bootstrap-admin'
-      preLoaderRoute: typeof ApiPublicBootstrapAdminRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_authenticated/b/$boardId': {
       id: '/_authenticated/b/$boardId'
       path: '/b/$boardId'
@@ -160,7 +137,6 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
-  ApiPublicBootstrapAdminRoute: ApiPublicBootstrapAdminRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
