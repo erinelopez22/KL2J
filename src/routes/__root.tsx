@@ -52,9 +52,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "KL2J Geodetic Services — Land Surveying & Engineering" },
+      { title: "KL2J Land Surveying and Engineering Services" },
       { name: "description", content: "Licensed geodetic engineers offering relocation, subdivision, consolidation, topographic, verification, as-built surveys, and land titling assistance." },
-      { property: "og:title", content: "KL2J Geodetic Services" },
+      { property: "og:title", content: "KL2J Land Surveying and Engineering Services" },
       { property: "og:description", content: "Land surveying and engineering services in the Philippines." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

@@ -10,9 +10,9 @@ import { BOARD_BACKGROUNDS, bgClass } from "@/lib/board-backgrounds";
 export const Route = createFileRoute("/_authenticated/boards")({
   head: () => ({
     meta: [
-      { title: "Your boards — KL2J" },
+      { title: "Your boards — KL2J Land Surveying and Engineering Services" },
       { name: "description", content: "All your kanban boards in one place." },
-      { property: "og:title", content: "Your boards — KL2J" },
+      { property: "og:title", content: "Your boards — KL2J Land Surveying and Engineering Services" },
       { property: "og:description", content: "All your kanban boards in one place." },
     ],
   }),
