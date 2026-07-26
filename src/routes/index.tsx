@@ -29,6 +29,8 @@ const FACEBOOK_DOCS_URL =
 const FACEBOOK_PHOTOS_URL = "https://www.facebook.com/profile.php?id=61581147040190&sk=photos_by";
 import logoAsset from "@/assets/kl2j-logo.jpg.asset.json";
 import bannerAsset from "@/assets/kl2j-banner.jpg.asset.json";
+import prcAsset from "@/assets/kl2j-prc-licensed.jpg.asset.json";
+import secAsset from "@/assets/kl2j-sec-registered.jpg.asset.json";
 const heroImage = bannerAsset.url;
 
 export const Route = createFileRoute("/")({
@@ -107,6 +109,7 @@ function LandingPage() {
       <Services />
       <Process />
       <WhyUs />
+      <Credentials />
       <Photos />
       <CTA />
       <Footer />
@@ -119,6 +122,7 @@ function NavBar() {
   const links = [
     { href: "#services", label: "Services" },
     { href: "#process", label: "Process" },
+    { href: "#credentials", label: "Credentials" },
     { href: "#photos", label: "Photos" },
     { href: "#why", label: "Why us" },
     { href: "#contact", label: "Contact" },
@@ -541,6 +545,70 @@ const galleryPhotos = Object.entries(galleryModules)
     url: mod.default.url,
     name: path.split("/").pop() ?? "photo",
   }));
+
+function Credentials() {
+  const items = [
+    {
+      img: prcAsset.url,
+      title: "PRC Licensed Professionals",
+      description:
+        "Our team is composed of Professional Regulation Commission (PRC) licensed Civil and Geodetic Engineers — ensuring every survey is signed and sealed by qualified professionals.",
+      badge: "PRC Licensed",
+    },
+    {
+      img: secAsset.url,
+      title: "SEC Registered Business",
+      description:
+        "KL2J Land Surveying and Engineering Services is a duly registered partnership with the Securities and Exchange Commission (SEC) of the Republic of the Philippines.",
+      badge: "SEC Registered",
+    },
+  ];
+  return (
+    <section id="credentials" className="bg-muted/40 border-y border-border">
+      <div className="max-w-6xl mx-auto px-4 py-20 md:py-24">
+        <div className="text-center max-w-2xl mx-auto mb-12">
+          <p className="text-sm font-semibold uppercase tracking-wider text-primary">
+            Legitimacy & Credibility
+          </p>
+          <h2 className="mt-2 text-3xl md:text-4xl font-bold tracking-tight">
+            Trusted, licensed, and officially registered
+          </h2>
+          <p className="mt-4 text-muted-foreground">
+            We operate with full regulatory compliance so clients can transact with complete
+            confidence.
+          </p>
+        </div>
+        <div className="grid md:grid-cols-2 gap-6 md:gap-8">
+          {items.map((item) => (
+            <article
+              key={item.title}
+              className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+            >
+              <div className="aspect-[4/5] bg-muted overflow-hidden">
+                <img
+                  src={item.img}
+                  alt={item.title}
+                  loading="lazy"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="p-6">
+                <div className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-primary/10 text-primary">
+                  <BadgeCheck className="h-3.5 w-3.5" />
+                  {item.badge}
+                </div>
+                <h3 className="mt-3 text-xl font-bold">{item.title}</h3>
+                <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+                  {item.description}
+                </p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
 
 function Photos() {
   const [lightbox, setLightbox] = useState<number | null>(null);
