@@ -514,6 +514,24 @@ function Footer() {
           <Compass className="h-4 w-4 text-primary" />
           KL2J Geodetic Services
         </div>
+        <div className="flex items-center gap-4">
+          <a
+            href={FACEBOOK_PAGE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 hover:text-foreground"
+          >
+            <Facebook className="h-4 w-4" /> Facebook
+          </a>
+          <a
+            href={FACEBOOK_DOCS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 hover:text-foreground"
+          >
+            <FileText className="h-4 w-4" /> Documents <ExternalLink className="h-3 w-3" />
+          </a>
+        </div>
         <div>© {new Date().getFullYear()} KL2J Geodetic Services. All rights reserved.</div>
       </div>
     </footer>
