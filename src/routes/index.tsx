@@ -392,6 +392,22 @@ function CTA() {
               <div className="flex items-center gap-3">
                 <MapPin className="h-4 w-4" /> Serving clients nationwide
               </div>
+              <a
+                href={FACEBOOK_PAGE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 hover:underline"
+              >
+                <Facebook className="h-4 w-4" /> Follow us on Facebook
+              </a>
+              <a
+                href={FACEBOOK_DOCS_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 hover:underline"
+              >
+                <FileText className="h-4 w-4" /> View credentials & documents
+              </a>
             </div>
           </div>
           <ContactForm />
