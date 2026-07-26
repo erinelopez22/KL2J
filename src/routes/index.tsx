@@ -201,12 +201,19 @@ function Hero() {
           height={1280}
           className="w-full h-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/70 to-slate-950/30" />
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/85 via-slate-950/60 to-primary/30" />
       </div>
       <div className="relative max-w-6xl mx-auto px-4 py-24 md:py-32 text-white">
-        <span className="inline-flex items-center gap-2 rounded-full bg-white/10 border border-white/20 px-3 py-1 text-xs uppercase tracking-wider">
-          <BadgeCheck className="h-3.5 w-3.5" /> Licensed Geodetic Engineers
-        </span>
+        <div className="flex items-center gap-4">
+          <img
+            src={logoAsset.url}
+            alt="KL2J logo"
+            className="h-16 w-16 md:h-20 md:w-20 rounded-full ring-2 ring-white/30 bg-white/95 object-cover shadow-xl"
+          />
+          <span className="inline-flex items-center gap-2 rounded-full bg-white/10 border border-white/20 px-3 py-1 text-xs uppercase tracking-wider">
+            <BadgeCheck className="h-3.5 w-3.5" /> Licensed Geodetic Engineers
+          </span>
+        </div>
         <h1 className="mt-5 text-4xl md:text-6xl font-bold tracking-tight max-w-3xl leading-[1.05]">
           Precise land surveys.
           <br />
