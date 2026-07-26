@@ -531,7 +531,25 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+const galleryModules = import.meta.glob<{ default: { url: string } }>(
+  "@/assets/gallery/*.asset.json",
+  { eager: true },
+);
+const galleryPhotos = Object.entries(galleryModules)
+  .sort(([a], [b]) => a.localeCompare(b))
+  .map(([path, mod]) => ({
+    url: mod.default.url,
+    name: path.split("/").pop() ?? "photo",
+  }));
+
 function Photos() {
+  const [lightbox, setLightbox] = useState<number | null>(null);
+  const close = () => setLightbox(null);
+  const prev = () =>
+    setLightbox((i) => (i === null ? null : (i - 1 + galleryPhotos.length) % galleryPhotos.length));
+  const next = () =>
+    setLightbox((i) => (i === null ? null : (i + 1) % galleryPhotos.length));
+
   return (
     <section id="photos" className="max-w-6xl mx-auto px-4 py-20 md:py-24">
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
@@ -541,8 +559,8 @@ function Photos() {
             See our team on the ground
           </h2>
           <p className="mt-3 text-muted-foreground">
-            Browse project photos, equipment in action, and completed surveys on our official
-            Facebook page.
+            Project photos, equipment in action, and completed surveys from KL2J field
+            operations. Tap any image to view it full-size.
           </p>
         </div>
         <a
@@ -551,32 +569,76 @@ function Photos() {
           rel="noopener noreferrer"
           className="inline-flex items-center gap-2 h-11 px-5 rounded-md bg-primary text-primary-foreground font-semibold hover:bg-primary/90 self-start"
         >
-          <Facebook className="h-4 w-4" /> View all photos on Facebook
+          <Facebook className="h-4 w-4" /> View on Facebook
           <ExternalLink className="h-3.5 w-3.5" />
         </a>
       </div>
-      <a
-        href={FACEBOOK_PHOTOS_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="mt-10 block group rounded-2xl overflow-hidden border border-border relative"
-      >
-        <img
-          src={bannerAsset.url}
-          alt="KL2J field survey work"
-          className="w-full h-64 md:h-80 object-cover group-hover:scale-[1.02] transition-transform duration-500"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-slate-950/20 to-transparent flex items-end p-6">
-          <div className="text-white">
-            <div className="flex items-center gap-2 text-sm font-semibold">
-              <Facebook className="h-4 w-4" /> facebook.com/KL2J
-            </div>
-            <p className="mt-1 text-white/85 text-sm">
-              Tap to open the full album on Facebook.
-            </p>
+
+      <div className="mt-10 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+        {galleryPhotos.map((p, i) => (
+          <button
+            key={p.name}
+            type="button"
+            onClick={() => setLightbox(i)}
+            className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-secondary/40"
+          >
+            <img
+              src={p.url}
+              alt={`KL2J field survey photo ${i + 1}`}
+              loading="lazy"
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.05]"
+            />
+            <div className="absolute inset-0 bg-slate-950/0 group-hover:bg-slate-950/20 transition" />
+          </button>
+        ))}
+      </div>
+
+      {lightbox !== null && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-950/90 flex items-center justify-center p-4"
+          onClick={close}
+        >
+          <button
+            className="absolute top-4 right-4 h-10 w-10 rounded-full bg-white/10 text-white hover:bg-white/20 flex items-center justify-center text-xl"
+            onClick={(e) => {
+              e.stopPropagation();
+              close();
+            }}
+            aria-label="Close"
+          >
+            ×
+          </button>
+          <button
+            className="absolute left-4 top-1/2 -translate-y-1/2 h-12 w-12 rounded-full bg-white/10 text-white hover:bg-white/20 flex items-center justify-center text-2xl"
+            onClick={(e) => {
+              e.stopPropagation();
+              prev();
+            }}
+            aria-label="Previous"
+          >
+            ‹
+          </button>
+          <img
+            src={galleryPhotos[lightbox].url}
+            alt={`KL2J field survey photo ${lightbox + 1}`}
+            className="max-h-[85vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            className="absolute right-4 top-1/2 -translate-y-1/2 h-12 w-12 rounded-full bg-white/10 text-white hover:bg-white/20 flex items-center justify-center text-2xl"
+            onClick={(e) => {
+              e.stopPropagation();
+              next();
+            }}
+            aria-label="Next"
+          >
+            ›
+          </button>
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/70 text-sm">
+            {lightbox + 1} / {galleryPhotos.length}
           </div>
         </div>
-      </a>
+      )}
     </section>
   );
 }
