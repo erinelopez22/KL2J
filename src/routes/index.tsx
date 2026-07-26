@@ -586,7 +586,7 @@ function Footer() {
     <footer className="border-t border-border bg-background">
       <div className="max-w-6xl mx-auto px-4 py-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-sm text-muted-foreground">
         <div className="flex items-center gap-2 font-semibold text-foreground">
-          <Compass className="h-4 w-4 text-primary" />
+          <img src={logoAsset.url} alt="KL2J logo" className="h-6 w-6 rounded-full object-cover" />
           KL2J Geodetic Services
         </div>
         <div className="flex items-center gap-4">
