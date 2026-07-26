@@ -412,11 +412,14 @@ function CTA() {
               scoped quote and estimated timeline.
             </p>
             <div className="mt-8 space-y-3 text-sm">
-              <a href="tel:+639000000000" className="flex items-center gap-3 hover:underline">
-                <Phone className="h-4 w-4" /> +63 900 000 0000
+              <a href="tel:+639296410776" className="flex items-center gap-3 hover:underline">
+                <Phone className="h-4 w-4" /> 0929 641 0776 <span className="text-primary-foreground/70">(Smart)</span>
               </a>
-              <a href="mailto:hello@kl2jgeodetic.com" className="flex items-center gap-3 hover:underline">
-                <Mail className="h-4 w-4" /> hello@kl2jgeodetic.com
+              <a href="tel:+639954608248" className="flex items-center gap-3 hover:underline">
+                <Phone className="h-4 w-4" /> 0995 460 8248 <span className="text-primary-foreground/70">(Globe)</span>
+              </a>
+              <a href="mailto:kl2j.engineering@gmail.com" className="flex items-center gap-3 hover:underline">
+                <Mail className="h-4 w-4" /> kl2j.engineering@gmail.com
               </a>
               <div className="flex items-center gap-3">
                 <MapPin className="h-4 w-4" /> Serving clients nationwide
@@ -476,7 +479,7 @@ function ContactForm() {
                 <input required type="email" className="input" placeholder="you@email.com" />
               </Field>
               <Field label="Phone">
-                <input className="input" placeholder="+63 900 000 0000" />
+                <input className="input" placeholder="0929 641 0776 / 0995 460 8248" />
               </Field>
             </div>
             <Field label="Service needed">
