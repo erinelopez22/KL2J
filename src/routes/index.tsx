@@ -531,6 +531,56 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+function Photos() {
+  return (
+    <section id="photos" className="max-w-6xl mx-auto px-4 py-20 md:py-24">
+      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+        <div className="max-w-2xl">
+          <p className="text-sm font-semibold uppercase tracking-wider text-primary">Field gallery</p>
+          <h2 className="mt-2 text-3xl md:text-4xl font-bold tracking-tight">
+            See our team on the ground
+          </h2>
+          <p className="mt-3 text-muted-foreground">
+            Browse project photos, equipment in action, and completed surveys on our official
+            Facebook page.
+          </p>
+        </div>
+        <a
+          href={FACEBOOK_PHOTOS_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 h-11 px-5 rounded-md bg-primary text-primary-foreground font-semibold hover:bg-primary/90 self-start"
+        >
+          <Facebook className="h-4 w-4" /> View all photos on Facebook
+          <ExternalLink className="h-3.5 w-3.5" />
+        </a>
+      </div>
+      <a
+        href={FACEBOOK_PHOTOS_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-10 block group rounded-2xl overflow-hidden border border-border relative"
+      >
+        <img
+          src={bannerAsset.url}
+          alt="KL2J field survey work"
+          className="w-full h-64 md:h-80 object-cover group-hover:scale-[1.02] transition-transform duration-500"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-slate-950/20 to-transparent flex items-end p-6">
+          <div className="text-white">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Facebook className="h-4 w-4" /> facebook.com/KL2J
+            </div>
+            <p className="mt-1 text-white/85 text-sm">
+              Tap to open the full album on Facebook.
+            </p>
+          </div>
+        </div>
+      </a>
+    </section>
+  );
+}
+
 function Footer() {
   return (
     <footer className="border-t border-border bg-background">
