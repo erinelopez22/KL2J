@@ -110,6 +110,7 @@ function LandingPage() {
       <Process />
       <WhyUs />
       <Credentials />
+      <FacebookCTA />
       <Photos />
       <CTA />
       <Footer />
@@ -548,6 +549,35 @@ const galleryPhotos = Object.entries(galleryModules)
     url: mod.default.url,
     name: path.split("/").pop() ?? "photo",
   }));
+
+function FacebookCTA() {
+  return (
+    <section className="bg-primary/5 border-y border-primary/10">
+      <div className="max-w-6xl mx-auto px-4 py-14 md:py-16">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 rounded-2xl border border-primary/20 bg-background p-8 md:p-10 shadow-sm">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-wider text-primary">Stay connected</p>
+            <h2 className="mt-2 text-2xl md:text-3xl font-bold tracking-tight">Follow KL2J on Facebook</h2>
+            <p className="mt-2 text-muted-foreground max-w-xl">
+              Get updates on completed projects, fieldwork behind-the-scenes, and company
+              announcements straight from our Facebook page.
+            </p>
+          </div>
+          <a
+            href={FACEBOOK_PAGE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-2 h-12 px-6 rounded-md bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition shrink-0"
+          >
+            <Facebook className="h-5 w-5" />
+            Visit our Facebook page
+            <ExternalLink className="h-4 w-4" />
+          </a>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 function Credentials() {
   const items = [
