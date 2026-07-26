@@ -110,6 +110,7 @@ function LandingPage() {
       <Process />
       <WhyUs />
       <Credentials />
+      <FacebookCTA />
       <Photos />
       <CTA />
       <Footer />
