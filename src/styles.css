@@ -46,19 +46,19 @@
   --card-foreground: oklch(0.24 0.04 258);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.24 0.04 258);
-  --primary: oklch(0.55 0.18 258); /* #0C66E4 */
+  --primary: oklch(0.48 0.17 20); /* KL2J brand red */
   --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.96 0.005 258);
-  --secondary-foreground: oklch(0.24 0.04 258);
-  --muted: oklch(0.96 0.005 258);
-  --muted-foreground: oklch(0.45 0.03 258);
-  --accent: oklch(0.94 0.01 258);
-  --accent-foreground: oklch(0.24 0.04 258);
+  --secondary: oklch(0.96 0.008 30);
+  --secondary-foreground: oklch(0.24 0.04 20);
+  --muted: oklch(0.96 0.008 30);
+  --muted-foreground: oklch(0.45 0.03 20);
+  --accent: oklch(0.94 0.015 30);
+  --accent-foreground: oklch(0.24 0.04 20);
   --destructive: oklch(0.62 0.22 25);
   --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(0.9 0.01 258); /* #DCDFE4 */
-  --input: oklch(0.9 0.01 258);
-  --ring: oklch(0.55 0.18 258);
+  --border: oklch(0.9 0.01 30);
+  --input: oklch(0.9 0.01 30);
+  --ring: oklch(0.48 0.17 20);
 
   --list-surface: oklch(0.965 0.005 258); /* #F1F2F4 */
 

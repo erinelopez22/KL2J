@@ -26,7 +26,10 @@ import {
 const FACEBOOK_PAGE_URL = "https://www.facebook.com/profile.php?id=61581147040190";
 const FACEBOOK_DOCS_URL =
   "https://www.facebook.com/permalink.php?story_fbid=pfbid0pDhu8X7Zwkpwrpti3ccFEXWoHni2X6X8bip1Lo9DaoCJFZLX9oDkxifCbhfxDnM6l&id=61581147040190";
-import heroImage from "@/assets/hero-survey.jpg";
+const FACEBOOK_PHOTOS_URL = "https://www.facebook.com/profile.php?id=61581147040190&sk=photos_by";
+import logoAsset from "@/assets/kl2j-logo.jpg.asset.json";
+import bannerAsset from "@/assets/kl2j-banner.jpg.asset.json";
+const heroImage = bannerAsset.url;
 
 export const Route = createFileRoute("/")({
   ssr: false,
@@ -104,6 +107,7 @@ function LandingPage() {
       <Services />
       <Process />
       <WhyUs />
+      <Photos />
       <CTA />
       <Footer />
     </div>
@@ -115,18 +119,21 @@ function NavBar() {
   const links = [
     { href: "#services", label: "Services" },
     { href: "#process", label: "Process" },
+    { href: "#photos", label: "Photos" },
     { href: "#why", label: "Why us" },
     { href: "#contact", label: "Contact" },
   ];
   return (
     <header className="sticky top-0 z-40 bg-background/85 backdrop-blur border-b border-border">
       <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-        <a href="#top" className="flex items-center gap-2 font-bold">
-          <span className="h-9 w-9 rounded-md bg-primary text-primary-foreground flex items-center justify-center">
-            <Compass className="h-5 w-5" />
-          </span>
+        <a href="#top" className="flex items-center gap-2.5 font-bold">
+          <img
+            src={logoAsset.url}
+            alt="KL2J Land Surveying and Engineering Services"
+            className="h-10 w-10 rounded-full object-cover ring-1 ring-border"
+          />
           <span className="text-lg tracking-tight">
-            KL2J <span className="text-muted-foreground font-medium">Geodetic</span>
+            KL2J <span className="text-muted-foreground font-medium hidden sm:inline">Geodetic</span>
           </span>
         </a>
         <nav className="hidden md:flex items-center gap-7 text-sm">
@@ -194,12 +201,19 @@ function Hero() {
           height={1280}
           className="w-full h-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/70 to-slate-950/30" />
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/85 via-slate-950/60 to-primary/30" />
       </div>
       <div className="relative max-w-6xl mx-auto px-4 py-24 md:py-32 text-white">
-        <span className="inline-flex items-center gap-2 rounded-full bg-white/10 border border-white/20 px-3 py-1 text-xs uppercase tracking-wider">
-          <BadgeCheck className="h-3.5 w-3.5" /> Licensed Geodetic Engineers
-        </span>
+        <div className="flex items-center gap-4">
+          <img
+            src={logoAsset.url}
+            alt="KL2J logo"
+            className="h-16 w-16 md:h-20 md:w-20 rounded-full ring-2 ring-white/30 bg-white/95 object-cover shadow-xl"
+          />
+          <span className="inline-flex items-center gap-2 rounded-full bg-white/10 border border-white/20 px-3 py-1 text-xs uppercase tracking-wider">
+            <BadgeCheck className="h-3.5 w-3.5" /> Licensed Geodetic Engineers
+          </span>
+        </div>
         <h1 className="mt-5 text-4xl md:text-6xl font-bold tracking-tight max-w-3xl leading-[1.05]">
           Precise land surveys.
           <br />
@@ -517,12 +531,62 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+function Photos() {
+  return (
+    <section id="photos" className="max-w-6xl mx-auto px-4 py-20 md:py-24">
+      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+        <div className="max-w-2xl">
+          <p className="text-sm font-semibold uppercase tracking-wider text-primary">Field gallery</p>
+          <h2 className="mt-2 text-3xl md:text-4xl font-bold tracking-tight">
+            See our team on the ground
+          </h2>
+          <p className="mt-3 text-muted-foreground">
+            Browse project photos, equipment in action, and completed surveys on our official
+            Facebook page.
+          </p>
+        </div>
+        <a
+          href={FACEBOOK_PHOTOS_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 h-11 px-5 rounded-md bg-primary text-primary-foreground font-semibold hover:bg-primary/90 self-start"
+        >
+          <Facebook className="h-4 w-4" /> View all photos on Facebook
+          <ExternalLink className="h-3.5 w-3.5" />
+        </a>
+      </div>
+      <a
+        href={FACEBOOK_PHOTOS_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-10 block group rounded-2xl overflow-hidden border border-border relative"
+      >
+        <img
+          src={bannerAsset.url}
+          alt="KL2J field survey work"
+          className="w-full h-64 md:h-80 object-cover group-hover:scale-[1.02] transition-transform duration-500"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-slate-950/20 to-transparent flex items-end p-6">
+          <div className="text-white">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Facebook className="h-4 w-4" /> facebook.com/KL2J
+            </div>
+            <p className="mt-1 text-white/85 text-sm">
+              Tap to open the full album on Facebook.
+            </p>
+          </div>
+        </div>
+      </a>
+    </section>
+  );
+}
+
 function Footer() {
   return (
     <footer className="border-t border-border bg-background">
       <div className="max-w-6xl mx-auto px-4 py-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-sm text-muted-foreground">
         <div className="flex items-center gap-2 font-semibold text-foreground">
-          <Compass className="h-4 w-4 text-primary" />
+          <img src={logoAsset.url} alt="KL2J logo" className="h-6 w-6 rounded-full object-cover" />
           KL2J Geodetic Services
         </div>
         <div className="flex items-center gap-4">
