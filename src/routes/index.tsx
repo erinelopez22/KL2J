@@ -47,7 +47,7 @@ export const Route = createFileRoute("/")({
       {
         property: "og:description",
         content:
-          "Precision land surveying and titling assistance for landowners, developers, and engineers.",
+          "Licensed geodetic engineers offering relocation, subdivision, consolidation, topographic, verification, as-built surveys, and land titling assistance.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
