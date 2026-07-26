@@ -553,7 +553,7 @@ const galleryPhotos = Object.entries(galleryModules)
 function FacebookCTA() {
   return (
     <section className="bg-primary/5 border-y border-primary/10">
-      <div className="max-w-6xl mx-auto px-4 py-14 md:py-18">
+      <div className="max-w-6xl mx-auto px-4 py-14 md:py-16">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 rounded-2xl border border-primary/20 bg-background p-8 md:p-10 shadow-sm">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wider text-primary">Stay connected</p>
@@ -567,7 +567,7 @@ function FacebookCTA() {
             href={FACEBOOK_PAGE_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-2 h-12 px-6 rounded-md bg-[#1877F2] text-white font-semibold hover:bg-[#166fe5] transition shrink-0"
+            className="inline-flex items-center justify-center gap-2 h-12 px-6 rounded-md bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition shrink-0"
           >
             <Facebook className="h-5 w-5" />
             Visit our Facebook page
