@@ -28,7 +28,7 @@ export function AppBar({ transparent = false }: { transparent?: boolean }) {
     >
       <Link to="/boards" className="flex items-center gap-2 font-bold">
         <KanbanSquare className="h-5 w-5" />
-        <span className="hidden sm:inline">KL2J</span>
+        <span className="hidden sm:inline">KL2J Land Surveying and Engineering Services</span>
       </Link>
       <Link
         to="/boards"

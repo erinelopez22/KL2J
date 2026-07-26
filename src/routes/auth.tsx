@@ -8,9 +8,9 @@ export const Route = createFileRoute("/auth")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Sign in — KL2J" },
+      { title: "Sign in — KL2J Land Surveying and Engineering Services" },
       { name: "description", content: "Sign in or create an account to use KL2J boards." },
-      { property: "og:title", content: "Sign in — KL2J" },
+      { property: "og:title", content: "Sign in — KL2J Land Surveying and Engineering Services" },
       { property: "og:description", content: "Sign in or create an account to use KL2J boards." },
     ],
   }),
@@ -60,7 +60,7 @@ function AuthPage() {
       <div className="w-full max-w-md rounded-2xl bg-card shadow-2xl p-8">
         <div className="flex items-center gap-2 mb-6">
           <div className="rounded-lg bg-primary text-primary-foreground p-1.5"><KanbanSquare className="h-5 w-5" /></div>
-          <span className="text-lg font-bold tracking-tight">KL2J</span>
+          <span className="text-lg font-bold tracking-tight">KL2J Land Surveying and Engineering Services</span>
         </div>
         <h1 className="text-2xl font-semibold mb-1">{mode === "signin" ? "Welcome back" : "Create your account"}</h1>
         <p className="text-sm text-muted-foreground mb-6">

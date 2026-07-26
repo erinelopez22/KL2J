@@ -37,7 +37,7 @@ export const Route = createFileRoute("/_authenticated/b/$boardId")({
   validateSearch: (s) => searchSchema.parse(s),
   head: () => ({
     meta: [
-      { title: "Board — KL2J" },
+      { title: "Board — KL2J Land Surveying and Engineering Services" },
       { name: "description", content: "Drag and drop cards on your kanban board." },
     ],
   }),

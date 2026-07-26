@@ -35,13 +35,13 @@ export const Route = createFileRoute("/")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "KL2J Geodetic Services — Licensed Land Surveying" },
+      { title: "KL2J Land Surveying and Engineering Services" },
       {
         name: "description",
         content:
           "Licensed geodetic engineers offering relocation, subdivision, consolidation, topographic, verification, as-built surveys, and land titling assistance.",
       },
-      { property: "og:title", content: "KL2J Geodetic Services — Licensed Land Surveying" },
+      { property: "og:title", content: "KL2J Land Surveying and Engineering Services" },
       {
         property: "og:description",
         content:
@@ -132,8 +132,8 @@ function NavBar() {
             alt="KL2J Land Surveying and Engineering Services"
             className="h-10 w-10 rounded-full object-cover ring-1 ring-border"
           />
-          <span className="text-lg tracking-tight">
-            KL2J <span className="text-muted-foreground font-medium hidden sm:inline">Geodetic</span>
+          <span className="text-base tracking-tight">
+            KL2J <span className="text-muted-foreground font-medium hidden sm:inline">Land Surveying and Engineering Services</span>
           </span>
         </a>
         <nav className="hidden md:flex items-center gap-7 text-sm">
@@ -587,7 +587,7 @@ function Footer() {
       <div className="max-w-6xl mx-auto px-4 py-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-sm text-muted-foreground">
         <div className="flex items-center gap-2 font-semibold text-foreground">
           <img src={logoAsset.url} alt="KL2J logo" className="h-6 w-6 rounded-full object-cover" />
-          KL2J Geodetic Services
+          KL2J Land Surveying and Engineering Services
         </div>
         <div className="flex items-center gap-4">
           <a
@@ -607,7 +607,7 @@ function Footer() {
             <FileText className="h-4 w-4" /> Documents <ExternalLink className="h-3 w-3" />
           </a>
         </div>
-        <div>© {new Date().getFullYear()} KL2J Geodetic Services. All rights reserved.</div>
+        <div>© {new Date().getFullYear()} KL2J Land Surveying and Engineering Services. All rights reserved.</div>
       </div>
     </footer>
   );
