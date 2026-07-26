@@ -18,7 +18,14 @@ import {
   BadgeCheck,
   Clock,
   Award,
+  Facebook,
+  FileText,
+  ExternalLink,
 } from "lucide-react";
+
+const FACEBOOK_PAGE_URL = "https://www.facebook.com/profile.php?id=61581147040190";
+const FACEBOOK_DOCS_URL =
+  "https://www.facebook.com/permalink.php?story_fbid=pfbid0pDhu8X7Zwkpwrpti3ccFEXWoHni2X6X8bip1Lo9DaoCJFZLX9oDkxifCbhfxDnM6l&id=61581147040190";
 import heroImage from "@/assets/hero-survey.jpg";
 
 export const Route = createFileRoute("/")({
@@ -129,12 +136,23 @@ function NavBar() {
             </a>
           ))}
         </nav>
-        <a
-          href="#contact"
-          className="hidden md:inline-flex items-center gap-2 h-10 px-4 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90"
-        >
-          Request a quote <ArrowRight className="h-4 w-4" />
-        </a>
+        <div className="hidden md:flex items-center gap-2">
+          <a
+            href={FACEBOOK_PAGE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Facebook page"
+            className="inline-flex items-center justify-center h-10 w-10 rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+          >
+            <Facebook className="h-4 w-4" />
+          </a>
+          <a
+            href="#contact"
+            className="inline-flex items-center gap-2 h-10 px-4 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90"
+          >
+            Request a quote <ArrowRight className="h-4 w-4" />
+          </a>
+        </div>
         <button
           className="md:hidden p-2 rounded hover:bg-accent"
           onClick={() => setOpen((v) => !v)}
@@ -385,6 +403,22 @@ function CTA() {
               <div className="flex items-center gap-3">
                 <MapPin className="h-4 w-4" /> Serving clients nationwide
               </div>
+              <a
+                href={FACEBOOK_PAGE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 hover:underline"
+              >
+                <Facebook className="h-4 w-4" /> Follow us on Facebook
+              </a>
+              <a
+                href={FACEBOOK_DOCS_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 hover:underline"
+              >
+                <FileText className="h-4 w-4" /> View credentials & documents
+              </a>
             </div>
           </div>
           <ContactForm />
@@ -490,6 +524,24 @@ function Footer() {
         <div className="flex items-center gap-2 font-semibold text-foreground">
           <Compass className="h-4 w-4 text-primary" />
           KL2J Geodetic Services
+        </div>
+        <div className="flex items-center gap-4">
+          <a
+            href={FACEBOOK_PAGE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 hover:text-foreground"
+          >
+            <Facebook className="h-4 w-4" /> Facebook
+          </a>
+          <a
+            href={FACEBOOK_DOCS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 hover:text-foreground"
+          >
+            <FileText className="h-4 w-4" /> Documents <ExternalLink className="h-3 w-3" />
+          </a>
         </div>
         <div>© {new Date().getFullYear()} KL2J Geodetic Services. All rights reserved.</div>
       </div>
