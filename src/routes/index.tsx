@@ -124,12 +124,14 @@ function NavBar() {
   return (
     <header className="sticky top-0 z-40 bg-background/85 backdrop-blur border-b border-border">
       <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-        <a href="#top" className="flex items-center gap-2 font-bold">
-          <span className="h-9 w-9 rounded-md bg-primary text-primary-foreground flex items-center justify-center">
-            <Compass className="h-5 w-5" />
-          </span>
+        <a href="#top" className="flex items-center gap-2.5 font-bold">
+          <img
+            src={logoAsset.url}
+            alt="KL2J Land Surveying and Engineering Services"
+            className="h-10 w-10 rounded-full object-cover ring-1 ring-border"
+          />
           <span className="text-lg tracking-tight">
-            KL2J <span className="text-muted-foreground font-medium">Geodetic</span>
+            KL2J <span className="text-muted-foreground font-medium hidden sm:inline">Geodetic</span>
           </span>
         </a>
         <nav className="hidden md:flex items-center gap-7 text-sm">
