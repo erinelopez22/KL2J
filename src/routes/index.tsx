@@ -122,6 +122,7 @@ function NavBar() {
   const links = [
     { href: "#services", label: "Services" },
     { href: "#process", label: "Process" },
+    { href: "#credentials", label: "Credentials" },
     { href: "#photos", label: "Photos" },
     { href: "#why", label: "Why us" },
     { href: "#contact", label: "Contact" },
