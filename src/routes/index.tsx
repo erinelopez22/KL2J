@@ -107,6 +107,7 @@ function LandingPage() {
       <Services />
       <Process />
       <WhyUs />
+      <Photos />
       <CTA />
       <Footer />
     </div>
@@ -118,6 +119,7 @@ function NavBar() {
   const links = [
     { href: "#services", label: "Services" },
     { href: "#process", label: "Process" },
+    { href: "#photos", label: "Photos" },
     { href: "#why", label: "Why us" },
     { href: "#contact", label: "Contact" },
   ];
