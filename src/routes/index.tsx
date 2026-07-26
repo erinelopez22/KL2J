@@ -26,7 +26,10 @@ import {
 const FACEBOOK_PAGE_URL = "https://www.facebook.com/profile.php?id=61581147040190";
 const FACEBOOK_DOCS_URL =
   "https://www.facebook.com/permalink.php?story_fbid=pfbid0pDhu8X7Zwkpwrpti3ccFEXWoHni2X6X8bip1Lo9DaoCJFZLX9oDkxifCbhfxDnM6l&id=61581147040190";
-import heroImage from "@/assets/hero-survey.jpg";
+const FACEBOOK_PHOTOS_URL = "https://www.facebook.com/profile.php?id=61581147040190&sk=photos_by";
+import logoAsset from "@/assets/kl2j-logo.jpg.asset.json";
+import bannerAsset from "@/assets/kl2j-banner.jpg.asset.json";
+const heroImage = bannerAsset.url;
 
 export const Route = createFileRoute("/")({
   ssr: false,
