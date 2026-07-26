@@ -109,6 +109,7 @@ function LandingPage() {
       <Services />
       <Process />
       <WhyUs />
+      <Credentials />
       <Photos />
       <CTA />
       <Footer />
