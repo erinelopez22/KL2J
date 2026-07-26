@@ -479,7 +479,7 @@ function ContactForm() {
                 <input required type="email" className="input" placeholder="you@email.com" />
               </Field>
               <Field label="Phone">
-                <input className="input" placeholder="+63 900 000 0000" />
+                <input className="input" placeholder="0929 641 0776 / 0995 460 8248" />
               </Field>
             </div>
             <Field label="Service needed">
