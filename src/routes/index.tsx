@@ -136,12 +136,23 @@ function NavBar() {
             </a>
           ))}
         </nav>
-        <a
-          href="#contact"
-          className="hidden md:inline-flex items-center gap-2 h-10 px-4 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90"
-        >
-          Request a quote <ArrowRight className="h-4 w-4" />
-        </a>
+        <div className="hidden md:flex items-center gap-2">
+          <a
+            href={FACEBOOK_PAGE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Facebook page"
+            className="inline-flex items-center justify-center h-10 w-10 rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+          >
+            <Facebook className="h-4 w-4" />
+          </a>
+          <a
+            href="#contact"
+            className="inline-flex items-center gap-2 h-10 px-4 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90"
+          >
+            Request a quote <ArrowRight className="h-4 w-4" />
+          </a>
+        </div>
         <button
           className="md:hidden p-2 rounded hover:bg-accent"
           onClick={() => setOpen((v) => !v)}
