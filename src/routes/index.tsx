@@ -29,6 +29,8 @@ const FACEBOOK_DOCS_URL =
 const FACEBOOK_PHOTOS_URL = "https://www.facebook.com/profile.php?id=61581147040190&sk=photos_by";
 import logoAsset from "@/assets/kl2j-logo.jpg.asset.json";
 import bannerAsset from "@/assets/kl2j-banner.jpg.asset.json";
+import prcAsset from "@/assets/kl2j-prc-licensed.jpg.asset.json";
+import secAsset from "@/assets/kl2j-sec-registered.jpg.asset.json";
 const heroImage = bannerAsset.url;
 
 export const Route = createFileRoute("/")({
