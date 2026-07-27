@@ -46,6 +46,7 @@ export function ChatWidget() {
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const sendInquiry = useServerFn(submitInquiry);
 
   useEffect(() => {
     if (open && messages.length === 0) {
