@@ -269,6 +269,12 @@ export function ChatWidget() {
                 >
                   <Phone className="h-4 w-4" /> Call
                 </button>
+                <button
+                  onClick={() => handoff("email")}
+                  className="col-span-2 flex items-center justify-center gap-2 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 text-sm font-medium text-foreground hover:bg-primary/10"
+                >
+                  <Mail className="h-4 w-4" /> Email {STAFF_EMAIL}
+                </button>
                 <div className="col-span-2 mt-1 text-center text-[11px] text-muted-foreground">
                   Smart {SMART_NUMBER} · Globe {GLOBE_NUMBER}
                 </div>
