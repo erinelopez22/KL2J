@@ -115,6 +115,7 @@ function LandingPage() {
       <Photos />
       <CTA />
       <Footer />
+      <ChatWidget />
     </div>
   );
 }
