@@ -247,6 +247,39 @@ export type Database = {
           },
         ]
       }
+      inquiries: {
+        Row: {
+          channel: string | null
+          contact: string
+          created_at: string
+          id: string
+          message: string | null
+          name: string
+          service: string | null
+          status: string
+        }
+        Insert: {
+          channel?: string | null
+          contact: string
+          created_at?: string
+          id?: string
+          message?: string | null
+          name: string
+          service?: string | null
+          status?: string
+        }
+        Update: {
+          channel?: string | null
+          contact?: string
+          created_at?: string
+          id?: string
+          message?: string | null
+          name?: string
+          service?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       labels: {
         Row: {
           board_id: string
