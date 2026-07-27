@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MessageCircle, X, Send, ArrowLeft, Facebook, Phone, Mail } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { useServerFn } from "@tanstack/react-start";
+import { submitInquiry } from "@/lib/inquiries.functions";
 import logoAsset from "@/assets/kl2j-logo.jpg.asset.json";
 
 const FB_PAGE_ID = "61581147040190";
