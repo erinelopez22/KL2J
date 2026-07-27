@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MessageCircle, X, Send, ArrowLeft, Facebook, Phone, Mail } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { useServerFn } from "@tanstack/react-start";
+import { submitInquiry } from "@/lib/inquiries.functions";
 import logoAsset from "@/assets/kl2j-logo.jpg.asset.json";
 
 const FB_PAGE_ID = "61581147040190";
@@ -45,6 +46,7 @@ export function ChatWidget() {
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const sendInquiry = useServerFn(submitInquiry);
 
   useEffect(() => {
     if (open && messages.length === 0) {
@@ -87,12 +89,14 @@ export function ChatWidget() {
     setSubmitting(true);
     pushUser(`${name} · ${contact}${note ? " · " + note : ""}`);
     try {
-      await supabase.from("inquiries").insert({
-        name: name.trim(),
-        contact: contact.trim(),
-        service,
-        message: `${intent}${note ? "\n\n" + note : ""}`,
-        status: "new",
+      await sendInquiry({
+        data: {
+          name: name.trim(),
+          contact: contact.trim(),
+          service,
+          message: `${intent}${note ? "\n\n" + note : ""}`,
+          status: "new",
+        },
       });
     } catch (e) {
       console.error(e);
@@ -121,18 +125,17 @@ export function ChatWidget() {
       url = `mailto:${STAFF_EMAIL}?subject=${encodeURIComponent(
         `Inquiry: ${service || "KL2J Services"}`,
       )}&body=${text}`;
-    // fire-and-forget log
-    supabase
-      .from("inquiries")
-      .insert({
+    // fire-and-forget log + email notification
+    sendInquiry({
+      data: {
         name: name.trim() || "Anonymous",
         contact: contact.trim() || channel,
         service,
         message: `Handoff → ${channel}\n${intent}${note ? "\n" + note : ""}`,
         channel,
         status: "handoff",
-      })
-      .then(() => {});
+      },
+    }).catch((e) => console.error(e));
     window.open(url, "_blank", "noopener,noreferrer");
     setStep("done");
     pushBot(`Opening ${channel === "call" ? "phone dialer" : channel}… We'll continue there.`);
