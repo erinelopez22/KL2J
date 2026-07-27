@@ -89,12 +89,14 @@ export function ChatWidget() {
     setSubmitting(true);
     pushUser(`${name} · ${contact}${note ? " · " + note : ""}`);
     try {
-      await supabase.from("inquiries").insert({
-        name: name.trim(),
-        contact: contact.trim(),
-        service,
-        message: `${intent}${note ? "\n\n" + note : ""}`,
-        status: "new",
+      await sendInquiry({
+        data: {
+          name: name.trim(),
+          contact: contact.trim(),
+          service,
+          message: `${intent}${note ? "\n\n" + note : ""}`,
+          status: "new",
+        },
       });
     } catch (e) {
       console.error(e);
