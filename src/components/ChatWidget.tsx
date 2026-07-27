@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { MessageCircle, X, Send, ArrowLeft, Facebook, Phone } from "lucide-react";
+import { MessageCircle, X, Send, ArrowLeft, Facebook, Phone, Mail } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import logoAsset from "@/assets/kl2j-logo.jpg.asset.json";
 
@@ -7,6 +7,7 @@ const FB_PAGE_ID = "61581147040190";
 const MESSENGER_URL = `https://m.me/${FB_PAGE_ID}`;
 const SMART_NUMBER = "09296410776";
 const GLOBE_NUMBER = "09954608248";
+const STAFF_EMAIL = "erinelopez22@gmail.com";
 // PH E.164 for wa.me / viber (drop leading 0, prefix 63)
 const WA_NUMBER = "639296410776";
 const VIBER_NUMBER = "639296410776";
