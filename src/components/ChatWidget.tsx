@@ -125,18 +125,17 @@ export function ChatWidget() {
       url = `mailto:${STAFF_EMAIL}?subject=${encodeURIComponent(
         `Inquiry: ${service || "KL2J Services"}`,
       )}&body=${text}`;
-    // fire-and-forget log
-    supabase
-      .from("inquiries")
-      .insert({
+    // fire-and-forget log + email notification
+    sendInquiry({
+      data: {
         name: name.trim() || "Anonymous",
         contact: contact.trim() || channel,
         service,
         message: `Handoff → ${channel}\n${intent}${note ? "\n" + note : ""}`,
         channel,
         status: "handoff",
-      })
-      .then(() => {});
+      },
+    }).catch((e) => console.error(e));
     window.open(url, "_blank", "noopener,noreferrer");
     setStep("done");
     pushBot(`Opening ${channel === "call" ? "phone dialer" : channel}… We'll continue there.`);
