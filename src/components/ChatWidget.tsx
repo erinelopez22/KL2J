@@ -110,13 +110,17 @@ export function ChatWidget() {
     }`.trim();
   }
 
-  function handoff(channel: "messenger" | "whatsapp" | "viber" | "call") {
+  function handoff(channel: "messenger" | "whatsapp" | "viber" | "call" | "email") {
     const text = encodeURIComponent(prefilledMessage());
     let url = "";
     if (channel === "messenger") url = MESSENGER_URL;
     else if (channel === "whatsapp") url = `https://wa.me/${WA_NUMBER}?text=${text}`;
     else if (channel === "viber") url = `viber://chat?number=%2B${VIBER_NUMBER}&draft=${text}`;
     else if (channel === "call") url = `tel:${SMART_NUMBER}`;
+    else if (channel === "email")
+      url = `mailto:${STAFF_EMAIL}?subject=${encodeURIComponent(
+        `Inquiry: ${service || "KL2J Services"}`,
+      )}&body=${text}`;
     // fire-and-forget log
     supabase
       .from("inquiries")
