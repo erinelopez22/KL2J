@@ -22,6 +22,7 @@ import {
   FileText,
   ExternalLink,
 } from "lucide-react";
+import { ChatWidget } from "@/components/ChatWidget";
 
 const FACEBOOK_PAGE_URL = "https://www.facebook.com/profile.php?id=61581147040190";
 const FACEBOOK_DOCS_URL =
@@ -114,6 +115,7 @@ function LandingPage() {
       <Photos />
       <CTA />
       <Footer />
+      <ChatWidget />
     </div>
   );
 }
