@@ -107,11 +107,18 @@ function AdminProjects() {
             className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-2xl sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <h2 className="text-lg font-semibold">{viewingProject.title}</h2>
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h2 className="truncate text-xl font-bold leading-tight">{viewingProject.title}</h2>
+                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-foreground/80">
+                  {viewingProject.location && <span>{viewingProject.location}</span>}
+                  {viewingProject.location && viewingProject.service && <span className="text-muted-foreground/50">·</span>}
+                  {viewingProject.service && <span>{viewingProject.service}</span>}
+                </p>
+              </div>
               <button
                 onClick={() => setViewingId(null)}
-                className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+                className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted"
                 aria-label="Close"
               >
                 <X className="h-5 w-5" />
@@ -122,64 +129,48 @@ function AdminProjects() {
               <img
                 src={viewingProject.cover_photo_url}
                 alt={viewingProject.title}
-                className="mb-4 aspect-video w-full rounded-lg object-cover"
+                className="mt-4 aspect-video w-full rounded-lg object-cover"
               />
             )}
 
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Status</span>
-              <div className="flex gap-2">
-                <select
-                  value={statusDraft ?? viewingProject.status}
-                  onChange={(e) => setStatusDraft(e.target.value as ProjectStatus)}
-                  className={`h-10 w-full rounded-md border border-border px-3 text-sm font-medium ${STATUS_STYLES[statusDraft ?? viewingProject.status]}`}
-                >
-                  {PROJECT_STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  disabled={savingStatus || (statusDraft ?? viewingProject.status) === viewingProject.status}
-                  onClick={() => saveStatus(viewingProject.id, statusDraft ?? viewingProject.status)}
-                  className="shrink-0 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
-                >
-                  {savingStatus ? "Saving…" : "Save"}
-                </button>
-              </div>
-            </label>
+            <div className="mt-4 flex gap-2">
+              <select
+                value={statusDraft ?? viewingProject.status}
+                onChange={(e) => setStatusDraft(e.target.value as ProjectStatus)}
+                className={`h-9 rounded-md border border-border px-3 text-xs font-medium ${STATUS_STYLES[statusDraft ?? viewingProject.status]}`}
+              >
+                {PROJECT_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                disabled={savingStatus || (statusDraft ?? viewingProject.status) === viewingProject.status}
+                onClick={() => saveStatus(viewingProject.id, statusDraft ?? viewingProject.status)}
+                className="shrink-0 rounded-md bg-primary px-4 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
+              >
+                {savingStatus ? "Saving…" : "Save"}
+              </button>
+            </div>
 
-            <div className="mt-4 text-sm">
-              <span className="text-xs font-semibold uppercase text-muted-foreground">Location</span>
-              <p className="mt-0.5">{viewingProject.location || "—"}</p>
+            <div className="mt-4 whitespace-pre-wrap rounded-lg border border-border bg-muted/30 p-3 text-sm leading-relaxed">
+              {viewingProject.description || "No description yet."}
             </div>
-            <div className="mt-3 text-sm">
-              <span className="text-xs font-semibold uppercase text-muted-foreground">Service</span>
-              <p className="mt-0.5">{viewingProject.service || "—"}</p>
-            </div>
-            <div className="mt-3 text-sm">
-              <span className="text-xs font-semibold uppercase text-muted-foreground">Dates</span>
-              <p className="mt-0.5">
-                {viewingProject.start_date
-                  ? `${viewingProject.start_date}${viewingProject.end_date ? ` – ${viewingProject.end_date}` : ""}`
-                  : "—"}
-              </p>
-            </div>
-            <div className="mt-3 text-sm">
-              <span className="text-xs font-semibold uppercase text-muted-foreground">People involved</span>
-              <p className="mt-0.5">
-                {viewingProject.personnel?.length > 0 ? viewingProject.personnel.join(", ") : "—"}
-              </p>
-            </div>
-            <div className="mt-3 text-sm">
-              <span className="text-xs font-semibold uppercase text-muted-foreground">Description</span>
-              <p className="mt-0.5 whitespace-pre-wrap text-muted-foreground">{viewingProject.description || "—"}</p>
+
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground/70">
+              {viewingProject.start_date && (
+                <span>
+                  {viewingProject.start_date}
+                  {viewingProject.end_date ? ` – ${viewingProject.end_date}` : ""}
+                </span>
+              )}
+              {viewingProject.personnel?.length > 0 && <span>Team: {viewingProject.personnel.join(", ")}</span>}
             </div>
             {viewingProject.attachments?.length > 0 && (
               <div className="mt-3">
-                <span className="text-xs font-semibold uppercase text-muted-foreground">Files</span>
+                <span className="text-xs font-semibold uppercase text-muted-foreground/70">Files</span>
                 <div className="mt-1.5 space-y-1.5">
                   {viewingProject.attachments.map((a) => (
                     <a

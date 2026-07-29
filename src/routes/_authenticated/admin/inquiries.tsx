@@ -174,51 +174,50 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
         className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-2xl sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-4 flex items-start justify-between gap-4">
-          <h2 className="text-lg font-semibold">{inquiry.name}</h2>
-          <button onClick={onClose} className="rounded-md p-1 text-muted-foreground hover:bg-muted" aria-label="Close">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h2 className="truncate text-xl font-bold leading-tight">{inquiry.name}</h2>
+            <p className="mt-0.5 truncate text-sm text-foreground/80">{inquiry.contact}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted"
+            aria-label="Close"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="block text-sm">
-          <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Status</span>
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
           <span
-            className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${STATUS_BADGE_STYLES[inquiry.status]}`}
+            className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_BADGE_STYLES[inquiry.status]}`}
           >
             {inquiry.status}
           </span>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Set automatically from the linked project's status — create or update a project below to change it.
-          </p>
+          {inquiry.service && (
+            <span className="inline-flex rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground/70">
+              {inquiry.service}
+            </span>
+          )}
         </div>
 
-        <div className="mt-3 text-sm">
-          <span className="text-xs font-semibold uppercase text-muted-foreground">Contact</span>
-          <p className="mt-0.5">{inquiry.contact}</p>
-        </div>
-        {inquiry.service && (
-          <div className="mt-3 text-sm">
-            <span className="text-xs font-semibold uppercase text-muted-foreground">Service</span>
-            <p className="mt-0.5">{inquiry.service}</p>
-          </div>
-        )}
-        {inquiry.channel && (
-          <div className="mt-3 text-sm">
-            <span className="text-xs font-semibold uppercase text-muted-foreground">Channel</span>
-            <p className="mt-0.5">{inquiry.channel}</p>
-          </div>
-        )}
         {inquiry.message && (
-          <div className="mt-3 text-sm">
-            <span className="text-xs font-semibold uppercase text-muted-foreground">Message</span>
-            <p className="mt-0.5 whitespace-pre-wrap text-muted-foreground">{inquiry.message}</p>
+          <div className="mt-4 whitespace-pre-wrap rounded-lg border border-border bg-muted/30 p-3 text-sm leading-relaxed">
+            {inquiry.message}
           </div>
         )}
-        <div className="mt-3 flex items-center gap-1 text-xs text-muted-foreground">
-          <Clock className="h-3 w-3" />
-          {new Date(inquiry.created_at).toLocaleString()}
+
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground/70">
+          {inquiry.channel && <span>via {inquiry.channel}</span>}
+          <span className="flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            {new Date(inquiry.created_at).toLocaleString()}
+          </span>
         </div>
+        <p className="mt-1 text-[11px] leading-snug text-muted-foreground/60">
+          Status is set automatically from the linked project — create or update a project below to change it.
+        </p>
+
         {!inquiry.email_sent && (
           <div className="mt-2 flex items-center gap-1.5 rounded-md bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive">
             <MailWarning className="h-3.5 w-3.5" />
@@ -227,7 +226,9 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
         )}
 
         <div className="mt-5">
-          <span className="mb-1.5 block text-xs font-semibold uppercase text-muted-foreground">Linked project</span>
+          <span className="mb-1.5 block text-xs font-semibold uppercase text-muted-foreground/70">
+            Linked project
+          </span>
           <LinkedProjectSection inquiry={inquiry} />
         </div>
       </div>
