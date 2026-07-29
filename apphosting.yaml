@@ -1,8 +1,18 @@
 # Firebase App Hosting runtime configuration.
-# These map Secret Manager secrets (created via `firebase apphosting:secrets:set`)
-# to process.env variables at runtime — server-only code reads these via
-# process.env.*, they are never needed in the browser bundle.
+# Vite bakes VITE_* vars into the browser bundle at build time by reading the
+# committed .env file directly, so those don't need to be listed here. But
+# non-VITE_ vars read via process.env in server code (e.g. requireSupabaseAuth
+# middleware) are NOT loaded from .env at runtime in production — Cloud Run's
+# process environment only has what's declared below.
 env:
+  # Public, non-secret values (same as in the committed .env) — plain value,
+  # not a secret reference.
+  - variable: SUPABASE_URL
+    value: "https://glcpppvyzrwzmobkdcmi.supabase.co"
+  - variable: SUPABASE_PUBLISHABLE_KEY
+    value: "sb_publishable_OrzXuUfNA_86nkpp7xo4FQ_ZYwfnUax"
+  # Secrets, created via `firebase apphosting:secrets:set` — reference by name,
+  # value stays in Secret Manager rather than plaintext here.
   - variable: SUPABASE_SERVICE_ROLE_KEY
     secret: SUPABASE_SERVICE_ROLE_KEY
   - variable: GMAIL_SMTP_USER
