@@ -1,0 +1,15 @@
+# Firebase App Hosting runtime configuration.
+# These map Secret Manager secrets (created via `firebase apphosting:secrets:set`)
+# to process.env variables at runtime — server-only code reads these via
+# process.env.*, they are never needed in the browser bundle.
+env:
+  - variable: SUPABASE_SERVICE_ROLE_KEY
+    secret: SUPABASE_SERVICE_ROLE_KEY
+  - variable: GMAIL_SMTP_USER
+    secret: GMAIL_SMTP_USER
+  - variable: GMAIL_SMTP_APP_PASSWORD
+    secret: GMAIL_SMTP_APP_PASSWORD
+  - variable: GOOGLE_GBP_CLIENT_ID
+    secret: GOOGLE_GBP_CLIENT_ID
+  - variable: GOOGLE_GBP_CLIENT_SECRET
+    secret: GOOGLE_GBP_CLIENT_SECRET
