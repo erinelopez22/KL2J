@@ -1,12 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { getRequest } from "@tanstack/react-start/server";
+import { getRequestUrl } from "@tanstack/react-start/server";
 
 export const Route = createFileRoute("/api/auth/google-business/callback")({
   server: {
     handlers: {
       GET: async () => {
-        const request = getRequest();
-        const url = new URL(request.url);
+        // Firebase App Hosting proxies to an internal Cloud Run URL — resolve
+        // the public-facing host/proto so redirects and the OAuth redirect_uri
+        // match what's registered with Google, not the internal hostname.
+        const url = getRequestUrl({ xForwardedHost: true, xForwardedProto: true });
         const code = url.searchParams.get("code");
         const state = url.searchParams.get("state");
         const errorParam = url.searchParams.get("error");

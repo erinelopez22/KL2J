@@ -1,12 +1,14 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
+import { getRequestUrl } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 function callbackRedirectUri(): string {
-  const request = getRequest();
-  const origin = new URL(request.url).origin;
-  return `${origin}/api/auth/google-business/callback`;
+  // Firebase App Hosting proxies requests to an internal Cloud Run URL —
+  // the raw request URL/origin is the internal hostname, not the public
+  // domain. xForwardedHost/xForwardedProto resolve the public-facing one.
+  const url = getRequestUrl({ xForwardedHost: true, xForwardedProto: true });
+  return `${url.origin}/api/auth/google-business/callback`;
 }
 
 export const getGoogleBusinessStatus = createServerFn({ method: "GET" })
