@@ -156,6 +156,17 @@ function AdminGoogleBusiness() {
 
       {statusQuery.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
 
+      {statusQuery.isError && (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6">
+          <h2 className="text-lg font-semibold text-destructive">Failed to load connection status</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {statusQuery.error instanceof Error
+              ? statusQuery.error.message
+              : "Unknown error — check that the google_business_connection migration has been run in Supabase."}
+          </p>
+        </div>
+      )}
+
       {status && !status.connected && (
         <div className="rounded-xl border border-border bg-card p-8 text-center">
           <Building2 className="mx-auto h-10 w-10 text-muted-foreground" />
