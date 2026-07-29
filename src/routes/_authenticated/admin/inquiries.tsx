@@ -185,18 +185,11 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0 flex flex-wrap items-center gap-1.5">
-            <span
-              className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_BADGE_STYLES[inquiry.status]}`}
-            >
-              {inquiry.status}
-            </span>
-            {inquiry.service && (
-              <span className="inline-flex rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground/70">
-                {inquiry.service}
-              </span>
-            )}
-          </div>
+          <span
+            className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_BADGE_STYLES[inquiry.status]}`}
+          >
+            {inquiry.status}
+          </span>
           <button
             onClick={onClose}
             className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted"
@@ -205,6 +198,12 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
             <X className="h-5 w-5" />
           </button>
         </div>
+
+        {inquiry.service && (
+          <div className="mt-3 rounded-lg bg-primary/10 px-3 py-2.5">
+            <span className="text-sm font-bold text-primary">Service Type : {inquiry.service}</span>
+          </div>
+        )}
 
         <div className="mt-3 divide-y divide-border overflow-hidden rounded-lg border border-border text-sm">
           <div className="flex items-center justify-between gap-4 px-3 py-2">
