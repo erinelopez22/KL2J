@@ -12,4 +12,10 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  // Target Firebase App Hosting (real Node.js on Cloud Run) instead of the
+  // wrapper's Cloudflare Workers default — nodemailer's raw SMTP sockets
+  // and google-auth-library need a real Node runtime, not an edge isolate.
+  nitro: {
+    preset: "firebase-app-hosting",
+  },
 });

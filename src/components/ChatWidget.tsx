@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { MessageCircle, X, Send, ArrowLeft, Facebook, Phone, Mail } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { submitInquiry } from "@/lib/inquiries.functions";
-import logoAsset from "@/assets/kl2j-logo.jpg.asset.json";
+import { usePublicServices, usePublicSiteSettings } from "@/lib/public-content";
+import logoUrl from "@/assets/kl2j-logo.jpg";
 
 const FB_PAGE_ID = "61581147040190";
 const MESSENGER_URL = `https://m.me/${FB_PAGE_ID}`;
@@ -13,7 +14,7 @@ const STAFF_EMAIL = "erinelopez22@gmail.com";
 const WA_NUMBER = "639296410776";
 const VIBER_NUMBER = "639296410776";
 
-const SERVICES = [
+const FALLBACK_SERVICES = [
   "Relocation Survey",
   "Subdivision Survey",
   "Consolidation Survey",
@@ -47,6 +48,13 @@ export function ChatWidget() {
   const [submitting, setSubmitting] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const sendInquiry = useServerFn(submitInquiry);
+  const { data: servicesData } = usePublicServices();
+  const { data: siteSettings } = usePublicSiteSettings();
+  const logo = siteSettings?.logo_url || logoUrl;
+  const SERVICES =
+    servicesData && servicesData.length > 0
+      ? [...servicesData.map((s) => s.title), "Other / Not sure"]
+      : FALLBACK_SERVICES;
 
   useEffect(() => {
     if (open && messages.length === 0) {
@@ -95,7 +103,7 @@ export function ChatWidget() {
           contact: contact.trim(),
           service,
           message: `${intent}${note ? "\n\n" + note : ""}`,
-          status: "new",
+          status: "New",
         },
       });
     } catch (e) {
@@ -133,7 +141,7 @@ export function ChatWidget() {
         service,
         message: `Handoff → ${channel}\n${intent}${note ? "\n" + note : ""}`,
         channel,
-        status: "handoff",
+        status: "New",
       },
     }).catch((e) => console.error(e));
     window.open(url, "_blank", "noopener,noreferrer");
@@ -171,7 +179,7 @@ export function ChatWidget() {
           {/* Header */}
           <div className="flex items-center gap-3 border-b border-border bg-primary p-3 text-primary-foreground">
             <img
-              src={logoAsset.url}
+              src={logo}
               alt="KL2J"
               className="h-9 w-9 rounded-full border border-primary-foreground/30 bg-white object-cover"
             />

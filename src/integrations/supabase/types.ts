@@ -247,11 +247,118 @@ export type Database = {
           },
         ]
       }
+      documents: {
+        Row: {
+          category: string
+          created_at: string
+          description: string | null
+          id: string
+          sort_order: number
+          storage_path: string | null
+          title: string
+          url: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          sort_order?: number
+          storage_path?: string | null
+          title: string
+          url: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          sort_order?: number
+          storage_path?: string | null
+          title?: string
+          url?: string
+        }
+        Relationships: []
+      }
+      gallery_photos: {
+        Row: {
+          caption: string | null
+          created_at: string
+          id: string
+          sort_order: number
+          storage_path: string | null
+          url: string
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string
+          id?: string
+          sort_order?: number
+          storage_path?: string | null
+          url: string
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string
+          id?: string
+          sort_order?: number
+          storage_path?: string | null
+          url?: string
+        }
+        Relationships: []
+      }
+      google_business_connection: {
+        Row: {
+          access_token: string | null
+          account_name: string | null
+          connected_at: string | null
+          id: number
+          location_name: string | null
+          location_title: string | null
+          pending_state: string | null
+          pending_state_created_at: string | null
+          refresh_token: string | null
+          scope: string | null
+          token_expiry: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_token?: string | null
+          account_name?: string | null
+          connected_at?: string | null
+          id?: number
+          location_name?: string | null
+          location_title?: string | null
+          pending_state?: string | null
+          pending_state_created_at?: string | null
+          refresh_token?: string | null
+          scope?: string | null
+          token_expiry?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string | null
+          account_name?: string | null
+          connected_at?: string | null
+          id?: number
+          location_name?: string | null
+          location_title?: string | null
+          pending_state?: string | null
+          pending_state_created_at?: string | null
+          refresh_token?: string | null
+          scope?: string | null
+          token_expiry?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       inquiries: {
         Row: {
           channel: string | null
           contact: string
           created_at: string
+          email_error: string | null
+          email_sent: boolean
           id: string
           message: string | null
           name: string
@@ -262,6 +369,8 @@ export type Database = {
           channel?: string | null
           contact: string
           created_at?: string
+          email_error?: string | null
+          email_sent?: boolean
           id?: string
           message?: string | null
           name: string
@@ -272,6 +381,8 @@ export type Database = {
           channel?: string | null
           contact?: string
           created_at?: string
+          email_error?: string | null
+          email_sent?: boolean
           id?: string
           message?: string | null
           name?: string
@@ -368,6 +479,119 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id?: string
+        }
+        Relationships: []
+      }
+      projects: {
+        Row: {
+          attachments: Json
+          cover_photo_url: string | null
+          created_at: string
+          description: string | null
+          end_date: string | null
+          id: string
+          inquiry_id: string | null
+          location: string
+          personnel: string[]
+          service: string | null
+          sort_order: number
+          start_date: string | null
+          status: string
+          title: string
+        }
+        Insert: {
+          attachments?: Json
+          cover_photo_url?: string | null
+          created_at?: string
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          inquiry_id?: string | null
+          location: string
+          personnel?: string[]
+          service?: string | null
+          sort_order?: number
+          start_date?: string | null
+          status?: string
+          title: string
+        }
+        Update: {
+          attachments?: Json
+          cover_photo_url?: string | null
+          created_at?: string
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          inquiry_id?: string | null
+          location?: string
+          personnel?: string[]
+          service?: string | null
+          sort_order?: number
+          start_date?: string | null
+          status?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_inquiry_id_fkey"
+            columns: ["inquiry_id"]
+            isOneToOne: false
+            referencedRelation: "inquiries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      services: {
+        Row: {
+          active: boolean
+          created_at: string
+          description: string
+          icon: string
+          id: string
+          sort_order: number
+          title: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          description: string
+          icon?: string
+          id?: string
+          sort_order?: number
+          title: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          description?: string
+          icon?: string
+          id?: string
+          sort_order?: number
+          title?: string
+        }
+        Relationships: []
+      }
+      site_settings: {
+        Row: {
+          favicon_url: string | null
+          hero_banner_url: string | null
+          id: number
+          logo_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          favicon_url?: string | null
+          hero_banner_url?: string | null
+          id?: number
+          logo_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          favicon_url?: string | null
+          hero_banner_url?: string | null
+          id?: number
+          logo_url?: string | null
+          updated_at?: string
         }
         Relationships: []
       }

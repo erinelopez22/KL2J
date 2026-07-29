@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Star } from "lucide-react";
 import { useState } from "react";
@@ -8,6 +8,9 @@ import { createBoard, listBoards } from "@/lib/api/boards";
 import { BOARD_BACKGROUNDS, bgClass } from "@/lib/board-backgrounds";
 
 export const Route = createFileRoute("/_authenticated/boards")({
+  beforeLoad: async () => {
+    throw redirect({ to: "/inbox" });
+  },
   head: () => ({
     meta: [
       { title: "Your boards — KL2J Land Surveying and Engineering Services" },

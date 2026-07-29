@@ -10,6 +10,7 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
+import logoIcon from "@/assets/kl2j-logo.jpg?url";
 import { supabase } from "@/integrations/supabase/client";
 import { Toaster } from "sonner";
 
@@ -48,7 +49,15 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
-  head: () => ({
+  loader: async () => {
+    try {
+      const { data } = await supabase.from("site_settings").select("favicon_url").eq("id", 1).single();
+      return { faviconUrl: data?.favicon_url ?? null };
+    } catch {
+      return { faviconUrl: null };
+    }
+  },
+  head: ({ loaderData }) => ({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
@@ -65,7 +74,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "icon", type: "image/x-icon", href: "/__l5e/assets-v1/cc861cb7-0a65-4bda-a149-1d9b90b026d1/kl2j-logo.jpg" },
+      { rel: "icon", type: "image/jpeg", href: loaderData?.faviconUrl || logoIcon },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" },

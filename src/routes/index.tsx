@@ -1,5 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
+import { submitInquiry } from "@/lib/inquiries.functions";
 import {
   Compass,
   MapPin,
@@ -21,18 +24,27 @@ import {
   Facebook,
   FileText,
   ExternalLink,
+  X,
 } from "lucide-react";
 import { ChatWidget } from "@/components/ChatWidget";
+import {
+  usePublicServices,
+  usePublicGalleryPhotos,
+  usePublicDocuments,
+  usePublicProjects,
+  usePublicSiteSettings,
+} from "@/lib/public-content";
+import { getServiceIcon } from "@/lib/admin/iconMap";
 
 const FACEBOOK_PAGE_URL = "https://www.facebook.com/profile.php?id=61581147040190";
 const FACEBOOK_DOCS_URL =
   "https://www.facebook.com/permalink.php?story_fbid=pfbid0pDhu8X7Zwkpwrpti3ccFEXWoHni2X6X8bip1Lo9DaoCJFZLX9oDkxifCbhfxDnM6l&id=61581147040190";
 const FACEBOOK_PHOTOS_URL = "https://www.facebook.com/profile.php?id=61581147040190&sk=photos_by";
-import logoAsset from "@/assets/kl2j-logo.jpg.asset.json";
-import bannerAsset from "@/assets/kl2j-banner.jpg.asset.json";
-import prcAsset from "@/assets/kl2j-prc-licensed.jpg.asset.json";
-import secAsset from "@/assets/kl2j-sec-registered.jpg.asset.json";
-const heroImage = bannerAsset.url;
+import logoUrl from "@/assets/kl2j-logo.jpg";
+import bannerUrl from "@/assets/kl2j-bg.png";
+import prcUrl from "@/assets/kl2j-prc-licensed.jpg";
+import secUrl from "@/assets/kl2j-sec-registered.jpg";
+const heroImage = bannerUrl;
 
 export const Route = createFileRoute("/")({
   ssr: false,
@@ -58,44 +70,44 @@ export const Route = createFileRoute("/")({
   component: LandingPage,
 });
 
-const services = [
+const FALLBACK_SERVICES = [
   {
-    icon: MapPin,
+    icon: "MapPin",
     title: "Relocation Survey",
     desc: "Re-establish lost or disputed property corners on the ground using approved technical descriptions and titles.",
   },
   {
-    icon: Split,
+    icon: "Split",
     title: "Subdivision Survey",
     desc: "Divide a titled parcel into two or more lots with individual technical descriptions ready for titling.",
   },
   {
-    icon: Combine,
+    icon: "Combine",
     title: "Consolidation Survey",
     desc: "Merge two or more adjoining lots into a single titled property with a unified boundary description.",
   },
   {
-    icon: Mountain,
+    icon: "Mountain",
     title: "Topographic Survey",
     desc: "Capture ground elevations, contours, and features for architectural, engineering, and site development plans.",
   },
   {
-    icon: Layers,
+    icon: "Layers",
     title: "Consolidation-Subdivision Survey",
     desc: "Combine adjoining lots and re-subdivide them into new, precisely defined parcels in one approved plan.",
   },
   {
-    icon: ShieldCheck,
+    icon: "ShieldCheck",
     title: "Verification Survey",
     desc: "Confirm boundaries, monuments, and areas of existing surveys against records to resolve discrepancies.",
   },
   {
-    icon: Building2,
+    icon: "Building2",
     title: "As-Built Survey",
     desc: "Document the exact location of constructed improvements for compliance, occupancy, and turnover requirements.",
   },
   {
-    icon: FileCheck2,
+    icon: "FileCheck2",
     title: "Land Titling Assistance",
     desc: "End-to-end guidance through DENR-LMB, LRA, and Registry of Deeds processing to secure your land title.",
   },
@@ -111,6 +123,7 @@ function LandingPage() {
       <Process />
       <WhyUs />
       <Credentials />
+      <Projects />
       <FacebookCTA />
       <Photos />
       <CTA />
@@ -122,10 +135,13 @@ function LandingPage() {
 
 function NavBar() {
   const [open, setOpen] = useState(false);
+  const { data: settings } = usePublicSiteSettings();
+  const logo = settings?.logo_url || logoUrl;
   const links = [
     { href: "#services", label: "Services" },
     { href: "#process", label: "Process" },
     { href: "#credentials", label: "Credentials" },
+    { href: "#projects", label: "Projects" },
     { href: "#photos", label: "Photos" },
     { href: "#why", label: "Why us" },
     { href: "#contact", label: "Contact" },
@@ -135,7 +151,7 @@ function NavBar() {
       <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
         <a href="#top" className="flex items-center gap-2.5 font-bold">
           <img
-            src={logoAsset.url}
+            src={logo}
             alt="KL2J Land Surveying and Engineering Services"
             className="h-10 w-10 rounded-full object-cover ring-1 ring-border"
           />
@@ -145,12 +161,16 @@ function NavBar() {
         </a>
         <nav className="hidden md:flex items-center gap-7 text-sm">
           {links.map((l) => (
-            <a key={l.href} href={l.href} className="text-muted-foreground hover:text-foreground transition">
+            <a
+              key={l.href}
+              href={l.href}
+              className="whitespace-nowrap text-muted-foreground hover:text-foreground transition"
+            >
               {l.label}
             </a>
           ))}
         </nav>
-        <div className="hidden md:flex items-center gap-2">
+        <div className="hidden md:flex items-center gap-4 ml-8">
           <a
             href={FACEBOOK_PAGE_URL}
             target="_blank"
@@ -198,11 +218,14 @@ function NavBar() {
 }
 
 function Hero() {
+  const { data: settings } = usePublicSiteSettings();
+  const logo = settings?.logo_url || logoUrl;
+  const hero = settings?.hero_banner_url || heroImage;
   return (
     <section id="top" className="relative overflow-hidden">
       <div className="absolute inset-0">
         <img
-          src={heroImage}
+          src={hero}
           alt="Licensed geodetic engineer operating a total station in the field"
           width={1920}
           height={1280}
@@ -213,7 +236,7 @@ function Hero() {
       <div className="relative max-w-6xl mx-auto px-4 py-24 md:py-32 text-white">
         <div className="flex items-center gap-4">
           <img
-            src={logoAsset.url}
+            src={logo}
             alt="KL2J logo"
             className="h-16 w-16 md:h-20 md:w-20 rounded-full ring-2 ring-white/30 bg-white/95 object-cover shadow-xl"
           />
@@ -272,6 +295,12 @@ function TrustStrip() {
 }
 
 function Services() {
+  const { data } = usePublicServices();
+  const items =
+    data && data.length > 0
+      ? data.map((s) => ({ icon: s.icon, title: s.title, desc: s.description }))
+      : FALLBACK_SERVICES;
+
   return (
     <section id="services" className="max-w-6xl mx-auto px-4 py-20 md:py-28">
       <div className="max-w-2xl">
@@ -286,18 +315,21 @@ function Services() {
         </p>
       </div>
       <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        {services.map((s) => (
-          <div
-            key={s.title}
-            className="group rounded-xl border border-border bg-card p-6 hover:border-primary/40 hover:shadow-lg transition"
-          >
-            <div className="h-11 w-11 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-              <s.icon className="h-5 w-5" />
+        {items.map((s) => {
+          const Icon = getServiceIcon(s.icon);
+          return (
+            <div
+              key={s.title}
+              className="group rounded-xl border border-border bg-card p-6 hover:border-primary/40 hover:shadow-lg transition"
+            >
+              <div className="h-11 w-11 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                <Icon className="h-5 w-5" />
+              </div>
+              <h3 className="mt-4 font-semibold text-lg">{s.title}</h3>
+              <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{s.desc}</p>
             </div>
-            <h3 className="mt-4 font-semibold text-lg">{s.title}</h3>
-            <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{s.desc}</p>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </section>
   );
@@ -381,9 +413,7 @@ function WhyUs() {
             Accuracy you can build on
           </h2>
           <p className="mt-4 text-muted-foreground">
-            Land is your most valuable asset. We combine field precision, careful computation, and
-            hands-on titling experience so every boundary line and plan holds up in court, at
-            construction, and at the Registry.
+            Field precision, careful computation, and hands-on titling experience you can rely on.
           </p>
         </div>
         <div className="grid sm:grid-cols-2 gap-4">
@@ -454,12 +484,42 @@ function CTA() {
 
 function ContactForm() {
   const [sent, setSent] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [service, setService] = useState("");
+  const [message, setMessage] = useState("");
+  const sendInquiry = useServerFn(submitInquiry);
+  const { data: servicesData } = usePublicServices();
+  const serviceOptions = servicesData ?? [];
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      await sendInquiry({
+        data: {
+          name: fullName.trim(),
+          contact: email.trim(),
+          service: service || null,
+          message: `${phone.trim() ? `Phone: ${phone.trim()}\n\n` : ""}${message.trim()}`.trim() || null,
+          channel: "quote_form",
+          status: "New",
+        },
+      });
+      setSent(true);
+    } catch (err) {
+      console.error(err);
+      toast.error("Something went wrong sending your request. Please try again or call us directly.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        setSent(true);
-      }}
+      onSubmit={onSubmit}
       className="rounded-2xl bg-card text-card-foreground p-6 md:p-8 shadow-xl border border-white/10"
     >
       {sent ? (
@@ -475,22 +535,40 @@ function ContactForm() {
           <h3 className="text-xl font-semibold">Request a quote</h3>
           <div className="mt-5 grid gap-4">
             <Field label="Full name">
-              <input required className="input" placeholder="Juan dela Cruz" />
+              <input
+                required
+                className="input"
+                placeholder="Juan dela Cruz"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+              />
             </Field>
             <div className="grid sm:grid-cols-2 gap-4">
               <Field label="Email">
-                <input required type="email" className="input" placeholder="you@email.com" />
+                <input
+                  required
+                  type="email"
+                  className="input"
+                  placeholder="you@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
               </Field>
               <Field label="Phone">
-                <input className="input" placeholder="0929 641 0776 / 0995 460 8248" />
+                <input
+                  className="input"
+                  placeholder="0929 641 0776 / 0995 460 8248"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                />
               </Field>
             </div>
             <Field label="Service needed">
-              <select className="input" defaultValue="">
+              <select className="input" value={service} onChange={(e) => setService(e.target.value)}>
                 <option value="" disabled>
                   Select a service
                 </option>
-                {services.map((s) => (
+                {(serviceOptions.length > 0 ? serviceOptions : FALLBACK_SERVICES).map((s) => (
                   <option key={s.title}>{s.title}</option>
                 ))}
                 <option>Not sure yet</option>
@@ -501,13 +579,16 @@ function ContactForm() {
                 rows={4}
                 className="input resize-none"
                 placeholder="Location, lot area, title number if any, and what you need done."
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
               />
             </Field>
             <button
               type="submit"
-              className="mt-1 inline-flex items-center justify-center gap-2 h-12 rounded-md bg-primary text-primary-foreground font-semibold hover:bg-primary/90"
+              disabled={submitting}
+              className="mt-1 inline-flex items-center justify-center gap-2 h-12 rounded-md bg-primary text-primary-foreground font-semibold hover:bg-primary/90 disabled:opacity-50"
             >
-              Send request <ArrowRight className="h-4 w-4" />
+              {submitting ? "Sending…" : "Send request"} <ArrowRight className="h-4 w-4" />
             </button>
           </div>
         </>
@@ -541,14 +622,14 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-const galleryModules = import.meta.glob<{ default: { url: string } }>(
-  "@/assets/gallery/*.asset.json",
+const galleryModules = import.meta.glob<{ default: string }>(
+  "@/assets/gallery/*.jpg",
   { eager: true },
 );
-const galleryPhotos = Object.entries(galleryModules)
+const FALLBACK_GALLERY_PHOTOS = Object.entries(galleryModules)
   .sort(([a], [b]) => a.localeCompare(b))
   .map(([path, mod]) => ({
-    url: mod.default.url,
+    url: mod.default,
     name: path.split("/").pop() ?? "photo",
   }));
 
@@ -581,23 +662,34 @@ function FacebookCTA() {
   );
 }
 
+const FALLBACK_CREDENTIALS = [
+  {
+    img: prcUrl,
+    title: "PRC Licensed Professionals",
+    description:
+      "Our team is composed of Professional Regulation Commission (PRC) licensed Civil and Geodetic Engineers — ensuring every survey is signed and sealed by qualified professionals.",
+    badge: "PRC Licensed",
+  },
+  {
+    img: secUrl,
+    title: "SEC Registered Business",
+    description:
+      "KL2J Land Surveying and Engineering Services is a duly registered partnership with the Securities and Exchange Commission (SEC) of the Republic of the Philippines.",
+    badge: "SEC Registered",
+  },
+];
+
 function Credentials() {
-  const items = [
-    {
-      img: prcAsset.url,
-      title: "PRC Licensed Professionals",
-      description:
-        "Our team is composed of Professional Regulation Commission (PRC) licensed Civil and Geodetic Engineers — ensuring every survey is signed and sealed by qualified professionals.",
-      badge: "PRC Licensed",
-    },
-    {
-      img: secAsset.url,
-      title: "SEC Registered Business",
-      description:
-        "KL2J Land Surveying and Engineering Services is a duly registered partnership with the Securities and Exchange Commission (SEC) of the Republic of the Philippines.",
-      badge: "SEC Registered",
-    },
-  ];
+  const { data } = usePublicDocuments();
+  const items =
+    data && data.length > 0
+      ? data.map((d) => ({
+          img: d.url,
+          title: d.title,
+          description: d.description ?? "",
+          badge: d.category === "license" ? "License" : d.category === "registration" ? "Registered" : "Document",
+        }))
+      : FALLBACK_CREDENTIALS;
   return (
     <section id="credentials" className="bg-muted/40 border-y border-border">
       <div className="max-w-6xl mx-auto px-4 py-20 md:py-24">
@@ -645,8 +737,153 @@ function Credentials() {
   );
 }
 
+function ProjectDateRange({ p }: { p: { start_date: string | null; end_date: string | null } }) {
+  if (!p.start_date) return null;
+  return (
+    <>
+      {" · "}
+      {new Date(p.start_date).toLocaleDateString()}
+      {p.end_date ? ` – ${new Date(p.end_date).toLocaleDateString()}` : ""}
+    </>
+  );
+}
+
+function Projects() {
+  const { data } = usePublicProjects();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  if (!data || data.length === 0) return null;
+
+  const selected = data.find((p) => p.id === selectedId) ?? null;
+
+  return (
+    <section id="projects" className="max-w-6xl mx-auto px-4 py-20 md:py-24">
+      <div className="max-w-2xl">
+        <p className="text-sm font-semibold uppercase tracking-wider text-primary">Portfolio</p>
+        <h2 className="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Completed projects</h2>
+        <p className="mt-3 text-muted-foreground">A sample of surveys and titling work we've delivered.</p>
+      </div>
+      <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {data.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => setSelectedId(p.id)}
+            className="group overflow-hidden rounded-xl border border-border bg-card text-left shadow-sm transition-shadow hover:shadow-md"
+          >
+            {p.cover_photo_url && (
+              <div className="aspect-video overflow-hidden bg-muted">
+                <img
+                  src={p.cover_photo_url}
+                  alt={p.title}
+                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.05]"
+                  loading="lazy"
+                />
+              </div>
+            )}
+            <div className="p-5">
+              <h3 className="font-semibold text-lg">{p.title}</h3>
+              {p.location && <div className="mt-0.5 text-sm text-muted-foreground">{p.location}</div>}
+              <div className="mt-1 text-xs font-medium uppercase tracking-wide text-primary">
+                {p.service}
+                <ProjectDateRange p={p} />
+              </div>
+              {p.personnel?.length > 0 && (
+                <div className="mt-1 text-xs text-muted-foreground">Team: {p.personnel.join(", ")}</div>
+              )}
+              {p.description && (
+                <p className="mt-2 line-clamp-2 text-sm text-muted-foreground leading-relaxed">{p.description}</p>
+              )}
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {selected && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4"
+          onClick={() => setSelectedId(null)}
+        >
+          <div
+            className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-card shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {selected.cover_photo_url && (
+              <img
+                src={selected.cover_photo_url}
+                alt={selected.title}
+                className="aspect-video w-full rounded-t-2xl object-cover"
+              />
+            )}
+            <div className="p-6">
+              <div className="flex items-start justify-between gap-4">
+                <h3 className="text-xl font-bold">{selected.title}</h3>
+                <button
+                  onClick={() => setSelectedId(null)}
+                  className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted"
+                  aria-label="Close"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              {selected.location && <div className="text-sm text-muted-foreground">{selected.location}</div>}
+              <div className="mt-1 text-xs font-medium uppercase tracking-wide text-primary">
+                {selected.service}
+                <ProjectDateRange p={selected} />
+              </div>
+              {selected.personnel?.length > 0 && (
+                <div className="mt-2 text-sm text-muted-foreground">Team: {selected.personnel.join(", ")}</div>
+              )}
+              {selected.description && (
+                <p className="mt-4 whitespace-pre-wrap text-sm text-muted-foreground leading-relaxed">
+                  {selected.description}
+                </p>
+              )}
+              {selected.attachments?.length > 0 && (
+                <div className="mt-5">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Files</p>
+                  <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {selected.attachments.map((a) =>
+                      a.type === "image" ? (
+                        <a
+                          key={a.path}
+                          href={a.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="aspect-square overflow-hidden rounded-lg border border-border bg-muted"
+                        >
+                          <img src={a.url} alt={a.name} className="h-full w-full object-cover" />
+                        </a>
+                      ) : a.type === "video" ? (
+                        <video key={a.path} src={a.url} controls className="col-span-2 rounded-lg sm:col-span-3" />
+                      ) : (
+                        <a
+                          key={a.path}
+                          href={a.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm hover:bg-muted"
+                        >
+                          <FileText className="h-4 w-4 shrink-0 text-primary" />
+                          <span className="truncate">{a.name}</span>
+                        </a>
+                      ),
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function Photos() {
   const [lightbox, setLightbox] = useState<number | null>(null);
+  const { data } = usePublicGalleryPhotos();
+  const galleryPhotos =
+    data && data.length > 0 ? data.map((p) => ({ url: p.url, name: p.id })) : FALLBACK_GALLERY_PHOTOS;
   const close = () => setLightbox(null);
   const prev = () =>
     setLightbox((i) => (i === null ? null : (i - 1 + galleryPhotos.length) % galleryPhotos.length));
@@ -747,11 +984,13 @@ function Photos() {
 }
 
 function Footer() {
+  const { data: settings } = usePublicSiteSettings();
+  const logo = settings?.logo_url || logoUrl;
   return (
     <footer className="border-t border-border bg-background">
       <div className="max-w-6xl mx-auto px-4 py-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-sm text-muted-foreground">
         <div className="flex items-center gap-2 font-semibold text-foreground">
-          <img src={logoAsset.url} alt="KL2J logo" className="h-6 w-6 rounded-full object-cover" />
+          <img src={logo} alt="KL2J logo" className="h-6 w-6 rounded-full object-cover" />
           KL2J Land Surveying and Engineering Services
         </div>
         <div className="flex items-center gap-4">

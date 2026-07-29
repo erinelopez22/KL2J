@@ -207,7 +207,7 @@ function BoardView() {
         </button>
         <span className="text-xs bg-white/15 px-2 py-0.5 rounded">{board?.visibility ?? "private"}</span>
         <div className="flex-1" />
-        <Link to="/boards" className="text-sm hover:bg-white/15 px-2 py-1 rounded">All boards</Link>
+        <Link to="/inbox" className="text-sm hover:bg-white/15 px-2 py-1 rounded">Inbox</Link>
       </div>
 
       {/* Canvas */}

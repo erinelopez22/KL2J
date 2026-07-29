@@ -26,15 +26,15 @@ export function AppBar({ transparent = false }: { transparent?: boolean }) {
         transparent ? "bg-black/20 text-white backdrop-blur" : "bg-card border-b border-border"
       }`}
     >
-      <Link to="/boards" className="flex items-center gap-2 font-bold">
+      <Link to="/inbox" className="flex items-center gap-2 font-bold">
         <KanbanSquare className="h-5 w-5" />
         <span className="hidden sm:inline">KL2J Land Surveying and Engineering Services</span>
       </Link>
       <Link
-        to="/boards"
+        to="/inbox"
         className={`text-sm px-2 py-1 rounded ${transparent ? "hover:bg-white/10" : "hover:bg-accent"}`}
       >
-        Boards
+        Inbox
       </Link>
       <div className="flex-1 max-w-sm relative hidden md:block">
         <Search className="h-4 w-4 absolute left-2 top-1/2 -translate-y-1/2 opacity-60" />

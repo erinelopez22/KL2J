@@ -2,7 +2,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 const NOTIFY_TO = "erinelopez22@gmail.com";
-const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_mail/gmail/v1";
 
 const InquirySchema = z.object({
   name: z.string().min(1).max(200),
@@ -10,29 +9,8 @@ const InquirySchema = z.object({
   service: z.string().max(200).optional().nullable(),
   message: z.string().max(4000).optional().nullable(),
   channel: z.string().max(50).optional().nullable(),
-  status: z.string().max(50).optional().default("new"),
+  status: z.enum(["New", "Attended", "Completed", "Cancelled", "Rejected"]).optional().default("New"),
 });
-
-function b64url(input: string) {
-  return Buffer.from(input, "utf8")
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-}
-
-function buildRaw(to: string, subject: string, html: string, replyTo?: string) {
-  const headers = [
-    `To: ${to}`,
-    replyTo ? `Reply-To: ${replyTo}` : null,
-    `Subject: ${subject}`,
-    "MIME-Version: 1.0",
-    'Content-Type: text/html; charset="UTF-8"',
-  ]
-    .filter(Boolean)
-    .join("\r\n");
-  return b64url(`${headers}\r\n\r\n${html}`);
-}
 
 function esc(s: string) {
   return s.replace(/[&<>"']/g, (c) =>
@@ -54,7 +32,7 @@ export const submitInquiry = createServerFn({ method: "POST" })
         service: data.service ?? null,
         message: data.message ?? null,
         channel: data.channel ?? null,
-        status: data.status ?? "new",
+        status: data.status ?? "New",
       })
       .select("id, created_at")
       .single();
@@ -64,21 +42,17 @@ export const submitInquiry = createServerFn({ method: "POST" })
       throw new Error("Failed to save inquiry");
     }
 
-    // 2) Send email via Gmail connector gateway
-    const lovableKey = process.env.LOVABLE_API_KEY;
-    const gmailKey = process.env.GOOGLE_MAIL_API_KEY;
+    // 2) Send email via Gmail SMTP
+    const { sendMail } = await import("@/lib/mailer.server");
 
     let emailSent = false;
     let emailError: string | null = null;
+    const logPrefix = `[inquiry:${inserted.id}]`;
 
-    if (!lovableKey || !gmailKey) {
-      emailError = "Email sender not configured";
-      console.error(emailError);
-    } else {
-      try {
-        const subject = `New KL2J Inquiry: ${data.service || "General"} — ${data.name}`;
-        const replyToIsEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.contact);
-        const html = `
+    try {
+      const subject = `New KL2J Inquiry: ${data.service || "General"} — ${data.name}`;
+      const replyToIsEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.contact);
+      const html = `
 <div style="font-family:system-ui,Arial,sans-serif;max-width:560px;margin:0 auto;padding:16px;color:#111;">
   <h2 style="margin:0 0 12px;color:#8b1e1e;">New inquiry from KL2J website</h2>
   <table style="width:100%;border-collapse:collapse;font-size:14px;">
@@ -91,29 +65,28 @@ export const submitInquiry = createServerFn({ method: "POST" })
   <p style="margin-top:16px;font-size:12px;color:#666;">Inquiry ID: ${inserted.id}</p>
 </div>`.trim();
 
-        const raw = buildRaw(NOTIFY_TO, subject, html, replyToIsEmail ? data.contact : undefined);
+      await sendMail({
+        to: NOTIFY_TO,
+        subject,
+        html,
+        replyTo: replyToIsEmail ? data.contact : undefined,
+      });
+      emailSent = true;
+      console.log(`${logPrefix} notification email sent to ${NOTIFY_TO}`);
+    } catch (e) {
+      emailError = e instanceof Error ? e.message : String(e);
+      console.error(`${logPrefix} Gmail SMTP send error: ${emailError}`);
+    }
 
-        const res = await fetch(`${GATEWAY_URL}/users/me/messages/send`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${lovableKey}`,
-            "X-Connection-Api-Key": gmailKey,
-          },
-          body: JSON.stringify({ raw }),
-        });
+    // 3) Persist email delivery status so failures are visible in the admin inbox,
+    // since a failed notification email would otherwise be invisible outside server logs.
+    const { error: updateErr } = await supabaseAdmin
+      .from("inquiries")
+      .update({ email_sent: emailSent, email_error: emailError })
+      .eq("id", inserted.id);
 
-        if (!res.ok) {
-          const body = await res.text();
-          emailError = `Gmail send failed [${res.status}]: ${body}`;
-          console.error(emailError);
-        } else {
-          emailSent = true;
-        }
-      } catch (e) {
-        emailError = e instanceof Error ? e.message : String(e);
-        console.error("Gmail send error", emailError);
-      }
+    if (updateErr) {
+      console.error(`${logPrefix} failed to persist email status`, updateErr);
     }
 
     return { id: inserted.id, emailSent, emailError };
