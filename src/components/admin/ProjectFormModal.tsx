@@ -215,7 +215,7 @@ export function ProjectFormModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4" onClick={onClose}>
       <div
-        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-2xl sm:p-6"
+        className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-2xl sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
@@ -288,20 +288,22 @@ export function ProjectFormModal({
               ))}
             </select>
           </label>
-          <label className="block text-sm">
-            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Status</span>
-            <select
-              value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value as ProjectStatus })}
-              className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-            >
-              {PROJECT_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </label>
+          {project && (
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Status</span>
+              <select
+                value={form.status}
+                onChange={(e) => setForm({ ...form, status: e.target.value as ProjectStatus })}
+                className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+              >
+                {PROJECT_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="block text-sm">
             <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Start date</span>
             <input
