@@ -11,6 +11,12 @@ const AttachmentSchema = z.object({
   name: z.string().min(1).max(200),
 });
 
+const ConfidentialAttachmentSchema = z.object({
+  path: z.string().min(1),
+  type: z.enum(["image", "video", "document"]),
+  name: z.string().min(1).max(200),
+});
+
 const ProjectSchema = z.object({
   title: z.string().min(1).max(200),
   location: z.string().min(1).max(300),
@@ -21,6 +27,7 @@ const ProjectSchema = z.object({
   personnel: z.array(z.string().min(1).max(200)).default([]),
   cover_photo_url: z.string().url().optional(),
   attachments: z.array(AttachmentSchema).default([]),
+  confidential_attachments: z.array(ConfidentialAttachmentSchema).default([]),
   status: z.enum(PROJECT_STATUSES).default("Created"),
   sort_order: z.number().int().default(0),
   inquiry_id: z.string().uuid().optional(),

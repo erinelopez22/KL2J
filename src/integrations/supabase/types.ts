@@ -521,6 +521,7 @@ export type Database = {
       projects: {
         Row: {
           attachments: Json
+          confidential_attachments: Json
           cover_photo_url: string | null
           created_at: string
           description: string | null
@@ -537,6 +538,7 @@ export type Database = {
         }
         Insert: {
           attachments?: Json
+          confidential_attachments?: Json
           cover_photo_url?: string | null
           created_at?: string
           description?: string | null
@@ -553,6 +555,7 @@ export type Database = {
         }
         Update: {
           attachments?: Json
+          confidential_attachments?: Json
           cover_photo_url?: string | null
           created_at?: string
           description?: string | null

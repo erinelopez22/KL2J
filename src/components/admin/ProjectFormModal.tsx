@@ -2,18 +2,20 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { X, Trash2, FileText, Video, Image as ImageIcon } from "lucide-react";
+import { X, Trash2, FileText, Video, Image as ImageIcon, Lock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { createProject, updateProject, deleteProject } from "@/lib/admin/projects.functions";
-import { deleteSiteMedia } from "@/lib/admin/media.functions";
+import { deleteSiteMedia, deleteConfidentialMedia } from "@/lib/admin/media.functions";
 import { usePublicServices } from "@/lib/public-content";
 import { FileDrop } from "@/components/admin/FileDrop";
+import { ConfidentialFileDrop } from "@/components/admin/ConfidentialFileDrop";
 import { LocationAutosuggest } from "@/components/admin/LocationAutosuggest";
 
 export const PROJECT_STATUSES = ["Created", "Attended", "On-hold", "Completed", "Cancelled"] as const;
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 
 export type ProjectAttachment = { url: string; path: string; type: "image" | "video" | "document"; name: string };
+export type ConfidentialAttachment = { path: string; type: "image" | "video" | "document"; name: string };
 
 export type ProjectRecord = {
   id: string;
@@ -26,6 +28,7 @@ export type ProjectRecord = {
   personnel: string[];
   cover_photo_url: string | null;
   attachments: ProjectAttachment[];
+  confidential_attachments: ConfidentialAttachment[];
   status: ProjectStatus;
   inquiry_id: string | null;
   sort_order: number;
@@ -41,6 +44,7 @@ type FormState = {
   personnel: string[];
   cover_photo_url: string;
   attachments: ProjectAttachment[];
+  confidential_attachments: ConfidentialAttachment[];
   status: ProjectStatus;
   inquiry_id: string;
 };
@@ -68,6 +72,7 @@ function emptyForm(): FormState {
     personnel: [],
     cover_photo_url: "",
     attachments: [],
+    confidential_attachments: [],
     status: "Created",
     inquiry_id: "",
   };
@@ -98,6 +103,7 @@ export function ProjectFormModal({
           personnel: project.personnel ?? [],
           cover_photo_url: project.cover_photo_url ?? "",
           attachments: project.attachments ?? [],
+          confidential_attachments: project.confidential_attachments ?? [],
           status: project.status,
           inquiry_id: project.inquiry_id ?? "",
         }
@@ -109,6 +115,7 @@ export function ProjectFormModal({
   const doUpdate = useServerFn(updateProject);
   const doDelete = useServerFn(deleteProject);
   const doDeleteMedia = useServerFn(deleteSiteMedia);
+  const doDeleteConfidential = useServerFn(deleteConfidentialMedia);
   const { data: services } = usePublicServices();
 
   const { data: inquiries } = useQuery({
@@ -141,6 +148,28 @@ export function ProjectFormModal({
     setForm((f) => ({ ...f, attachments: f.attachments.filter((a) => a.path !== attachment.path) }));
     try {
       await doDeleteMedia({ data: { path: attachment.path } });
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  function addConfidentialAttachment(result: { path: string; contentType: string; name: string }) {
+    setForm((f) => ({
+      ...f,
+      confidential_attachments: [
+        ...f.confidential_attachments,
+        { path: result.path, type: attachmentTypeFor(result.contentType), name: result.name },
+      ],
+    }));
+  }
+
+  async function removeConfidentialAttachment(attachment: ConfidentialAttachment) {
+    setForm((f) => ({
+      ...f,
+      confidential_attachments: f.confidential_attachments.filter((a) => a.path !== attachment.path),
+    }));
+    try {
+      await doDeleteConfidential({ data: { path: attachment.path } });
     } catch (err) {
       console.error(err);
     }
@@ -180,6 +209,7 @@ export function ProjectFormModal({
       personnel: form.personnel,
       cover_photo_url: form.cover_photo_url || undefined,
       attachments: form.attachments,
+      confidential_attachments: form.confidential_attachments,
       status: form.status,
       inquiry_id: defaultInquiry?.id || form.inquiry_id || undefined,
       sort_order: project?.sort_order ?? 0,
@@ -401,8 +431,9 @@ export function ProjectFormModal({
               </div>
               <div>
                 <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
-                  Files (photos, documents, videos)
+                  Public files (photos, documents, videos)
                 </span>
+                <p className="mb-1.5 text-[11px] text-muted-foreground/70">Visible to visitors on the public site.</p>
                 <FileDrop
                   folder="projects"
                   accept="image/jpeg,image/png,image/webp,application/pdf,video/mp4,video/webm,video/quicktime"
@@ -410,27 +441,58 @@ export function ProjectFormModal({
                   onUploaded={addAttachment}
                 />
                 {form.attachments.length > 0 && (
-                  <div className="mt-2 space-y-1.5">
+                  <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
                     {form.attachments.map((a) => (
                       <div
                         key={a.path}
-                        className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm"
+                        className="group relative flex flex-col items-center gap-1 rounded-lg border border-border bg-background p-2 text-center"
                       >
-                        <AttachmentIcon type={a.type} />
-                        <span className="min-w-0 flex-1 truncate">{a.name}</span>
                         <button
                           type="button"
                           onClick={() => removeAttachment(a)}
-                          className="shrink-0 text-muted-foreground hover:text-destructive"
+                          className="absolute -right-1.5 -top-1.5 hidden rounded-full bg-destructive p-0.5 text-white group-hover:block"
                           aria-label={`Remove ${a.name}`}
                         >
-                          <X className="h-4 w-4" />
+                          <X className="h-3 w-3" />
                         </button>
+                        <AttachmentIcon type={a.type} />
+                        <span className="w-full truncate text-[10px] text-muted-foreground">{a.name}</span>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
+            </div>
+
+            <div className="mt-4 pl-4">
+              <span className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground">
+                <Lock className="h-3.5 w-3.5" /> Confidential files
+              </span>
+              <p className="mb-1.5 text-[11px] text-muted-foreground/70">
+                Only visible to admins here — never shown on the public site.
+              </p>
+              <ConfidentialFileDrop onUploaded={addConfidentialAttachment} />
+              {form.confidential_attachments.length > 0 && (
+                <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {form.confidential_attachments.map((a) => (
+                    <div
+                      key={a.path}
+                      className="group relative flex flex-col items-center gap-1 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 text-center"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => removeConfidentialAttachment(a)}
+                        className="absolute -right-1.5 -top-1.5 hidden rounded-full bg-destructive p-0.5 text-white group-hover:block"
+                        aria-label={`Remove ${a.name}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                      <AttachmentIcon type={a.type} />
+                      <span className="w-full truncate text-[10px] text-muted-foreground">{a.name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </section>
         </div>

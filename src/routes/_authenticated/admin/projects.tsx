@@ -3,15 +3,17 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Plus, Trash2, X, Pencil } from "lucide-react";
+import { Plus, Trash2, X, Pencil, Lock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { updateProject, deleteProject } from "@/lib/admin/projects.functions";
+import { getConfidentialFileUrl } from "@/lib/admin/media.functions";
 import {
   ProjectFormModal,
   AttachmentIcon,
   PROJECT_STATUSES,
   type ProjectRecord,
   type ProjectStatus,
+  type ConfidentialAttachment,
 } from "@/components/admin/ProjectFormModal";
 
 export const Route = createFileRoute("/_authenticated/admin/projects")({
@@ -34,6 +36,7 @@ function AdminProjects() {
   const [savingStatus, setSavingStatus] = useState(false);
   const doUpdate = useServerFn(updateProject);
   const doDelete = useServerFn(deleteProject);
+  const doGetConfidentialUrl = useServerFn(getConfidentialFileUrl);
 
   const { data: projects, isLoading } = useQuery({
     queryKey: ["admin-projects"],
@@ -66,6 +69,15 @@ function AdminProjects() {
       toast.error(err instanceof Error ? err.message : "Failed to update status");
     } finally {
       setSavingStatus(false);
+    }
+  }
+
+  async function openConfidentialFile(attachment: ConfidentialAttachment) {
+    try {
+      const { url } = await doGetConfidentialUrl({ data: { path: attachment.path } });
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to open file");
     }
   }
 
@@ -104,7 +116,7 @@ function AdminProjects() {
           onClick={() => setViewingId(null)}
         >
           <div
-            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-2xl sm:p-6"
+            className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-2xl sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4">
@@ -170,19 +182,39 @@ function AdminProjects() {
             </div>
             {viewingProject.attachments?.length > 0 && (
               <div className="mt-3">
-                <span className="text-xs font-semibold uppercase text-muted-foreground/70">Files</span>
-                <div className="mt-1.5 space-y-1.5">
+                <span className="text-xs font-semibold uppercase text-muted-foreground/70">Public files</span>
+                <div className="mt-1.5 grid grid-cols-4 gap-2 sm:grid-cols-6">
                   {viewingProject.attachments.map((a) => (
                     <a
                       key={a.path}
                       href={a.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm hover:bg-muted"
+                      className="flex flex-col items-center gap-1 rounded-lg border border-border bg-background p-2 text-center hover:bg-muted"
                     >
                       <AttachmentIcon type={a.type} />
-                      <span className="min-w-0 flex-1 truncate">{a.name}</span>
+                      <span className="w-full truncate text-[10px] text-muted-foreground">{a.name}</span>
                     </a>
+                  ))}
+                </div>
+              </div>
+            )}
+            {viewingProject.confidential_attachments?.length > 0 && (
+              <div className="mt-3">
+                <span className="flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground/70">
+                  <Lock className="h-3.5 w-3.5" /> Confidential files
+                </span>
+                <div className="mt-1.5 grid grid-cols-4 gap-2 sm:grid-cols-6">
+                  {viewingProject.confidential_attachments.map((a) => (
+                    <button
+                      key={a.path}
+                      type="button"
+                      onClick={() => openConfidentialFile(a)}
+                      className="flex flex-col items-center gap-1 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 text-center hover:bg-amber-500/10"
+                    >
+                      <AttachmentIcon type={a.type} />
+                      <span className="w-full truncate text-[10px] text-muted-foreground">{a.name}</span>
+                    </button>
                   ))}
                 </div>
               </div>
