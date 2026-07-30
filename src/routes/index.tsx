@@ -25,6 +25,8 @@ import {
   FileText,
   ExternalLink,
   X,
+  Maximize2,
+  Handshake,
 } from "lucide-react";
 import { ChatWidget } from "@/components/ChatWidget";
 import {
@@ -33,6 +35,7 @@ import {
   usePublicDocuments,
   usePublicProjects,
   usePublicSiteSettings,
+  usePublicPartnerCompanies,
 } from "@/lib/public-content";
 import { getServiceIcon } from "@/lib/admin/iconMap";
 
@@ -127,6 +130,7 @@ function LandingPage() {
       <FacebookCTA />
       <Photos />
       <CTA />
+      <Partners />
       <Footer />
       <ChatWidget />
     </div>
@@ -881,6 +885,7 @@ function Projects() {
 
 function Photos() {
   const [lightbox, setLightbox] = useState<number | null>(null);
+  const [showAll, setShowAll] = useState(false);
   const { data } = usePublicGalleryPhotos();
   const galleryPhotos =
     data && data.length > 0 ? data.map((p) => ({ url: p.url, name: p.id })) : FALLBACK_GALLERY_PHOTOS;
@@ -903,35 +908,87 @@ function Photos() {
             operations. Tap any image to view it full-size.
           </p>
         </div>
-        <a
-          href={FACEBOOK_PHOTOS_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 h-11 px-5 rounded-md bg-primary text-primary-foreground font-semibold hover:bg-primary/90 self-start"
-        >
-          <Facebook className="h-4 w-4" /> View on Facebook
-          <ExternalLink className="h-3.5 w-3.5" />
-        </a>
+        <div className="flex shrink-0 gap-2 self-start">
+          <a
+            href={FACEBOOK_PHOTOS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 h-11 px-5 rounded-md bg-primary text-primary-foreground font-semibold hover:bg-primary/90"
+          >
+            <Facebook className="h-4 w-4" /> View on Facebook
+            <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+          <button
+            type="button"
+            onClick={() => setShowAll(true)}
+            className="inline-flex items-center gap-2 h-11 px-5 rounded-md border border-border font-semibold hover:bg-accent"
+          >
+            <Maximize2 className="h-4 w-4" /> View all
+          </button>
+        </div>
       </div>
 
-      <div className="mt-10 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-        {galleryPhotos.map((p, i) => (
-          <button
-            key={p.name}
-            type="button"
-            onClick={() => setLightbox(i)}
-            className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-secondary/40"
-          >
-            <img
-              src={p.url}
-              alt={`KL2J field survey photo ${i + 1}`}
-              loading="lazy"
-              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.05]"
-            />
-            <div className="absolute inset-0 bg-slate-950/0 group-hover:bg-slate-950/20 transition" />
-          </button>
-        ))}
+      <div className="mt-10 -mx-4 px-4 overflow-x-auto">
+        <div className="grid grid-flow-col grid-rows-2 auto-cols-[140px] sm:auto-cols-[170px] gap-3 pb-2">
+          {galleryPhotos.map((p, i) => (
+            <button
+              key={p.name}
+              type="button"
+              onClick={() => setLightbox(i)}
+              className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-secondary/40"
+            >
+              <img
+                src={p.url}
+                alt={`KL2J field survey photo ${i + 1}`}
+                loading="lazy"
+                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.05]"
+              />
+              <div className="absolute inset-0 bg-slate-950/0 group-hover:bg-slate-950/20 transition" />
+            </button>
+          ))}
+        </div>
       </div>
+
+      {showAll && (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/80 p-4"
+          onClick={() => setShowAll(false)}
+        >
+          <div
+            className="max-h-[85vh] w-full max-w-5xl overflow-y-auto rounded-xl bg-card p-4 shadow-2xl sm:p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <h3 className="text-lg font-semibold">Full gallery ({galleryPhotos.length} photos)</h3>
+              <button
+                onClick={() => setShowAll(false)}
+                className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {galleryPhotos.map((p, i) => (
+                <button
+                  key={p.name}
+                  type="button"
+                  onClick={() => setLightbox(i)}
+                  className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-secondary/40"
+                >
+                  <img
+                    src={p.url}
+                    alt={`KL2J field survey photo ${i + 1}`}
+                    loading="lazy"
+                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.05]"
+                  />
+                  <div className="absolute inset-0 bg-slate-950/0 group-hover:bg-slate-950/20 transition" />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {lightbox !== null && (
         <div
@@ -979,6 +1036,42 @@ function Photos() {
           </div>
         </div>
       )}
+    </section>
+  );
+}
+
+function Partners() {
+  const { data } = usePublicPartnerCompanies();
+  if (!data || data.length === 0) return null;
+
+  return (
+    <section className="border-t border-border bg-muted/20">
+      <div className="max-w-6xl mx-auto px-4 py-14">
+        <div className="flex items-center justify-center gap-2 text-center">
+          <Handshake className="h-5 w-5 text-primary" />
+          <p className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Tied-up companies</p>
+        </div>
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-8">
+          {data.map((c) =>
+            c.website_url ? (
+              <a
+                key={c.id}
+                href={c.website_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={c.name}
+                className="flex h-16 w-32 items-center justify-center grayscale transition hover:grayscale-0"
+              >
+                <img src={c.logo_url} alt={c.name} className="max-h-full max-w-full object-contain" />
+              </a>
+            ) : (
+              <div key={c.id} title={c.name} className="flex h-16 w-32 items-center justify-center grayscale">
+                <img src={c.logo_url} alt={c.name} className="max-h-full max-w-full object-contain" />
+              </div>
+            ),
+          )}
+        </div>
+      </div>
     </section>
   );
 }

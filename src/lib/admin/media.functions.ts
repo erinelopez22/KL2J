@@ -11,10 +11,11 @@ const FOLDER_RULES: Record<string, { types: string[]; maxBytes: number }> = {
   gallery: { types: IMAGE_TYPES, maxBytes: 5 * 1024 * 1024 },
   documents: { types: [...IMAGE_TYPES, ...DOC_TYPES], maxBytes: 10 * 1024 * 1024 },
   projects: { types: [...IMAGE_TYPES, ...DOC_TYPES, ...VIDEO_TYPES], maxBytes: 50 * 1024 * 1024 },
+  companies: { types: IMAGE_TYPES, maxBytes: 5 * 1024 * 1024 },
 };
 
 const UploadSchema = z.object({
-  folder: z.enum(["branding", "gallery", "documents", "projects"]),
+  folder: z.enum(["branding", "gallery", "documents", "projects", "companies"]),
   filename: z.string().min(1).max(200),
   contentType: z.string().min(1),
   base64: z.string().min(1),

@@ -5,7 +5,7 @@ import { Upload } from "lucide-react";
 import { uploadSiteMedia } from "@/lib/admin/media.functions";
 import { fileToBase64 } from "@/lib/admin/fileToBase64";
 
-type Folder = "branding" | "gallery" | "documents" | "projects";
+type Folder = "branding" | "gallery" | "documents" | "projects" | "companies";
 
 export function FileDrop({
   folder,

@@ -59,6 +59,23 @@ export function usePublicGalleryPhotos() {
   });
 }
 
+export type PublicPartnerCompany = { id: string; name: string; logo_url: string; website_url: string | null };
+
+export function usePublicPartnerCompanies() {
+  return useQuery({
+    queryKey: ["public-companies"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("partner_companies")
+        .select("id,name,logo_url,website_url")
+        .order("sort_order");
+      if (error) throw error;
+      return data as PublicPartnerCompany[];
+    },
+    staleTime: 60_000,
+  });
+}
+
 export function usePublicDocuments() {
   return useQuery({
     queryKey: ["public-documents"],

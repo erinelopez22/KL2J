@@ -12,6 +12,7 @@ import {
   Palette,
   LogOut,
   Building2,
+  Handshake,
 } from "lucide-react";
 
 const links = [
@@ -22,6 +23,7 @@ const links = [
   { to: "/admin/gallery", label: "Gallery", icon: ImageIcon },
   { to: "/admin/documents", label: "Documents", icon: FileText },
   { to: "/admin/projects", label: "Projects", icon: FolderKanban },
+  { to: "/admin/companies", label: "Tied-up Companies", icon: Handshake },
   { to: "/admin/google-business", label: "Google Business", icon: Building2 },
 ];
 
