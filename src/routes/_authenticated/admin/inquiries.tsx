@@ -3,7 +3,21 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ProjectFormModal, type ProjectStatus } from "@/components/admin/ProjectFormModal";
-import { MessageCircle, RefreshCw, Clock, MailWarning, Eye, EyeOff, X, FolderKanban, Plus } from "lucide-react";
+import {
+  MessageCircle,
+  RefreshCw,
+  Clock,
+  MailWarning,
+  Eye,
+  EyeOff,
+  X,
+  FolderKanban,
+  Plus,
+  Mail,
+  MessageSquare,
+  Globe,
+  Bot,
+} from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/inquiries")({
   component: AdminInquiries,
@@ -178,6 +192,16 @@ function parseInquiryMessage(message: string | null): { phone: string | null; de
   return { phone: null, details: message };
 }
 
+function platformLabel(channel: string | null): { label: string; icon: typeof Globe } {
+  if (channel === "quote_form") return { label: "Request a Quote form", icon: Globe };
+  if (channel) return { label: "Chatbot", icon: Bot };
+  return { label: "Unknown", icon: Globe };
+}
+
+function emailComposeUrl(to: string, subject: string) {
+  return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}`;
+}
+
 function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => void }) {
   // Newer inquiries have dedicated email/phone columns. Older rows only have
   // "contact" (email or phone, whichever the customer entered) with the
@@ -188,11 +212,33 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
   const email = inquiry.email || (!hasDedicatedFields && contactIsEmail ? inquiry.contact : null);
   const phone = inquiry.phone || legacy.phone || (!hasDedicatedFields && !contactIsEmail ? inquiry.contact : null);
   const details = hasDedicatedFields ? inquiry.message : legacy.details;
+  const platform = platformLabel(inquiry.channel);
+
+  function emailInquirer() {
+    if (!email) return;
+    if (confirm(`Send an email to: ${inquiry.name} (${email})?`)) {
+      window.open(
+        emailComposeUrl(email, `Re: Your inquiry to KL2J`),
+        "_blank",
+        "noopener,noreferrer,width=900,height=650",
+      );
+    }
+  }
+
+  function smsInquirer() {
+    if (!phone) return;
+    if (confirm(`Send an SMS to: ${inquiry.name} (${phone})?`)) {
+      // sms: is a custom URI scheme handled by the OS's default messaging
+      // app (if one is registered) — it must be a direct navigation, not
+      // window.open, same as how tel: links work elsewhere in this app.
+      window.location.href = `sms:${phone}`;
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4" onClick={onClose}>
       <div
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-2xl sm:p-6"
+        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-2xl sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4">
@@ -222,17 +268,35 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
             <span className="text-right font-semibold">{inquiry.name}</span>
           </div>
           {email && (
-            <div className="flex items-center justify-between gap-4 px-3 py-2">
+            <button
+              type="button"
+              onClick={emailInquirer}
+              className="flex w-full items-center justify-between gap-4 px-3 py-2 text-left hover:bg-muted/50"
+            >
               <span className="text-xs font-medium text-muted-foreground">Email</span>
-              <span className="text-right">{email}</span>
-            </div>
+              <span className="flex items-center gap-1.5 text-right text-primary hover:underline">
+                <Mail className="h-3.5 w-3.5" /> {email}
+              </span>
+            </button>
           )}
           {phone && (
-            <div className="flex items-center justify-between gap-4 px-3 py-2">
+            <button
+              type="button"
+              onClick={smsInquirer}
+              className="flex w-full items-center justify-between gap-4 px-3 py-2 text-left hover:bg-muted/50"
+            >
               <span className="text-xs font-medium text-muted-foreground">Number</span>
-              <span className="text-right">{phone}</span>
-            </div>
+              <span className="flex items-center gap-1.5 text-right text-primary hover:underline">
+                <MessageSquare className="h-3.5 w-3.5" /> {phone}
+              </span>
+            </button>
           )}
+          <div className="flex items-center justify-between gap-4 px-3 py-2">
+            <span className="text-xs font-medium text-muted-foreground">Platform</span>
+            <span className="flex items-center gap-1.5 text-right">
+              <platform.icon className="h-3.5 w-3.5 text-muted-foreground" /> {platform.label}
+            </span>
+          </div>
           {details && (
             <div className="px-3 py-2">
               <span className="mb-1 block text-xs font-medium text-muted-foreground">Inquiry details</span>
@@ -242,7 +306,6 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
         </div>
 
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground/60">
-          {inquiry.channel && <span>via {inquiry.channel}</span>}
           <span className="flex items-center gap-1">
             <Clock className="h-3 w-3" />
             {new Date(inquiry.created_at).toLocaleString()}

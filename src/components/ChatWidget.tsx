@@ -106,6 +106,7 @@ export function ChatWidget() {
           phone: phone.trim() || null,
           service,
           message: `${intent}${note ? "\n\n" + note : ""}`,
+          channel: "chatbot",
           status: "New",
         },
       });
