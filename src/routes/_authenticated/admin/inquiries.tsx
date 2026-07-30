@@ -43,6 +43,8 @@ type Inquiry = {
   created_at: string;
   name: string;
   contact: string;
+  email: string | null;
+  phone: string | null;
   service: string | null;
   message: string | null;
   channel: string | null;
@@ -75,7 +77,9 @@ function InquiryCard({ inquiry, onOpen }: { inquiry: Inquiry; onOpen: () => void
           </span>
         )}
       </div>
-      <div className="mt-1 text-xs text-muted-foreground">{inquiry.contact}</div>
+      <div className="mt-1 text-xs text-muted-foreground">
+        {[inquiry.email, inquiry.phone].filter(Boolean).join(" · ") || inquiry.contact}
+      </div>
       {inquiry.service && <div className="mt-1 text-xs font-medium text-primary">{inquiry.service}</div>}
       {inquiry.message && <p className="mt-1.5 line-clamp-3 text-xs text-muted-foreground">{inquiry.message}</p>}
       <div className="mt-2 flex items-center gap-1 text-[10px] text-muted-foreground">
@@ -175,8 +179,15 @@ function parseInquiryMessage(message: string | null): { phone: string | null; de
 }
 
 function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => void }) {
-  const { phone, details } = parseInquiryMessage(inquiry.message);
+  // Newer inquiries have dedicated email/phone columns. Older rows only have
+  // "contact" (email or phone, whichever the customer entered) with the
+  // phone sometimes embedded as a "Phone: ..." prefix in the message.
+  const hasDedicatedFields = Boolean(inquiry.email || inquiry.phone);
+  const legacy = parseInquiryMessage(inquiry.message);
   const contactIsEmail = inquiry.contact.includes("@");
+  const email = inquiry.email || (!hasDedicatedFields && contactIsEmail ? inquiry.contact : null);
+  const phone = inquiry.phone || legacy.phone || (!hasDedicatedFields && !contactIsEmail ? inquiry.contact : null);
+  const details = hasDedicatedFields ? inquiry.message : legacy.details;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4" onClick={onClose}>
@@ -210,10 +221,12 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
             <span className="text-xs font-medium text-muted-foreground">Customer Name</span>
             <span className="text-right font-semibold">{inquiry.name}</span>
           </div>
-          <div className="flex items-center justify-between gap-4 px-3 py-2">
-            <span className="text-xs font-medium text-muted-foreground">{contactIsEmail ? "Email" : "Number"}</span>
-            <span className="text-right">{inquiry.contact}</span>
-          </div>
+          {email && (
+            <div className="flex items-center justify-between gap-4 px-3 py-2">
+              <span className="text-xs font-medium text-muted-foreground">Email</span>
+              <span className="text-right">{email}</span>
+            </div>
+          )}
           {phone && (
             <div className="flex items-center justify-between gap-4 px-3 py-2">
               <span className="text-xs font-medium text-muted-foreground">Number</span>

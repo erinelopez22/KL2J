@@ -357,11 +357,13 @@ export type Database = {
           channel: string | null
           contact: string
           created_at: string
+          email: string | null
           email_error: string | null
           email_sent: boolean
           id: string
           message: string | null
           name: string
+          phone: string | null
           service: string | null
           status: string
         }
@@ -369,11 +371,13 @@ export type Database = {
           channel?: string | null
           contact: string
           created_at?: string
+          email?: string | null
           email_error?: string | null
           email_sent?: boolean
           id?: string
           message?: string | null
           name: string
+          phone?: string | null
           service?: string | null
           status?: string
         }
@@ -381,11 +385,13 @@ export type Database = {
           channel?: string | null
           contact?: string
           created_at?: string
+          email?: string | null
           email_error?: string | null
           email_sent?: boolean
           id?: string
           message?: string | null
           name?: string
+          phone?: string | null
           service?: string | null
           status?: string
         }

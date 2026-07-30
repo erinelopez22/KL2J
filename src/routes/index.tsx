@@ -42,7 +42,6 @@ import { getServiceIcon } from "@/lib/admin/iconMap";
 const FACEBOOK_PAGE_URL = "https://www.facebook.com/profile.php?id=61581147040190";
 const FACEBOOK_DOCS_URL =
   "https://www.facebook.com/permalink.php?story_fbid=pfbid0pDhu8X7Zwkpwrpti3ccFEXWoHni2X6X8bip1Lo9DaoCJFZLX9oDkxifCbhfxDnM6l&id=61581147040190";
-const FACEBOOK_PHOTOS_URL = "https://www.facebook.com/profile.php?id=61581147040190&sk=photos_by";
 import logoUrl from "@/assets/kl2j-logo.jpg";
 import bannerUrl from "@/assets/kl2j-bg.png";
 import prcUrl from "@/assets/kl2j-prc-licensed.jpg";
@@ -186,7 +185,7 @@ function NavBar() {
           </a>
           <a
             href="#contact"
-            className="inline-flex items-center gap-2 h-10 px-4 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90"
+            className="inline-flex items-center gap-2 h-10 px-4 rounded-md bg-primary text-primary-foreground text-sm font-semibold whitespace-nowrap hover:bg-primary/90"
           >
             Request a quote <ArrowRight className="h-4 w-4" />
           </a>
@@ -237,7 +236,7 @@ function Hero() {
         />
         <div className="absolute inset-0 bg-gradient-to-r from-slate-950/85 via-slate-950/60 to-primary/30" />
       </div>
-      <div className="relative max-w-6xl mx-auto px-4 py-24 md:py-32 text-white">
+      <div className="relative max-w-6xl mx-auto px-4 py-16 md:py-20 text-white">
         <div className="flex items-center gap-4">
           <img
             src={logo}
@@ -306,7 +305,7 @@ function Services() {
       : FALLBACK_SERVICES;
 
   return (
-    <section id="services" className="max-w-6xl mx-auto px-4 py-20 md:py-28">
+    <section id="services" className="max-w-6xl mx-auto px-4 py-14 md:py-16">
       <div className="max-w-2xl">
         <p className="text-sm font-semibold uppercase tracking-wider text-primary">Our services</p>
         <h2 className="mt-2 text-3xl md:text-4xl font-bold tracking-tight">
@@ -318,7 +317,7 @@ function Services() {
           surveying work.
         </p>
       </div>
-      <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {items.map((s) => {
           const Icon = getServiceIcon(s.icon);
           return (
@@ -364,14 +363,14 @@ function Process() {
   ];
   return (
     <section id="process" className="bg-secondary/40 border-y border-border">
-      <div className="max-w-6xl mx-auto px-4 py-20 md:py-24">
+      <div className="max-w-6xl mx-auto px-4 py-14 md:py-16">
         <div className="max-w-2xl">
           <p className="text-sm font-semibold uppercase tracking-wider text-primary">How we work</p>
           <h2 className="mt-2 text-3xl md:text-4xl font-bold tracking-tight">
             A clear, four-step process
           </h2>
         </div>
-        <div className="mt-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
           {steps.map((s) => (
             <div key={s.n} className="rounded-xl bg-card border border-border p-6">
               <div className="text-3xl font-bold text-primary/70">{s.n}</div>
@@ -409,7 +408,7 @@ function WhyUs() {
     },
   ];
   return (
-    <section id="why" className="max-w-6xl mx-auto px-4 py-20 md:py-28">
+    <section id="why" className="max-w-6xl mx-auto px-4 py-14 md:py-16">
       <div className="grid lg:grid-cols-2 gap-12 items-center">
         <div>
           <p className="text-sm font-semibold uppercase tracking-wider text-primary">Why choose us</p>
@@ -438,7 +437,7 @@ function CTA() {
   return (
     <section id="contact" className="relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-br from-primary to-slate-900" />
-      <div className="relative max-w-6xl mx-auto px-4 py-20 md:py-24 text-primary-foreground">
+      <div className="relative max-w-6xl mx-auto px-4 py-14 md:py-16 text-primary-foreground">
         <div className="grid lg:grid-cols-2 gap-10 items-start">
           <div>
             <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
@@ -505,9 +504,10 @@ function ContactForm() {
       await sendInquiry({
         data: {
           name: fullName.trim(),
-          contact: email.trim(),
+          email: email.trim() || null,
+          phone: phone.trim() || null,
           service: service || null,
-          message: `${phone.trim() ? `Phone: ${phone.trim()}\n\n` : ""}${message.trim()}`.trim() || null,
+          message: message.trim() || null,
           channel: "quote_form",
           status: "New",
         },
@@ -640,25 +640,22 @@ const FALLBACK_GALLERY_PHOTOS = Object.entries(galleryModules)
 function FacebookCTA() {
   return (
     <section className="bg-primary/5 border-y border-primary/10">
-      <div className="max-w-6xl mx-auto px-4 py-14 md:py-16">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 rounded-2xl border border-primary/20 bg-background p-8 md:p-10 shadow-sm">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wider text-primary">Stay connected</p>
-            <h2 className="mt-2 text-2xl md:text-3xl font-bold tracking-tight">Follow KL2J on Facebook</h2>
-            <p className="mt-2 text-muted-foreground max-w-xl">
-              Get updates on completed projects, fieldwork behind-the-scenes, and company
-              announcements straight from our Facebook page.
-            </p>
+      <div className="max-w-6xl mx-auto px-4 py-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-primary/20 bg-background px-5 py-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <Facebook className="h-5 w-5 shrink-0 text-primary" />
+            <div>
+              <span className="font-semibold">Stay connected</span>
+              <span className="text-muted-foreground"> — follow KL2J on Facebook for updates.</span>
+            </div>
           </div>
           <a
             href={FACEBOOK_PAGE_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-2 h-12 px-6 rounded-md bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition shrink-0"
+            className="inline-flex items-center justify-center gap-2 h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition shrink-0"
           >
-            <Facebook className="h-5 w-5" />
-            Visit our Facebook page
-            <ExternalLink className="h-4 w-4" />
+            Visit page <ExternalLink className="h-3.5 w-3.5" />
           </a>
         </div>
       </div>
@@ -696,8 +693,8 @@ function Credentials() {
       : FALLBACK_CREDENTIALS;
   return (
     <section id="credentials" className="bg-muted/40 border-y border-border">
-      <div className="max-w-6xl mx-auto px-4 py-20 md:py-24">
-        <div className="text-center max-w-2xl mx-auto mb-12">
+      <div className="max-w-6xl mx-auto px-4 py-14 md:py-16">
+        <div className="text-center max-w-2xl mx-auto mb-8">
           <p className="text-sm font-semibold uppercase tracking-wider text-primary">
             Legitimacy & Credibility
           </p>
@@ -760,13 +757,13 @@ function Projects() {
   const selected = data.find((p) => p.id === selectedId) ?? null;
 
   return (
-    <section id="projects" className="max-w-6xl mx-auto px-4 py-20 md:py-24">
+    <section id="projects" className="max-w-6xl mx-auto px-4 py-14 md:py-16">
       <div className="max-w-2xl">
         <p className="text-sm font-semibold uppercase tracking-wider text-primary">Portfolio</p>
         <h2 className="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Completed projects</h2>
         <p className="mt-3 text-muted-foreground">A sample of surveys and titling work we've delivered.</p>
       </div>
-      <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {data.map((p) => (
           <button
             key={p.id}
@@ -896,7 +893,7 @@ function Photos() {
     setLightbox((i) => (i === null ? null : (i + 1) % galleryPhotos.length));
 
   return (
-    <section id="photos" className="max-w-6xl mx-auto px-4 py-20 md:py-24">
+    <section id="photos" className="max-w-6xl mx-auto px-4 py-14 md:py-16">
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
         <div className="max-w-2xl">
           <p className="text-sm font-semibold uppercase tracking-wider text-primary">Field gallery</p>
@@ -908,27 +905,16 @@ function Photos() {
             operations. Tap any image to view it full-size.
           </p>
         </div>
-        <div className="flex shrink-0 gap-2 self-start">
-          <a
-            href={FACEBOOK_PHOTOS_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 h-11 px-5 rounded-md bg-primary text-primary-foreground font-semibold hover:bg-primary/90"
-          >
-            <Facebook className="h-4 w-4" /> View on Facebook
-            <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-          <button
-            type="button"
-            onClick={() => setShowAll(true)}
-            className="inline-flex items-center gap-2 h-11 px-5 rounded-md border border-border font-semibold hover:bg-accent"
-          >
-            <Maximize2 className="h-4 w-4" /> View all
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setShowAll(true)}
+          className="inline-flex shrink-0 items-center gap-2 h-11 px-5 rounded-md bg-primary text-primary-foreground font-semibold hover:bg-primary/90 self-start"
+        >
+          <Maximize2 className="h-4 w-4" /> View all
+        </button>
       </div>
 
-      <div className="mt-10 -mx-4 px-4 overflow-x-auto">
+      <div className="mt-8 -mx-4 px-4 overflow-x-auto">
         <div className="grid grid-flow-col grid-rows-2 auto-cols-[140px] sm:auto-cols-[170px] gap-3 pb-2">
           {galleryPhotos.map((p, i) => (
             <button
@@ -1046,12 +1032,12 @@ function Partners() {
 
   return (
     <section className="border-t border-border bg-muted/20">
-      <div className="max-w-6xl mx-auto px-4 py-14">
+      <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="flex items-center justify-center gap-2 text-center">
           <Handshake className="h-5 w-5 text-primary" />
           <p className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Tied-up companies</p>
         </div>
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-8">
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-8">
           {data.map((c) =>
             c.website_url ? (
               <a

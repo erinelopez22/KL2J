@@ -43,7 +43,8 @@ export function ChatWidget() {
   const [service, setService] = useState<string>("");
   const [intent, setIntent] = useState<string>("");
   const [name, setName] = useState("");
-  const [contact, setContact] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -93,14 +94,16 @@ export function ChatWidget() {
   }
 
   async function submitDetails() {
-    if (!name.trim() || !contact.trim()) return;
+    if (!name.trim() || (!email.trim() && !phone.trim())) return;
     setSubmitting(true);
-    pushUser(`${name} · ${contact}${note ? " · " + note : ""}`);
+    const contactSummary = [email.trim(), phone.trim()].filter(Boolean).join(" · ");
+    pushUser(`${name} · ${contactSummary}${note ? " · " + note : ""}`);
     try {
       await sendInquiry({
         data: {
           name: name.trim(),
-          contact: contact.trim(),
+          email: email.trim() || null,
+          phone: phone.trim() || null,
           service,
           message: `${intent}${note ? "\n\n" + note : ""}`,
           status: "New",
@@ -137,7 +140,8 @@ export function ChatWidget() {
     sendInquiry({
       data: {
         name: name.trim() || "Anonymous",
-        contact: contact.trim() || channel,
+        email: email.trim() || null,
+        phone: phone.trim() || (email.trim() ? null : channel),
         service,
         message: `Handoff → ${channel}\n${intent}${note ? "\n" + note : ""}`,
         channel,
@@ -155,7 +159,8 @@ export function ChatWidget() {
     setService("");
     setIntent("");
     setName("");
-    setContact("");
+    setEmail("");
+    setPhone("");
     setNote("");
   }
 
@@ -313,12 +318,21 @@ export function ChatWidget() {
                 placeholder="Your name"
                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
               />
-              <input
-                value={contact}
-                onChange={(e) => setContact(e.target.value)}
-                placeholder="Phone or email"
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
-              />
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Email"
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                />
+                <input
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="Phone"
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                />
+              </div>
               <textarea
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
@@ -327,7 +341,7 @@ export function ChatWidget() {
                 className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
               />
               <button
-                disabled={!name.trim() || !contact.trim() || submitting}
+                disabled={!name.trim() || (!email.trim() && !phone.trim()) || submitting}
                 onClick={submitDetails}
                 className="flex w-full items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
               >
