@@ -260,10 +260,10 @@ export function ProjectFormModal({
           )}
 
           <section>
-            <h3 className="mb-5 border-b border-border pb-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <h3 className="mb-5 border-b-2 border-primary/30 pb-2.5 text-sm font-bold uppercase tracking-wide text-foreground">
               Project details
             </h3>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 pl-4 sm:grid-cols-2">
               <label className="block text-sm sm:col-span-2">
                 <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Title</span>
                 <input
@@ -340,49 +340,54 @@ export function ProjectFormModal({
           </section>
 
           <section>
-            <h3 className="mb-5 border-b border-border pb-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <h3 className="mb-5 border-b-2 border-primary/30 pb-2.5 text-sm font-bold uppercase tracking-wide text-foreground">
               People involved
             </h3>
-            <div className="flex gap-2">
-              <input
-                value={personName}
-                onChange={(e) => setPersonName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addPerson();
-                  }
-                }}
-                placeholder="Name"
-                className="h-10 flex-1 rounded-md border border-border bg-background px-3 text-sm"
-              />
-              <button
-                type="button"
-                onClick={addPerson}
-                className="rounded-md border border-border px-3 text-sm hover:bg-muted"
-              >
-                Add
-              </button>
-            </div>
-            {form.personnel.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {form.personnel.map((name) => (
-                  <span key={name} className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs">
-                    {name}
-                    <button type="button" onClick={() => removePerson(name)} aria-label={`Remove ${name}`}>
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
+            <div className="pl-4">
+              <div className="flex gap-2">
+                <input
+                  value={personName}
+                  onChange={(e) => setPersonName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addPerson();
+                    }
+                  }}
+                  placeholder="Name"
+                  className="h-10 flex-1 rounded-md border border-border bg-background px-3 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={addPerson}
+                  className="rounded-md border border-border px-3 text-sm hover:bg-muted"
+                >
+                  Add
+                </button>
               </div>
-            )}
+              {form.personnel.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {form.personnel.map((name) => (
+                    <span
+                      key={name}
+                      className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs"
+                    >
+                      {name}
+                      <button type="button" onClick={() => removePerson(name)} aria-label={`Remove ${name}`}>
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           </section>
 
           <section>
-            <h3 className="mb-5 border-b border-border pb-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <h3 className="mb-5 border-b-2 border-primary/30 pb-2.5 text-sm font-bold uppercase tracking-wide text-foreground">
               Media & attachments
             </h3>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 pl-4 sm:grid-cols-2">
               <div>
                 <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Cover photo</span>
                 {form.cover_photo_url && (
