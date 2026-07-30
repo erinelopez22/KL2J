@@ -225,14 +225,14 @@ export function ProjectFormModal({
           </button>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-6">
           {defaultInquiry ? (
-            <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm sm:col-span-2">
+            <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
               <span className="text-xs font-semibold uppercase text-muted-foreground">Linked inquiry</span>
               <p className="mt-0.5 font-medium">{defaultInquiry.label}</p>
             </div>
           ) : (
-            <label className="block text-sm sm:col-span-2">
+            <label className="block text-sm">
               <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
                 Linked inquiry {!project && <span className="text-destructive">(required)</span>}
               </span>
@@ -259,80 +259,90 @@ export function ProjectFormModal({
             </label>
           )}
 
-          <label className="block text-sm sm:col-span-2">
-            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Title</span>
-            <input
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-              className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-            />
-          </label>
-          <label className="block text-sm sm:col-span-2">
-            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
-              Location <span className="text-destructive">(required)</span>
-            </span>
-            <LocationAutosuggest value={form.location} onChange={(v) => setForm({ ...form, location: v })} />
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Service</span>
-            <select
-              value={form.service}
-              onChange={(e) => setForm({ ...form, service: e.target.value })}
-              className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-            >
-              <option value="">Select a service</option>
-              {services?.map((s) => (
-                <option key={s.id} value={s.title}>
-                  {s.title}
-                </option>
-              ))}
-            </select>
-          </label>
-          {project && (
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Status</span>
-              <select
-                value={form.status}
-                onChange={(e) => setForm({ ...form, status: e.target.value as ProjectStatus })}
-                className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-              >
-                {PROJECT_STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          <label className="block text-sm">
-            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Start date</span>
-            <input
-              type="date"
-              value={form.start_date}
-              onChange={(e) => setForm({ ...form, start_date: e.target.value })}
-              className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">End date</span>
-            <input
-              type="date"
-              value={form.end_date}
-              onChange={(e) => setForm({ ...form, end_date: e.target.value })}
-              className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-            />
-          </label>
-          <label className="block text-sm sm:col-span-2">
-            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Description</span>
-            <textarea
-              rows={3}
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm"
-            />
-          </label>
-          <div className="sm:col-span-2">
-            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">People involved</span>
+          <section>
+            <h3 className="mb-3 border-b border-border pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Project details
+            </h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block text-sm sm:col-span-2">
+                <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Title</span>
+                <input
+                  value={form.title}
+                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                />
+              </label>
+              <label className="block text-sm sm:col-span-2">
+                <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
+                  Location <span className="text-destructive">(required)</span>
+                </span>
+                <LocationAutosuggest value={form.location} onChange={(v) => setForm({ ...form, location: v })} />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Service</span>
+                <select
+                  value={form.service}
+                  onChange={(e) => setForm({ ...form, service: e.target.value })}
+                  className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                >
+                  <option value="">Select a service</option>
+                  {services?.map((s) => (
+                    <option key={s.id} value={s.title}>
+                      {s.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {project && (
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Status</span>
+                  <select
+                    value={form.status}
+                    onChange={(e) => setForm({ ...form, status: e.target.value as ProjectStatus })}
+                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                  >
+                    {PROJECT_STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Start date</span>
+                <input
+                  type="date"
+                  value={form.start_date}
+                  onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+                  className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">End date</span>
+                <input
+                  type="date"
+                  value={form.end_date}
+                  onChange={(e) => setForm({ ...form, end_date: e.target.value })}
+                  className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                />
+              </label>
+              <label className="block text-sm sm:col-span-2">
+                <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Description</span>
+                <textarea
+                  rows={3}
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm"
+                />
+              </label>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="mb-3 border-b border-border pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              People involved
+            </h3>
             <div className="flex gap-2">
               <input
                 value={personName}
@@ -366,50 +376,58 @@ export function ProjectFormModal({
                 ))}
               </div>
             )}
-          </div>
-          <div className="sm:col-span-2">
-            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Cover photo</span>
-            {form.cover_photo_url && (
-              <img src={form.cover_photo_url} alt="Cover" className="mb-2 h-32 w-full rounded-lg object-cover" />
-            )}
-            <FileDrop
-              folder="projects"
-              label="Upload cover photo"
-              onUploaded={(result) => setForm({ ...form, cover_photo_url: result.url })}
-            />
-          </div>
-          <div className="sm:col-span-2">
-            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
-              Files (photos, documents, videos)
-            </span>
-            <FileDrop
-              folder="projects"
-              accept="image/jpeg,image/png,image/webp,application/pdf,video/mp4,video/webm,video/quicktime"
-              label="Upload a photo, document, or video"
-              onUploaded={addAttachment}
-            />
-            {form.attachments.length > 0 && (
-              <div className="mt-2 space-y-1.5">
-                {form.attachments.map((a) => (
-                  <div
-                    key={a.path}
-                    className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm"
-                  >
-                    <AttachmentIcon type={a.type} />
-                    <span className="min-w-0 flex-1 truncate">{a.name}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeAttachment(a)}
-                      className="shrink-0 text-muted-foreground hover:text-destructive"
-                      aria-label={`Remove ${a.name}`}
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
+          </section>
+
+          <section>
+            <h3 className="mb-3 border-b border-border pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Media & attachments
+            </h3>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Cover photo</span>
+                {form.cover_photo_url && (
+                  <img src={form.cover_photo_url} alt="Cover" className="mb-2 h-32 w-full rounded-lg object-cover" />
+                )}
+                <FileDrop
+                  folder="projects"
+                  label="Upload cover photo"
+                  onUploaded={(result) => setForm({ ...form, cover_photo_url: result.url })}
+                />
               </div>
-            )}
-          </div>
+              <div>
+                <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
+                  Files (photos, documents, videos)
+                </span>
+                <FileDrop
+                  folder="projects"
+                  accept="image/jpeg,image/png,image/webp,application/pdf,video/mp4,video/webm,video/quicktime"
+                  label="Upload a photo, document, or video"
+                  onUploaded={addAttachment}
+                />
+                {form.attachments.length > 0 && (
+                  <div className="mt-2 space-y-1.5">
+                    {form.attachments.map((a) => (
+                      <div
+                        key={a.path}
+                        className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm"
+                      >
+                        <AttachmentIcon type={a.type} />
+                        <span className="min-w-0 flex-1 truncate">{a.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeAttachment(a)}
+                          className="shrink-0 text-muted-foreground hover:text-destructive"
+                          aria-label={`Remove ${a.name}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
         </div>
 
         <div className="mt-4 flex items-center gap-2">
