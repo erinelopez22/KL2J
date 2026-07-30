@@ -225,7 +225,7 @@ export function ProjectFormModal({
           </button>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-10">
           {defaultInquiry ? (
             <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
               <span className="text-xs font-semibold uppercase text-muted-foreground">Linked inquiry</span>
@@ -260,7 +260,7 @@ export function ProjectFormModal({
           )}
 
           <section>
-            <h3 className="mb-3 border-b border-border pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <h3 className="mb-5 border-b border-border pb-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Project details
             </h3>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -340,7 +340,7 @@ export function ProjectFormModal({
           </section>
 
           <section>
-            <h3 className="mb-3 border-b border-border pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <h3 className="mb-5 border-b border-border pb-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               People involved
             </h3>
             <div className="flex gap-2">
@@ -379,7 +379,7 @@ export function ProjectFormModal({
           </section>
 
           <section>
-            <h3 className="mb-3 border-b border-border pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <h3 className="mb-5 border-b border-border pb-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Media & attachments
             </h3>
             <div className="grid gap-4 sm:grid-cols-2">
