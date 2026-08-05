@@ -340,52 +340,45 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
         </div>
 
         {inquiry.checklist_responses?.length > 0 && (
-          <div className="mt-3 rounded-lg border border-border p-3">
-            <span className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground">
-              <ListChecks className="h-3.5 w-3.5" /> Supporting documents
-            </span>
-            <div className="space-y-2">
-              {inquiry.checklist_responses.map((c) => {
-                if (c.type === "checkbox") {
-                  return (
-                    <div key={c.id} className="flex items-center gap-2 text-sm">
-                      {c.checked ? (
-                        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-                      ) : (
-                        <Circle className="h-4 w-4 shrink-0 text-muted-foreground/40" />
-                      )}
-                      <span className={c.checked ? "" : "text-muted-foreground"}>{c.label}</span>
-                    </div>
-                  );
-                }
-                if (c.type === "document") {
-                  return (
-                    <div key={c.id} className="flex items-center justify-between gap-2 text-sm">
-                      <span className="text-muted-foreground">{c.label}</span>
-                      {c.document ? (
-                        <button
-                          type="button"
-                          onClick={() => viewChecklistDocument(c.document!)}
-                          className="flex items-center gap-1.5 text-primary hover:underline"
-                        >
-                          <FileText className="h-3.5 w-3.5" /> {c.document.name}
-                        </button>
-                      ) : (
-                        <span className="text-xs text-muted-foreground/60">Not provided</span>
-                      )}
-                    </div>
-                  );
-                }
-                return (
-                  <div key={c.id} className="flex items-center justify-between gap-4 text-sm">
-                    <span className="text-muted-foreground">{c.label}</span>
-                    <span className={c.answer?.trim() ? "text-right font-medium" : "text-right text-muted-foreground/60"}>
-                      {c.answer?.trim() || "—"}
-                    </span>
-                  </div>
-                );
-              })}
+          <div className="mt-3 divide-y divide-border overflow-hidden rounded-lg border border-border text-sm">
+            <div className="flex items-center gap-1.5 bg-muted/40 px-3 py-2">
+              <ListChecks className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs font-semibold uppercase text-muted-foreground">Supporting documents</span>
             </div>
+            {inquiry.checklist_responses.map((c) => (
+              <div key={c.id} className="px-3 py-2">
+                <span className="mb-1 block text-xs font-medium text-muted-foreground">{c.label}</span>
+                {c.type === "checkbox" && (
+                  <span className="inline-flex items-center gap-1.5">
+                    {c.checked ? (
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                    ) : (
+                      <Circle className="h-4 w-4 shrink-0 text-muted-foreground/40" />
+                    )}
+                    <span className={c.checked ? "font-medium text-emerald-700" : "text-muted-foreground"}>
+                      {c.checked ? "Yes" : "No"}
+                    </span>
+                  </span>
+                )}
+                {c.type === "document" &&
+                  (c.document ? (
+                    <button
+                      type="button"
+                      onClick={() => viewChecklistDocument(c.document!)}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-primary hover:bg-muted"
+                    >
+                      <FileText className="h-3.5 w-3.5" /> {c.document.name}
+                    </button>
+                  ) : (
+                    <span className="text-muted-foreground/60">Not provided</span>
+                  ))}
+                {c.type !== "checkbox" && c.type !== "document" && (
+                  <span className={c.answer?.trim() ? "font-medium" : "text-muted-foreground/60"}>
+                    {c.answer?.trim() || "—"}
+                  </span>
+                )}
+              </div>
+            ))}
           </div>
         )}
 
