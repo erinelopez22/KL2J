@@ -3,7 +3,11 @@ import { MessageCircle, X, Send, ArrowLeft, Facebook, Phone, Mail } from "lucide
 import { useServerFn } from "@tanstack/react-start";
 import { submitInquiry } from "@/lib/inquiries.functions";
 import { usePublicServices, usePublicSiteSettings } from "@/lib/public-content";
+import { LocationAutosuggest } from "@/components/LocationAutosuggest";
+import { PublicDocumentUpload, type UploadedDocument } from "@/components/PublicDocumentUpload";
 import logoUrl from "@/assets/kl2j-logo.jpg";
+
+type ChecklistAnswer = { checked?: boolean; answer?: string; document?: UploadedDocument | null };
 
 const FB_PAGE_ID = "61581147040190";
 const MESSENGER_URL = `https://m.me/${FB_PAGE_ID}`;
@@ -41,7 +45,7 @@ export function ChatWidget() {
   const [step, setStep] = useState<Step>("intro");
   const [messages, setMessages] = useState<Msg[]>([]);
   const [service, setService] = useState<string>("");
-  const [checklistAnswers, setChecklistAnswers] = useState<Record<string, boolean>>({});
+  const [checklistAnswers, setChecklistAnswers] = useState<Record<string, ChecklistAnswer>>({});
   const [intent, setIntent] = useState<string>("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -85,7 +89,7 @@ export function ChatWidget() {
     pushUser(s);
     const checklist = servicesData?.find((sv) => sv.title === s)?.checklist ?? [];
     if (checklist.length > 0) {
-      pushBot("Before we continue, check off any of these you already have (optional):");
+      pushBot("Before we continue, a few quick details for this service:");
       setStep("checklist");
     } else {
       pushBot("Got it. How can we help you today?");
@@ -93,13 +97,16 @@ export function ChatWidget() {
     }
   }
 
-  function toggleChecklistItem(item: string) {
-    setChecklistAnswers((a) => ({ ...a, [item]: !a[item] }));
+  function updateChecklistAnswer(id: string, patch: ChecklistAnswer) {
+    setChecklistAnswers((a) => ({ ...a, [id]: { ...a[id], ...patch } }));
   }
 
   function continueFromChecklist() {
-    const checked = serviceChecklist.filter((item) => checklistAnswers[item]);
-    pushUser(checked.length > 0 ? `Have: ${checked.join(", ")}` : "None of these yet");
+    const filled = serviceChecklist.filter((item) => {
+      const a = checklistAnswers[item.id];
+      return a && (a.checked || a.answer?.trim() || a.document);
+    });
+    pushUser(filled.length > 0 ? `Provided: ${filled.map((i) => i.label).join(", ")}` : "Skipped for now");
     pushBot("Got it. How can we help you today?");
     setStep("intent");
   }
@@ -111,6 +118,17 @@ export function ChatWidget() {
       "Please share your name and a contact number or email so our team can follow up. You can also add any details about your property (location, lot size, etc.).",
     );
     setStep("details");
+  }
+
+  function buildChecklistResponses() {
+    return serviceChecklist.map((item) => ({
+      id: item.id,
+      label: item.label,
+      type: item.type,
+      checked: checklistAnswers[item.id]?.checked,
+      answer: checklistAnswers[item.id]?.answer,
+      document: checklistAnswers[item.id]?.document,
+    }));
   }
 
   async function submitDetails() {
@@ -127,10 +145,7 @@ export function ChatWidget() {
           service,
           message: `${intent}${note ? "\n\n" + note : ""}`,
           channel: "chatbot",
-          checklist_responses: serviceChecklist.map((label) => ({
-            label,
-            checked: Boolean(checklistAnswers[label]),
-          })),
+          checklist_responses: buildChecklistResponses(),
           status: "New",
         },
       });
@@ -170,10 +185,7 @@ export function ChatWidget() {
         service,
         message: `Handoff → ${channel}\n${intent}${note ? "\n" + note : ""}`,
         channel,
-        checklist_responses: serviceChecklist.map((label) => ({
-          label,
-          checked: Boolean(checklistAnswers[label]),
-        })),
+        checklist_responses: buildChecklistResponses(),
         status: "New",
       },
     }).catch((e) => console.error(e));
@@ -274,17 +286,58 @@ export function ChatWidget() {
 
             {step === "checklist" && (
               <div className="rounded-lg border border-border bg-card p-3">
-                <div className="space-y-1.5">
-                  {serviceChecklist.map((item) => (
-                    <label key={item} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(checklistAnswers[item])}
-                        onChange={() => toggleChecklistItem(item)}
-                      />
-                      {item}
-                    </label>
-                  ))}
+                <div className="space-y-2.5">
+                  {serviceChecklist.map((item) => {
+                    const a = checklistAnswers[item.id] ?? {};
+                    if (item.type === "checkbox") {
+                      return (
+                        <label key={item.id} className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(a.checked)}
+                            onChange={() => updateChecklistAnswer(item.id, { checked: !a.checked })}
+                          />
+                          {item.label}
+                        </label>
+                      );
+                    }
+                    if (item.type === "document") {
+                      return (
+                        <div key={item.id}>
+                          <span className="mb-1 block text-xs text-muted-foreground">{item.label}</span>
+                          <PublicDocumentUpload
+                            value={a.document ?? null}
+                            onChange={(doc) => updateChecklistAnswer(item.id, { document: doc })}
+                          />
+                        </div>
+                      );
+                    }
+                    if (item.type === "location") {
+                      return (
+                        <div key={item.id}>
+                          <span className="mb-1 block text-xs text-muted-foreground">{item.label}</span>
+                          <LocationAutosuggest
+                            value={a.answer ?? ""}
+                            onChange={(v) => updateChecklistAnswer(item.id, { answer: v })}
+                          />
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={item.id}>
+                        <span className="mb-1 block text-xs text-muted-foreground">{item.label}</span>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type={item.type === "number" ? "number" : "text"}
+                            value={a.answer ?? ""}
+                            onChange={(e) => updateChecklistAnswer(item.id, { answer: e.target.value })}
+                            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                          />
+                          {item.unit && <span className="shrink-0 text-xs text-muted-foreground">{item.unit}</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
                 <button
                   onClick={continueFromChecklist}

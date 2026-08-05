@@ -3,7 +3,17 @@ import { z } from "zod";
 
 const NOTIFY_TO = "erinelopez22@gmail.com";
 
-const ChecklistResponseSchema = z.object({ label: z.string().min(1).max(200), checked: z.boolean() });
+const ChecklistResponseSchema = z.object({
+  id: z.string().min(1).max(100),
+  label: z.string().min(1).max(200),
+  type: z.enum(["text", "number", "location", "checkbox", "document"]),
+  checked: z.boolean().optional(),
+  answer: z.string().max(500).optional(),
+  document: z
+    .object({ path: z.string().min(1), name: z.string().min(1).max(200), contentType: z.string().min(1) })
+    .optional()
+    .nullable(),
+});
 
 const InquirySchema = z
   .object({
@@ -64,7 +74,13 @@ export const submitInquiry = createServerFn({ method: "POST" })
       const checklistHtml =
         data.checklist_responses && data.checklist_responses.length > 0
           ? data.checklist_responses
-              .map((c) => `${c.checked ? "&#9745;" : "&#9744;"} ${esc(c.label)}`)
+              .map((c) => {
+                if (c.type === "checkbox") return `${c.checked ? "&#9745;" : "&#9744;"} ${esc(c.label)}`;
+                if (c.type === "document") {
+                  return `${esc(c.label)}: ${c.document ? `Uploaded (${esc(c.document.name)})` : "Not provided"}`;
+                }
+                return `${esc(c.label)}: ${esc(c.answer || "—")}`;
+              })
               .join("<br/>")
           : "—";
       const html = `

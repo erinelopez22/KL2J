@@ -9,7 +9,7 @@ import { deleteSiteMedia, deleteConfidentialMedia } from "@/lib/admin/media.func
 import { usePublicServices } from "@/lib/public-content";
 import { FileDrop } from "@/components/admin/FileDrop";
 import { ConfidentialFileDrop } from "@/components/admin/ConfidentialFileDrop";
-import { LocationAutosuggest } from "@/components/admin/LocationAutosuggest";
+import { LocationAutosuggest } from "@/components/LocationAutosuggest";
 
 export const PROJECT_STATUSES = ["Created", "Attended", "On-hold", "Completed", "Cancelled"] as const;
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];

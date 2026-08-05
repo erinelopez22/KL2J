@@ -1,8 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { ProjectFormModal, type ProjectStatus } from "@/components/admin/ProjectFormModal";
+import { getConfidentialFileUrl } from "@/lib/admin/media.functions";
 import {
   MessageCircle,
   RefreshCw,
@@ -20,6 +23,7 @@ import {
   CheckCircle2,
   Circle,
   ListChecks,
+  FileText,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/inquiries")({
@@ -55,7 +59,14 @@ const PROJECT_STATUS_STYLES: Record<ProjectStatus, string> = {
   Cancelled: "bg-destructive/10 text-destructive",
 };
 
-type ChecklistResponse = { label: string; checked: boolean };
+type ChecklistResponse = {
+  id: string;
+  label: string;
+  type: "text" | "number" | "location" | "checkbox" | "document";
+  checked?: boolean;
+  answer?: string;
+  document?: { path: string; name: string; contentType: string } | null;
+};
 
 type Inquiry = {
   id: string;
@@ -104,7 +115,8 @@ function InquiryCard({ inquiry, onOpen }: { inquiry: Inquiry; onOpen: () => void
       {inquiry.checklist_responses?.length > 0 && (
         <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
           <ListChecks className="h-3 w-3" />
-          {inquiry.checklist_responses.filter((c) => c.checked).length}/{inquiry.checklist_responses.length} documents
+          {inquiry.checklist_responses.filter((c) => c.checked || c.answer?.trim() || c.document).length}/
+          {inquiry.checklist_responses.length} details provided
         </div>
       )}
       {inquiry.message && <p className="mt-1.5 line-clamp-3 text-xs text-muted-foreground">{inquiry.message}</p>}
@@ -225,6 +237,16 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
   const phone = inquiry.phone || legacy.phone || (!hasDedicatedFields && !contactIsEmail ? inquiry.contact : null);
   const details = hasDedicatedFields ? inquiry.message : legacy.details;
   const platform = platformLabel(inquiry.channel);
+  const doGetConfidentialUrl = useServerFn(getConfidentialFileUrl);
+
+  async function viewChecklistDocument(doc: { path: string; name: string }) {
+    try {
+      const { url } = await doGetConfidentialUrl({ data: { path: doc.path } });
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to open file");
+    }
+  }
 
   function emailInquirer() {
     if (!email) return;
@@ -322,17 +344,47 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
             <span className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground">
               <ListChecks className="h-3.5 w-3.5" /> Supporting documents
             </span>
-            <div className="space-y-1">
-              {inquiry.checklist_responses.map((c) => (
-                <div key={c.label} className="flex items-center gap-2 text-sm">
-                  {c.checked ? (
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-                  ) : (
-                    <Circle className="h-4 w-4 shrink-0 text-muted-foreground/40" />
-                  )}
-                  <span className={c.checked ? "" : "text-muted-foreground"}>{c.label}</span>
-                </div>
-              ))}
+            <div className="space-y-2">
+              {inquiry.checklist_responses.map((c) => {
+                if (c.type === "checkbox") {
+                  return (
+                    <div key={c.id} className="flex items-center gap-2 text-sm">
+                      {c.checked ? (
+                        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                      ) : (
+                        <Circle className="h-4 w-4 shrink-0 text-muted-foreground/40" />
+                      )}
+                      <span className={c.checked ? "" : "text-muted-foreground"}>{c.label}</span>
+                    </div>
+                  );
+                }
+                if (c.type === "document") {
+                  return (
+                    <div key={c.id} className="flex items-center justify-between gap-2 text-sm">
+                      <span className="text-muted-foreground">{c.label}</span>
+                      {c.document ? (
+                        <button
+                          type="button"
+                          onClick={() => viewChecklistDocument(c.document!)}
+                          className="flex items-center gap-1.5 text-primary hover:underline"
+                        >
+                          <FileText className="h-3.5 w-3.5" /> {c.document.name}
+                        </button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground/60">Not provided</span>
+                      )}
+                    </div>
+                  );
+                }
+                return (
+                  <div key={c.id} className="flex items-center justify-between gap-4 text-sm">
+                    <span className="text-muted-foreground">{c.label}</span>
+                    <span className={c.answer?.trim() ? "text-right font-medium" : "text-right text-muted-foreground/60"}>
+                      {c.answer?.trim() || "—"}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

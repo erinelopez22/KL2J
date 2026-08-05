@@ -37,6 +37,8 @@ import {
   usePublicSiteSettings,
   usePublicPartnerCompanies,
 } from "@/lib/public-content";
+import { LocationAutosuggest } from "@/components/LocationAutosuggest";
+import { PublicDocumentUpload, type UploadedDocument } from "@/components/PublicDocumentUpload";
 import { getServiceIcon } from "@/lib/admin/iconMap";
 
 const FACEBOOK_PAGE_URL = "https://www.facebook.com/profile.php?id=61581147040190";
@@ -485,6 +487,8 @@ function CTA() {
   );
 }
 
+type ChecklistAnswer = { checked?: boolean; answer?: string; document?: UploadedDocument | null };
+
 function ContactForm() {
   const [sent, setSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -493,7 +497,7 @@ function ContactForm() {
   const [phone, setPhone] = useState("");
   const [service, setService] = useState("");
   const [message, setMessage] = useState("");
-  const [checklistAnswers, setChecklistAnswers] = useState<Record<string, boolean>>({});
+  const [checklistAnswers, setChecklistAnswers] = useState<Record<string, ChecklistAnswer>>({});
   const sendInquiry = useServerFn(submitInquiry);
   const { data: servicesData } = usePublicServices();
   const serviceOptions = servicesData ?? [];
@@ -504,8 +508,8 @@ function ContactForm() {
     setChecklistAnswers({});
   }
 
-  function toggleChecklistItem(label: string) {
-    setChecklistAnswers((a) => ({ ...a, [label]: !a[label] }));
+  function updateChecklistAnswer(id: string, patch: ChecklistAnswer) {
+    setChecklistAnswers((a) => ({ ...a, [id]: { ...a[id], ...patch } }));
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -520,9 +524,13 @@ function ContactForm() {
           service: service || null,
           message: message.trim() || null,
           channel: "quote_form",
-          checklist_responses: selectedServiceChecklist.map((label) => ({
-            label,
-            checked: Boolean(checklistAnswers[label]),
+          checklist_responses: selectedServiceChecklist.map((item) => ({
+            id: item.id,
+            label: item.label,
+            type: item.type,
+            checked: checklistAnswers[item.id]?.checked,
+            answer: checklistAnswers[item.id]?.answer,
+            document: checklistAnswers[item.id]?.document,
           })),
           status: "New",
         },
@@ -596,19 +604,60 @@ function ContactForm() {
             {selectedServiceChecklist.length > 0 && (
               <div className="rounded-lg border border-border bg-secondary/30 p-3">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Which of these do you already have?
+                  A few details for this service
                 </p>
-                <div className="space-y-1.5">
-                  {selectedServiceChecklist.map((item) => (
-                    <label key={item} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(checklistAnswers[item])}
-                        onChange={() => toggleChecklistItem(item)}
-                      />
-                      {item}
-                    </label>
-                  ))}
+                <div className="space-y-3">
+                  {selectedServiceChecklist.map((item) => {
+                    const a = checklistAnswers[item.id] ?? {};
+                    if (item.type === "checkbox") {
+                      return (
+                        <label key={item.id} className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(a.checked)}
+                            onChange={() => updateChecklistAnswer(item.id, { checked: !a.checked })}
+                          />
+                          {item.label}
+                        </label>
+                      );
+                    }
+                    if (item.type === "document") {
+                      return (
+                        <div key={item.id}>
+                          <span className="mb-1 block text-xs text-muted-foreground">{item.label}</span>
+                          <PublicDocumentUpload
+                            value={a.document ?? null}
+                            onChange={(doc) => updateChecklistAnswer(item.id, { document: doc })}
+                          />
+                        </div>
+                      );
+                    }
+                    if (item.type === "location") {
+                      return (
+                        <div key={item.id}>
+                          <span className="mb-1 block text-xs text-muted-foreground">{item.label}</span>
+                          <LocationAutosuggest
+                            value={a.answer ?? ""}
+                            onChange={(v) => updateChecklistAnswer(item.id, { answer: v })}
+                          />
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={item.id}>
+                        <span className="mb-1 block text-xs text-muted-foreground">{item.label}</span>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type={item.type === "number" ? "number" : "text"}
+                            className="input"
+                            value={a.answer ?? ""}
+                            onChange={(e) => updateChecklistAnswer(item.id, { answer: e.target.value })}
+                          />
+                          {item.unit && <span className="shrink-0 text-sm text-muted-foreground">{item.unit}</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

@@ -1,12 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { ChecklistItem } from "@/lib/admin/services.functions";
+
+export type { ChecklistItem, ChecklistItemType } from "@/lib/admin/services.functions";
 
 export type PublicService = {
   id: string;
   icon: string;
   title: string;
   description: string;
-  checklist: string[];
+  checklist: ChecklistItem[];
   sort_order: number;
 };
 export type PublicPhoto = { id: string; url: string; caption: string | null; sort_order: number };

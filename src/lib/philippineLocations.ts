@@ -1,5 +1,6 @@
-// Lazily loaded (dynamic import) so this ~2MB dataset only downloads when an
-// admin actually opens a project form, never as part of the public site bundle.
+// Lazily loaded (dynamic import) so this ~2MB dataset only downloads when a
+// location autosuggest field is actually used (admin project form, or a
+// public checklist "location" item), never eagerly in the main bundle.
 let cached: string[] | null = null;
 let loading: Promise<string[]> | null = null;
 

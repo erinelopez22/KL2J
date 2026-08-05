@@ -2,11 +2,22 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
+export const CHECKLIST_ITEM_TYPES = ["text", "number", "location", "checkbox", "document"] as const;
+export type ChecklistItemType = (typeof CHECKLIST_ITEM_TYPES)[number];
+export type ChecklistItem = { id: string; label: string; type: ChecklistItemType; unit?: string };
+
+const ChecklistItemSchema = z.object({
+  id: z.string().min(1).max(100),
+  label: z.string().min(1).max(200),
+  type: z.enum(CHECKLIST_ITEM_TYPES),
+  unit: z.string().max(20).optional(),
+});
+
 const ServiceSchema = z.object({
   icon: z.string().min(1).max(50),
   title: z.string().min(1).max(200),
   description: z.string().min(1).max(1000),
-  checklist: z.array(z.string().min(1).max(200)).default([]),
+  checklist: z.array(ChecklistItemSchema).default([]),
   sort_order: z.number().int().default(0),
   active: z.boolean().default(true),
 });

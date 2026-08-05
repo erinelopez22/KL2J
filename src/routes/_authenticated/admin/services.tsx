@@ -5,19 +5,34 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Plus, Trash2, Pencil, X, ListChecks } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { createService, updateService, deleteService } from "@/lib/admin/services.functions";
+import {
+  createService,
+  updateService,
+  deleteService,
+  CHECKLIST_ITEM_TYPES,
+  type ChecklistItem,
+  type ChecklistItemType,
+} from "@/lib/admin/services.functions";
 import { SERVICE_ICON_NAMES, getServiceIcon } from "@/lib/admin/iconMap";
 
 export const Route = createFileRoute("/_authenticated/admin/services")({
   component: AdminServices,
 });
 
+const TYPE_LABELS: Record<ChecklistItemType, string> = {
+  text: "Text answer",
+  number: "Number",
+  location: "Location (autosuggest)",
+  checkbox: "Yes/No checkbox",
+  document: "Document upload",
+};
+
 type Service = {
   id: string;
   icon: string;
   title: string;
   description: string;
-  checklist: string[];
+  checklist: ChecklistItem[];
   sort_order: number;
   active: boolean;
 };
@@ -26,7 +41,7 @@ type FormState = {
   icon: string;
   title: string;
   description: string;
-  checklist: string[];
+  checklist: ChecklistItem[];
   sort_order: number;
   active: boolean;
 };
@@ -45,20 +60,49 @@ function AdminServices() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
-  const [checklistItem, setChecklistItem] = useState("");
+  const [itemLabel, setItemLabel] = useState("");
+  const [itemType, setItemType] = useState<ChecklistItemType>("text");
+  const [itemUnit, setItemUnit] = useState("");
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const doCreate = useServerFn(createService);
   const doUpdate = useServerFn(updateService);
   const doDelete = useServerFn(deleteService);
 
-  function addChecklistItem() {
-    const item = checklistItem.trim();
-    if (!item) return;
-    setForm((f) => ({ ...f, checklist: [...f.checklist, item] }));
-    setChecklistItem("");
+  function resetItemForm() {
+    setItemLabel("");
+    setItemType("text");
+    setItemUnit("");
+    setEditingItemId(null);
   }
 
-  function removeChecklistItem(item: string) {
-    setForm((f) => ({ ...f, checklist: f.checklist.filter((c) => c !== item) }));
+  function addOrUpdateChecklistItem() {
+    const label = itemLabel.trim();
+    if (!label) return;
+    const unit = itemType === "number" ? itemUnit.trim() || undefined : undefined;
+    if (editingItemId) {
+      setForm((f) => ({
+        ...f,
+        checklist: f.checklist.map((c) => (c.id === editingItemId ? { id: editingItemId, label, type: itemType, unit } : c)),
+      }));
+    } else {
+      setForm((f) => ({
+        ...f,
+        checklist: [...f.checklist, { id: crypto.randomUUID(), label, type: itemType, unit }],
+      }));
+    }
+    resetItemForm();
+  }
+
+  function editChecklistItem(item: ChecklistItem) {
+    setEditingItemId(item.id);
+    setItemLabel(item.label);
+    setItemType(item.type);
+    setItemUnit(item.unit ?? "");
+  }
+
+  function removeChecklistItem(id: string) {
+    setForm((f) => ({ ...f, checklist: f.checklist.filter((c) => c.id !== id) }));
+    if (editingItemId === id) resetItemForm();
   }
 
   const { data: services, isLoading } = useQuery({
@@ -66,7 +110,7 @@ function AdminServices() {
     queryFn: async () => {
       const { data, error } = await supabase.from("services").select("*").order("sort_order");
       if (error) throw error;
-      return data as Service[];
+      return data as unknown as Service[];
     },
   });
 
@@ -78,7 +122,7 @@ function AdminServices() {
   function startEdit(s: Service) {
     setEditingId(s.id);
     setCreating(false);
-    setChecklistItem("");
+    resetItemForm();
     setForm({
       icon: s.icon,
       title: s.title,
@@ -92,7 +136,7 @@ function AdminServices() {
   function startCreate() {
     setCreating(true);
     setEditingId(null);
-    setChecklistItem("");
+    resetItemForm();
     setForm({ ...emptyForm, sort_order: (services?.length ?? 0) + 1 });
   }
 
@@ -196,42 +240,85 @@ function AdminServices() {
                 <ListChecks className="h-3.5 w-3.5" /> Supporting documents checklist
               </span>
               <p className="mb-1.5 text-[11px] text-muted-foreground/70">
-                Shown to inquirers once they pick this service, so they can check off what they already have.
+                Shown to inquirers once they pick this service. Each item can ask a question, request a document, or
+                be a simple yes/no.
               </p>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <input
-                  value={checklistItem}
-                  onChange={(e) => setChecklistItem(e.target.value)}
+                  value={itemLabel}
+                  onChange={(e) => setItemLabel(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
-                      addChecklistItem();
+                      addOrUpdateChecklistItem();
                     }
                   }}
-                  placeholder="e.g. Has land title"
-                  className="h-10 flex-1 rounded-md border border-border bg-background px-3 text-sm"
+                  placeholder="e.g. Location of Lot"
+                  className="h-10 min-w-[160px] flex-1 rounded-md border border-border bg-background px-3 text-sm"
                 />
+                <select
+                  value={itemType}
+                  onChange={(e) => setItemType(e.target.value as ChecklistItemType)}
+                  className="h-10 rounded-md border border-border bg-background px-2 text-sm"
+                >
+                  {CHECKLIST_ITEM_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {TYPE_LABELS[t]}
+                    </option>
+                  ))}
+                </select>
+                {itemType === "number" && (
+                  <input
+                    value={itemUnit}
+                    onChange={(e) => setItemUnit(e.target.value)}
+                    placeholder="Unit (e.g. sqm)"
+                    className="h-10 w-28 rounded-md border border-border bg-background px-2 text-sm"
+                  />
+                )}
                 <button
                   type="button"
-                  onClick={addChecklistItem}
+                  onClick={addOrUpdateChecklistItem}
                   className="rounded-md border border-border px-3 text-sm hover:bg-muted"
                 >
-                  Add
+                  {editingItemId ? "Update" : "Add"}
                 </button>
+                {editingItemId && (
+                  <button
+                    type="button"
+                    onClick={resetItemForm}
+                    className="rounded-md border border-border px-3 text-sm hover:bg-muted"
+                  >
+                    Cancel
+                  </button>
+                )}
               </div>
               {form.checklist.length > 0 && (
                 <div className="mt-2 space-y-1.5">
                   {form.checklist.map((item) => (
                     <div
-                      key={item}
+                      key={item.id}
                       className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm"
                     >
-                      <span className="min-w-0 flex-1">{item}</span>
+                      <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase text-muted-foreground">
+                        {item.type}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        {item.label}
+                        {item.unit ? ` (${item.unit})` : ""}
+                      </span>
                       <button
                         type="button"
-                        onClick={() => removeChecklistItem(item)}
+                        onClick={() => editChecklistItem(item)}
+                        className="shrink-0 text-muted-foreground hover:text-foreground"
+                        aria-label={`Edit ${item.label}`}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeChecklistItem(item.id)}
                         className="shrink-0 text-muted-foreground hover:text-destructive"
-                        aria-label={`Remove ${item}`}
+                        aria-label={`Remove ${item.label}`}
                       >
                         <X className="h-4 w-4" />
                       </button>

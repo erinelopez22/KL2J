@@ -586,7 +586,7 @@ export type Database = {
       services: {
         Row: {
           active: boolean
-          checklist: string[]
+          checklist: Json
           created_at: string
           description: string
           icon: string
@@ -596,7 +596,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean
-          checklist?: string[]
+          checklist?: Json
           created_at?: string
           description: string
           icon?: string
@@ -606,7 +606,7 @@ export type Database = {
         }
         Update: {
           active?: boolean
-          checklist?: string[]
+          checklist?: Json
           created_at?: string
           description?: string
           icon?: string

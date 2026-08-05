@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { loadPhilippineLocations } from "@/lib/admin/philippineLocations";
+import { loadPhilippineLocations } from "@/lib/philippineLocations";
 
 export function LocationAutosuggest({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [allLocations, setAllLocations] = useState<string[] | null>(null);
