@@ -9,10 +9,10 @@ const ChecklistResponseSchema = z.object({
   type: z.enum(["text", "number", "location", "checkbox", "document"]),
   checked: z.boolean().optional(),
   answer: z.string().max(500).optional(),
-  document: z
-    .object({ path: z.string().min(1), name: z.string().min(1).max(200), contentType: z.string().min(1) })
+  documents: z
+    .array(z.object({ path: z.string().min(1), name: z.string().min(1).max(200), contentType: z.string().min(1) }))
     .optional()
-    .nullable(),
+    .default([]),
 });
 
 const InquirySchema = z
@@ -77,7 +77,11 @@ export const submitInquiry = createServerFn({ method: "POST" })
               .map((c) => {
                 if (c.type === "checkbox") return `${c.checked ? "&#9745;" : "&#9744;"} ${esc(c.label)}`;
                 if (c.type === "document") {
-                  return `${esc(c.label)}: ${c.document ? `Uploaded (${esc(c.document.name)})` : "Not provided"}`;
+                  return `${esc(c.label)}: ${
+                    c.documents && c.documents.length > 0
+                      ? `Uploaded (${c.documents.map((d) => esc(d.name)).join(", ")})`
+                      : "Not provided"
+                  }`;
                 }
                 return `${esc(c.label)}: ${esc(c.answer || "—")}`;
               })

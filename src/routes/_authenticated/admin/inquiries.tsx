@@ -65,7 +65,7 @@ type ChecklistResponse = {
   type: "text" | "number" | "location" | "checkbox" | "document";
   checked?: boolean;
   answer?: string;
-  document?: { path: string; name: string; contentType: string } | null;
+  documents?: { path: string; name: string; contentType: string }[];
 };
 
 type Inquiry = {
@@ -115,7 +115,7 @@ function InquiryCard({ inquiry, onOpen }: { inquiry: Inquiry; onOpen: () => void
       {inquiry.checklist_responses?.length > 0 && (
         <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
           <ListChecks className="h-3 w-3" />
-          {inquiry.checklist_responses.filter((c) => c.checked || c.answer?.trim() || c.document).length}/
+          {inquiry.checklist_responses.filter((c) => c.checked || c.answer?.trim() || c.documents?.length).length}/
           {inquiry.checklist_responses.length} details provided
         </div>
       )}
@@ -361,14 +361,19 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
                   </span>
                 )}
                 {c.type === "document" &&
-                  (c.document ? (
-                    <button
-                      type="button"
-                      onClick={() => viewChecklistDocument(c.document!)}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-primary hover:bg-muted"
-                    >
-                      <FileText className="h-3.5 w-3.5" /> {c.document.name}
-                    </button>
+                  (c.documents && c.documents.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {c.documents.map((doc) => (
+                        <button
+                          key={doc.path}
+                          type="button"
+                          onClick={() => viewChecklistDocument(doc)}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-primary hover:bg-muted"
+                        >
+                          <FileText className="h-3.5 w-3.5" /> {doc.name}
+                        </button>
+                      ))}
+                    </div>
                   ) : (
                     <span className="text-muted-foreground/60">Not provided</span>
                   ))}

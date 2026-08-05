@@ -7,7 +7,7 @@ import { LocationAutosuggest } from "@/components/LocationAutosuggest";
 import { PublicDocumentUpload, type UploadedDocument } from "@/components/PublicDocumentUpload";
 import logoUrl from "@/assets/kl2j-logo.jpg";
 
-type ChecklistAnswer = { checked?: boolean; answer?: string; document?: UploadedDocument | null };
+type ChecklistAnswer = { checked?: boolean; answer?: string; documents?: UploadedDocument[] };
 
 const FB_PAGE_ID = "61581147040190";
 const MESSENGER_URL = `https://m.me/${FB_PAGE_ID}`;
@@ -113,7 +113,7 @@ export function ChatWidget() {
       type: item.type,
       checked: checklistAnswers[item.id]?.checked,
       answer: checklistAnswers[item.id]?.answer,
-      document: checklistAnswers[item.id]?.document,
+      documents: checklistAnswers[item.id]?.documents ?? [],
     }));
   }
 
@@ -387,8 +387,8 @@ export function ChatWidget() {
                           <div key={item.id}>
                             <span className="mb-1 block text-xs text-muted-foreground">{item.label}</span>
                             <PublicDocumentUpload
-                              value={a.document ?? null}
-                              onChange={(doc) => updateChecklistAnswer(item.id, { document: doc })}
+                              value={a.documents ?? []}
+                              onChange={(docs) => updateChecklistAnswer(item.id, { documents: docs })}
                             />
                           </div>
                         );

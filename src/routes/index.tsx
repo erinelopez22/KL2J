@@ -487,7 +487,7 @@ function CTA() {
   );
 }
 
-type ChecklistAnswer = { checked?: boolean; answer?: string; document?: UploadedDocument | null };
+type ChecklistAnswer = { checked?: boolean; answer?: string; documents?: UploadedDocument[] };
 
 function ContactForm() {
   const [sent, setSent] = useState(false);
@@ -530,7 +530,7 @@ function ContactForm() {
             type: item.type,
             checked: checklistAnswers[item.id]?.checked,
             answer: checklistAnswers[item.id]?.answer,
-            document: checklistAnswers[item.id]?.document,
+            documents: checklistAnswers[item.id]?.documents ?? [],
           })),
           status: "New",
         },
@@ -626,8 +626,8 @@ function ContactForm() {
                         <div key={item.id}>
                           <span className="mb-1 block text-xs text-muted-foreground">{item.label}</span>
                           <PublicDocumentUpload
-                            value={a.document ?? null}
-                            onChange={(doc) => updateChecklistAnswer(item.id, { document: doc })}
+                            value={a.documents ?? []}
+                            onChange={(docs) => updateChecklistAnswer(item.id, { documents: docs })}
                           />
                         </div>
                       );
