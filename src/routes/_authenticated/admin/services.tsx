@@ -360,7 +360,7 @@ function AdminServices() {
 
       {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid max-h-[calc(100vh-260px)] gap-3 overflow-y-auto pr-1 sm:grid-cols-2">
         {services?.map((s) => {
           const Icon = getServiceIcon(s.icon);
           return (

@@ -62,7 +62,7 @@ function AdminGallery() {
 
       {isLoading && <p className="mt-6 text-sm text-muted-foreground">Loading…</p>}
 
-      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+      <div className="mt-6 grid max-h-[calc(100vh-260px)] grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3 md:grid-cols-4">
         {photos?.map((p) => (
           <div key={p.id} className="group relative aspect-square overflow-hidden rounded-lg border border-border">
             <img src={p.url} alt={p.caption ?? "Gallery photo"} className="h-full w-full object-cover" />

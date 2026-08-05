@@ -130,8 +130,10 @@ function InquiryCard({ inquiry, onOpen }: { inquiry: Inquiry; onOpen: () => void
 
 function StatusColumn({ status, items, onOpen }: { status: Status; items: Inquiry[]; onOpen: (i: Inquiry) => void }) {
   return (
-    <div className={`flex w-[260px] shrink-0 flex-col rounded-lg border-t-4 bg-muted/30 ${STATUS_HEADER_STYLES[status]}`}>
-      <div className="flex items-center justify-between px-3 py-2">
+    <div
+      className={`flex h-full w-[260px] shrink-0 flex-col rounded-lg border-t-4 bg-muted/30 ${STATUS_HEADER_STYLES[status]}`}
+    >
+      <div className="flex shrink-0 items-center justify-between px-3 py-2">
         <span className="text-sm font-semibold">{status}</span>
         <span className="text-xs text-muted-foreground">{items.length}</span>
       </div>
@@ -487,7 +489,7 @@ function AdminInquiries() {
       )}
 
       {!loading && items.length > 0 && (
-        <div className="flex gap-3 overflow-x-auto pb-2">
+        <div className="flex h-[calc(100vh-260px)] gap-3 overflow-x-auto pb-2">
           {columns.map((status) => (
             <StatusColumn
               key={status}

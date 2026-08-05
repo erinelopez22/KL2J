@@ -131,7 +131,7 @@ function AdminDocuments() {
 
       {isLoading && <p className="mt-6 text-sm text-muted-foreground">Loading…</p>}
 
-      <div className="mt-6 space-y-2">
+      <div className="mt-6 max-h-[calc(100vh-260px)] space-y-2 overflow-y-auto pr-1">
         {docs?.map((d) => (
           <div key={d.id} className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
             <FileIcon className="h-5 w-5 shrink-0 text-primary" />

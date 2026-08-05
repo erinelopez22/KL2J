@@ -116,7 +116,7 @@ function AdminCompanies() {
 
       {isLoading && <p className="mt-6 text-sm text-muted-foreground">Loading…</p>}
 
-      <div className="mt-6 space-y-2">
+      <div className="mt-6 max-h-[calc(100vh-260px)] space-y-2 overflow-y-auto pr-1">
         {companies?.map((c) => (
           <div key={c.id} className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border border-border bg-white p-1.5">
