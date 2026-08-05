@@ -346,8 +346,8 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
               <span className="text-xs font-semibold uppercase text-muted-foreground">Supporting documents</span>
             </div>
             {inquiry.checklist_responses.map((c) => (
-              <div key={c.id} className="px-3 py-2">
-                <span className="mb-1 block text-xs font-medium text-muted-foreground">{c.label}</span>
+              <div key={c.id} className="grid grid-cols-[45%_1fr] items-start gap-3 px-3 py-2.5">
+                <span className="text-xs font-medium text-muted-foreground">{c.label}</span>
                 {c.type === "checkbox" && (
                   <span className="inline-flex items-center gap-1.5">
                     {c.checked ? (
