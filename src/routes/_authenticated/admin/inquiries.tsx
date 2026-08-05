@@ -297,18 +297,18 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
         )}
 
         <div className="mt-3 divide-y divide-border overflow-hidden rounded-lg border border-border text-sm">
-          <div className="flex items-center justify-between gap-4 px-3 py-2">
+          <div className="grid grid-cols-[45%_1fr] items-center gap-3 px-3 py-2">
             <span className="text-xs font-medium text-muted-foreground">Customer Name</span>
-            <span className="text-right font-semibold">{inquiry.name}</span>
+            <span className="font-semibold">{inquiry.name}</span>
           </div>
           {email && (
             <button
               type="button"
               onClick={emailInquirer}
-              className="flex w-full items-center justify-between gap-4 px-3 py-2 text-left hover:bg-muted/50"
+              className="grid w-full grid-cols-[45%_1fr] items-center gap-3 px-3 py-2 text-left hover:bg-muted/50"
             >
               <span className="text-xs font-medium text-muted-foreground">Email</span>
-              <span className="flex items-center gap-1.5 text-right text-primary hover:underline">
+              <span className="flex items-center gap-1.5 text-primary hover:underline">
                 <Mail className="h-3.5 w-3.5" /> {email}
               </span>
             </button>
@@ -317,17 +317,17 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
             <button
               type="button"
               onClick={smsInquirer}
-              className="flex w-full items-center justify-between gap-4 px-3 py-2 text-left hover:bg-muted/50"
+              className="grid w-full grid-cols-[45%_1fr] items-center gap-3 px-3 py-2 text-left hover:bg-muted/50"
             >
               <span className="text-xs font-medium text-muted-foreground">Number</span>
-              <span className="flex items-center gap-1.5 text-right text-primary hover:underline">
+              <span className="flex items-center gap-1.5 text-primary hover:underline">
                 <MessageSquare className="h-3.5 w-3.5" /> {phone}
               </span>
             </button>
           )}
-          <div className="flex items-center justify-between gap-4 px-3 py-2">
+          <div className="grid grid-cols-[45%_1fr] items-center gap-3 px-3 py-2">
             <span className="text-xs font-medium text-muted-foreground">Platform</span>
-            <span className="flex items-center gap-1.5 text-right">
+            <span className="flex items-center gap-1.5">
               <platform.icon className="h-3.5 w-3.5 text-muted-foreground" /> {platform.label}
             </span>
           </div>
