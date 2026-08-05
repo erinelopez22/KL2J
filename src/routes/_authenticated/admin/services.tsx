@@ -169,6 +169,11 @@ function AdminServices() {
 
   const showForm = creating || editingId;
 
+  function cancel() {
+    setCreating(false);
+    setEditingId(null);
+  }
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
@@ -185,7 +190,17 @@ function AdminServices() {
       </div>
 
       {showForm && (
-        <div className="mb-6 rounded-xl border border-border bg-card p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4" onClick={cancel}>
+          <div
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-2xl sm:p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">{editingId ? "Edit service" : "New service"}</h2>
+              <button onClick={cancel} className="rounded-md p-1 text-muted-foreground hover:bg-muted" aria-label="Close">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-sm">
               <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Icon</span>
@@ -328,22 +343,17 @@ function AdminServices() {
               )}
             </div>
           </div>
-          <div className="mt-4 flex gap-2">
-            <button
-              onClick={submit}
-              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-            >
-              Save
-            </button>
-            <button
-              onClick={() => {
-                setCreating(false);
-                setEditingId(null);
-              }}
-              className="rounded-md border border-border px-4 py-2 text-sm hover:bg-muted"
-            >
-              Cancel
-            </button>
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={submit}
+                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                Save
+              </button>
+              <button onClick={cancel} className="rounded-md border border-border px-4 py-2 text-sm hover:bg-muted">
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
