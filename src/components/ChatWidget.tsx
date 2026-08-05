@@ -38,7 +38,7 @@ const INTENTS = [
 ];
 
 type Msg = { from: "bot" | "user"; text: string; options?: { label: string; value: string }[] };
-type Step = "intro" | "service" | "checklist" | "intent" | "details" | "channel" | "done";
+type Step = "intro" | "service" | "intent" | "details" | "channel" | "done";
 
 export function ChatWidget() {
   const [open, setOpen] = useState(false);
@@ -87,35 +87,21 @@ export function ChatWidget() {
     setService(s);
     setChecklistAnswers({});
     pushUser(s);
-    const checklist = servicesData?.find((sv) => sv.title === s)?.checklist ?? [];
-    if (checklist.length > 0) {
-      pushBot("Before we continue, a few quick details for this service:");
-      setStep("checklist");
-    } else {
-      pushBot("Got it. How can we help you today?");
-      setStep("intent");
-    }
+    pushBot("Got it. How can we help you today?");
+    setStep("intent");
   }
 
   function updateChecklistAnswer(id: string, patch: ChecklistAnswer) {
     setChecklistAnswers((a) => ({ ...a, [id]: { ...a[id], ...patch } }));
   }
 
-  function continueFromChecklist() {
-    const filled = serviceChecklist.filter((item) => {
-      const a = checklistAnswers[item.id];
-      return a && (a.checked || a.answer?.trim() || a.document);
-    });
-    pushUser(filled.length > 0 ? `Provided: ${filled.map((i) => i.label).join(", ")}` : "Skipped for now");
-    pushBot("Got it. How can we help you today?");
-    setStep("intent");
-  }
-
   function chooseIntent(i: { id: string; label: string }) {
     setIntent(i.label);
     pushUser(i.label);
     pushBot(
-      "Please share your name and a contact number or email so our team can follow up. You can also add any details about your property (location, lot size, etc.).",
+      serviceChecklist.length > 0
+        ? "Please share your name and a contact number or email so our team can follow up, plus a few quick details for this service below."
+        : "Please share your name and a contact number or email so our team can follow up. You can also add any details about your property (location, lot size, etc.).",
     );
     setStep("details");
   }
@@ -284,70 +270,6 @@ export function ChatWidget() {
               </div>
             )}
 
-            {step === "checklist" && (
-              <div className="rounded-lg border border-border bg-card p-3">
-                <div className="space-y-2.5">
-                  {serviceChecklist.map((item) => {
-                    const a = checklistAnswers[item.id] ?? {};
-                    if (item.type === "checkbox") {
-                      return (
-                        <label key={item.id} className="flex items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(a.checked)}
-                            onChange={() => updateChecklistAnswer(item.id, { checked: !a.checked })}
-                          />
-                          {item.label}
-                        </label>
-                      );
-                    }
-                    if (item.type === "document") {
-                      return (
-                        <div key={item.id}>
-                          <span className="mb-1 block text-xs text-muted-foreground">{item.label}</span>
-                          <PublicDocumentUpload
-                            value={a.document ?? null}
-                            onChange={(doc) => updateChecklistAnswer(item.id, { document: doc })}
-                          />
-                        </div>
-                      );
-                    }
-                    if (item.type === "location") {
-                      return (
-                        <div key={item.id}>
-                          <span className="mb-1 block text-xs text-muted-foreground">{item.label}</span>
-                          <LocationAutosuggest
-                            value={a.answer ?? ""}
-                            onChange={(v) => updateChecklistAnswer(item.id, { answer: v })}
-                          />
-                        </div>
-                      );
-                    }
-                    return (
-                      <div key={item.id}>
-                        <span className="mb-1 block text-xs text-muted-foreground">{item.label}</span>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type={item.type === "number" ? "number" : "text"}
-                            value={a.answer ?? ""}
-                            onChange={(e) => updateChecklistAnswer(item.id, { answer: e.target.value })}
-                            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
-                          />
-                          {item.unit && <span className="shrink-0 text-xs text-muted-foreground">{item.unit}</span>}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <button
-                  onClick={continueFromChecklist}
-                  className="mt-3 flex w-full items-center justify-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-                >
-                  Continue
-                </button>
-              </div>
-            )}
-
             {step === "intent" && (
               <div className="flex flex-col gap-2 pt-1">
                 {INTENTS.map((i) => (
@@ -417,39 +339,103 @@ export function ChatWidget() {
 
           {/* Details form */}
           {step === "details" && (
-            <div className="space-y-2 border-t border-border bg-card p-3">
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Your name"
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
-              />
-              <div className="grid grid-cols-2 gap-2">
+            <div className="border-t border-border bg-card p-3">
+              <div className="max-h-[45vh] space-y-2 overflow-y-auto pr-1">
                 <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Email"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Your name"
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
                 />
-                <input
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="Phone"
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Email"
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                  />
+                  <input
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="Phone"
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                  />
+                </div>
+
+                {serviceChecklist.length > 0 && (
+                  <div className="space-y-2.5 rounded-lg border border-border bg-background/60 p-2.5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      A few quick details for this service
+                    </p>
+                    {serviceChecklist.map((item) => {
+                      const a = checklistAnswers[item.id] ?? {};
+                      if (item.type === "checkbox") {
+                        return (
+                          <label key={item.id} className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(a.checked)}
+                              onChange={() => updateChecklistAnswer(item.id, { checked: !a.checked })}
+                            />
+                            {item.label}
+                          </label>
+                        );
+                      }
+                      if (item.type === "document") {
+                        return (
+                          <div key={item.id}>
+                            <span className="mb-1 block text-xs text-muted-foreground">{item.label}</span>
+                            <PublicDocumentUpload
+                              value={a.document ?? null}
+                              onChange={(doc) => updateChecklistAnswer(item.id, { document: doc })}
+                            />
+                          </div>
+                        );
+                      }
+                      if (item.type === "location") {
+                        return (
+                          <div key={item.id}>
+                            <span className="mb-1 block text-xs text-muted-foreground">{item.label}</span>
+                            <LocationAutosuggest
+                              value={a.answer ?? ""}
+                              onChange={(v) => updateChecklistAnswer(item.id, { answer: v })}
+                            />
+                          </div>
+                        );
+                      }
+                      return (
+                        <div key={item.id}>
+                          <span className="mb-1 block text-xs text-muted-foreground">{item.label}</span>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type={item.type === "number" ? "number" : "text"}
+                              value={a.answer ?? ""}
+                              onChange={(e) => updateChecklistAnswer(item.id, { answer: e.target.value })}
+                              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                            />
+                            {item.unit && (
+                              <span className="shrink-0 text-xs text-muted-foreground">{item.unit}</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="Property location, lot size, or any details (optional)"
+                  rows={2}
+                  className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
                 />
               </div>
-              <textarea
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="Property location, lot size, or any details (optional)"
-                rows={2}
-                className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
-              />
               <button
                 disabled={!name.trim() || (!email.trim() && !phone.trim()) || submitting}
                 onClick={submitDetails}
-                className="flex w-full items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
               >
                 <Send className="h-4 w-4" />
                 {submitting ? "Sending…" : "Send inquiry"}
