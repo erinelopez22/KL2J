@@ -355,6 +355,7 @@ export type Database = {
       inquiries: {
         Row: {
           channel: string | null
+          checklist_responses: Json
           contact: string
           created_at: string
           email: string | null
@@ -369,6 +370,7 @@ export type Database = {
         }
         Insert: {
           channel?: string | null
+          checklist_responses?: Json
           contact: string
           created_at?: string
           email?: string | null
@@ -383,6 +385,7 @@ export type Database = {
         }
         Update: {
           channel?: string | null
+          checklist_responses?: Json
           contact?: string
           created_at?: string
           email?: string | null
@@ -583,6 +586,7 @@ export type Database = {
       services: {
         Row: {
           active: boolean
+          checklist: string[]
           created_at: string
           description: string
           icon: string
@@ -592,6 +596,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          checklist?: string[]
           created_at?: string
           description: string
           icon?: string
@@ -601,6 +606,7 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          checklist?: string[]
           created_at?: string
           description?: string
           icon?: string

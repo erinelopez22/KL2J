@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Plus, Trash2, Pencil } from "lucide-react";
+import { Plus, Trash2, Pencil, X, ListChecks } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { createService, updateService, deleteService } from "@/lib/admin/services.functions";
 import { SERVICE_ICON_NAMES, getServiceIcon } from "@/lib/admin/iconMap";
@@ -17,22 +17,49 @@ type Service = {
   icon: string;
   title: string;
   description: string;
+  checklist: string[];
   sort_order: number;
   active: boolean;
 };
 
-type FormState = { icon: string; title: string; description: string; sort_order: number; active: boolean };
+type FormState = {
+  icon: string;
+  title: string;
+  description: string;
+  checklist: string[];
+  sort_order: number;
+  active: boolean;
+};
 
-const emptyForm: FormState = { icon: SERVICE_ICON_NAMES[0], title: "", description: "", sort_order: 0, active: true };
+const emptyForm: FormState = {
+  icon: SERVICE_ICON_NAMES[0],
+  title: "",
+  description: "",
+  checklist: [],
+  sort_order: 0,
+  active: true,
+};
 
 function AdminServices() {
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [checklistItem, setChecklistItem] = useState("");
   const doCreate = useServerFn(createService);
   const doUpdate = useServerFn(updateService);
   const doDelete = useServerFn(deleteService);
+
+  function addChecklistItem() {
+    const item = checklistItem.trim();
+    if (!item) return;
+    setForm((f) => ({ ...f, checklist: [...f.checklist, item] }));
+    setChecklistItem("");
+  }
+
+  function removeChecklistItem(item: string) {
+    setForm((f) => ({ ...f, checklist: f.checklist.filter((c) => c !== item) }));
+  }
 
   const { data: services, isLoading } = useQuery({
     queryKey: ["admin-services"],
@@ -51,12 +78,21 @@ function AdminServices() {
   function startEdit(s: Service) {
     setEditingId(s.id);
     setCreating(false);
-    setForm({ icon: s.icon, title: s.title, description: s.description, sort_order: s.sort_order, active: s.active });
+    setChecklistItem("");
+    setForm({
+      icon: s.icon,
+      title: s.title,
+      description: s.description,
+      checklist: s.checklist ?? [],
+      sort_order: s.sort_order,
+      active: s.active,
+    });
   }
 
   function startCreate() {
     setCreating(true);
     setEditingId(null);
+    setChecklistItem("");
     setForm({ ...emptyForm, sort_order: (services?.length ?? 0) + 1 });
   }
 
@@ -155,6 +191,55 @@ function AdminServices() {
               />
               Active (shown publicly)
             </label>
+            <div className="sm:col-span-2">
+              <span className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground">
+                <ListChecks className="h-3.5 w-3.5" /> Supporting documents checklist
+              </span>
+              <p className="mb-1.5 text-[11px] text-muted-foreground/70">
+                Shown to inquirers once they pick this service, so they can check off what they already have.
+              </p>
+              <div className="flex gap-2">
+                <input
+                  value={checklistItem}
+                  onChange={(e) => setChecklistItem(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addChecklistItem();
+                    }
+                  }}
+                  placeholder="e.g. Has land title"
+                  className="h-10 flex-1 rounded-md border border-border bg-background px-3 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={addChecklistItem}
+                  className="rounded-md border border-border px-3 text-sm hover:bg-muted"
+                >
+                  Add
+                </button>
+              </div>
+              {form.checklist.length > 0 && (
+                <div className="mt-2 space-y-1.5">
+                  {form.checklist.map((item) => (
+                    <div
+                      key={item}
+                      className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    >
+                      <span className="min-w-0 flex-1">{item}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeChecklistItem(item)}
+                        className="shrink-0 text-muted-foreground hover:text-destructive"
+                        aria-label={`Remove ${item}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           <div className="mt-4 flex gap-2">
             <button
@@ -196,6 +281,12 @@ function AdminServices() {
                   )}
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">{s.description}</p>
+                {s.checklist?.length > 0 && (
+                  <div className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground/70">
+                    <ListChecks className="h-3.5 w-3.5" /> {s.checklist.length} checklist item
+                    {s.checklist.length === 1 ? "" : "s"}
+                  </div>
+                )}
               </div>
               <div className="flex shrink-0 gap-1">
                 <button onClick={() => startEdit(s)} className="rounded-md p-2 hover:bg-muted" aria-label="Edit">

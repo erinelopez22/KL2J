@@ -34,13 +34,14 @@ const INTENTS = [
 ];
 
 type Msg = { from: "bot" | "user"; text: string; options?: { label: string; value: string }[] };
-type Step = "intro" | "service" | "intent" | "details" | "channel" | "done";
+type Step = "intro" | "service" | "checklist" | "intent" | "details" | "channel" | "done";
 
 export function ChatWidget() {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>("intro");
   const [messages, setMessages] = useState<Msg[]>([]);
   const [service, setService] = useState<string>("");
+  const [checklistAnswers, setChecklistAnswers] = useState<Record<string, boolean>>({});
   const [intent, setIntent] = useState<string>("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -56,6 +57,7 @@ export function ChatWidget() {
     servicesData && servicesData.length > 0
       ? [...servicesData.map((s) => s.title), "Other / Not sure"]
       : FALLBACK_SERVICES;
+  const serviceChecklist = servicesData?.find((s) => s.title === service)?.checklist ?? [];
 
   useEffect(() => {
     if (open && messages.length === 0) {
@@ -79,7 +81,25 @@ export function ChatWidget() {
 
   function chooseService(s: string) {
     setService(s);
+    setChecklistAnswers({});
     pushUser(s);
+    const checklist = servicesData?.find((sv) => sv.title === s)?.checklist ?? [];
+    if (checklist.length > 0) {
+      pushBot("Before we continue, check off any of these you already have (optional):");
+      setStep("checklist");
+    } else {
+      pushBot("Got it. How can we help you today?");
+      setStep("intent");
+    }
+  }
+
+  function toggleChecklistItem(item: string) {
+    setChecklistAnswers((a) => ({ ...a, [item]: !a[item] }));
+  }
+
+  function continueFromChecklist() {
+    const checked = serviceChecklist.filter((item) => checklistAnswers[item]);
+    pushUser(checked.length > 0 ? `Have: ${checked.join(", ")}` : "None of these yet");
     pushBot("Got it. How can we help you today?");
     setStep("intent");
   }
@@ -107,6 +127,10 @@ export function ChatWidget() {
           service,
           message: `${intent}${note ? "\n\n" + note : ""}`,
           channel: "chatbot",
+          checklist_responses: serviceChecklist.map((label) => ({
+            label,
+            checked: Boolean(checklistAnswers[label]),
+          })),
           status: "New",
         },
       });
@@ -146,6 +170,10 @@ export function ChatWidget() {
         service,
         message: `Handoff → ${channel}\n${intent}${note ? "\n" + note : ""}`,
         channel,
+        checklist_responses: serviceChecklist.map((label) => ({
+          label,
+          checked: Boolean(checklistAnswers[label]),
+        })),
         status: "New",
       },
     }).catch((e) => console.error(e));
@@ -158,6 +186,7 @@ export function ChatWidget() {
     setMessages([]);
     setStep("intro");
     setService("");
+    setChecklistAnswers({});
     setIntent("");
     setName("");
     setEmail("");
@@ -240,6 +269,29 @@ export function ChatWidget() {
                     {s}
                   </button>
                 ))}
+              </div>
+            )}
+
+            {step === "checklist" && (
+              <div className="rounded-lg border border-border bg-card p-3">
+                <div className="space-y-1.5">
+                  {serviceChecklist.map((item) => (
+                    <label key={item} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(checklistAnswers[item])}
+                        onChange={() => toggleChecklistItem(item)}
+                      />
+                      {item}
+                    </label>
+                  ))}
+                </div>
+                <button
+                  onClick={continueFromChecklist}
+                  className="mt-3 flex w-full items-center justify-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                >
+                  Continue
+                </button>
               </div>
             )}
 

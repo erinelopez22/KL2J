@@ -3,6 +3,8 @@ import { z } from "zod";
 
 const NOTIFY_TO = "erinelopez22@gmail.com";
 
+const ChecklistResponseSchema = z.object({ label: z.string().min(1).max(200), checked: z.boolean() });
+
 const InquirySchema = z
   .object({
     name: z.string().min(1).max(200),
@@ -11,6 +13,7 @@ const InquirySchema = z
     service: z.string().max(200).optional().nullable(),
     message: z.string().max(4000).optional().nullable(),
     channel: z.string().max(50).optional().nullable(),
+    checklist_responses: z.array(ChecklistResponseSchema).optional().default([]),
     status: z.enum(["New", "Attended", "Completed", "Cancelled", "Rejected"]).optional().default("New"),
   })
   .refine((d) => d.email || d.phone, { message: "Provide an email or phone number" });
@@ -38,6 +41,7 @@ export const submitInquiry = createServerFn({ method: "POST" })
         service: data.service ?? null,
         message: data.message ?? null,
         channel: data.channel ?? null,
+        checklist_responses: data.checklist_responses ?? [],
         status: data.status ?? "New",
       })
       .select("id, created_at")
@@ -57,6 +61,12 @@ export const submitInquiry = createServerFn({ method: "POST" })
 
     try {
       const subject = `New KL2J Inquiry: ${data.service || "General"} — ${data.name}`;
+      const checklistHtml =
+        data.checklist_responses && data.checklist_responses.length > 0
+          ? data.checklist_responses
+              .map((c) => `${c.checked ? "&#9745;" : "&#9744;"} ${esc(c.label)}`)
+              .join("<br/>")
+          : "—";
       const html = `
 <div style="font-family:system-ui,Arial,sans-serif;max-width:560px;margin:0 auto;padding:16px;color:#111;">
   <h2 style="margin:0 0 12px;color:#8b1e1e;">New inquiry from KL2J website</h2>
@@ -67,6 +77,7 @@ export const submitInquiry = createServerFn({ method: "POST" })
     <tr><td style="padding:6px 0;color:#666;">Service</td><td>${esc(data.service || "—")}</td></tr>
     <tr><td style="padding:6px 0;color:#666;">Channel</td><td>${esc(data.channel || "chat")}</td></tr>
     <tr><td style="padding:6px 0;color:#666;vertical-align:top;">Message</td><td style="white-space:pre-wrap;">${esc(data.message || "—")}</td></tr>
+    <tr><td style="padding:6px 0;color:#666;vertical-align:top;">Documents</td><td>${checklistHtml}</td></tr>
   </table>
   <p style="margin-top:16px;font-size:12px;color:#666;">Inquiry ID: ${inserted.id}</p>
 </div>`.trim();

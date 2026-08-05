@@ -17,6 +17,9 @@ import {
   MessageSquare,
   Globe,
   Bot,
+  CheckCircle2,
+  Circle,
+  ListChecks,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/inquiries")({
@@ -52,6 +55,8 @@ const PROJECT_STATUS_STYLES: Record<ProjectStatus, string> = {
   Cancelled: "bg-destructive/10 text-destructive",
 };
 
+type ChecklistResponse = { label: string; checked: boolean };
+
 type Inquiry = {
   id: string;
   created_at: string;
@@ -62,6 +67,7 @@ type Inquiry = {
   service: string | null;
   message: string | null;
   channel: string | null;
+  checklist_responses: ChecklistResponse[];
   status: Status;
   email_sent: boolean;
   email_error: string | null;
@@ -95,6 +101,12 @@ function InquiryCard({ inquiry, onOpen }: { inquiry: Inquiry; onOpen: () => void
         {[inquiry.email, inquiry.phone].filter(Boolean).join(" · ") || inquiry.contact}
       </div>
       {inquiry.service && <div className="mt-1 text-xs font-medium text-primary">{inquiry.service}</div>}
+      {inquiry.checklist_responses?.length > 0 && (
+        <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
+          <ListChecks className="h-3 w-3" />
+          {inquiry.checklist_responses.filter((c) => c.checked).length}/{inquiry.checklist_responses.length} documents
+        </div>
+      )}
       {inquiry.message && <p className="mt-1.5 line-clamp-3 text-xs text-muted-foreground">{inquiry.message}</p>}
       <div className="mt-2 flex items-center gap-1 text-[10px] text-muted-foreground">
         <Clock className="h-3 w-3" />
@@ -304,6 +316,26 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
             </div>
           )}
         </div>
+
+        {inquiry.checklist_responses?.length > 0 && (
+          <div className="mt-3 rounded-lg border border-border p-3">
+            <span className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground">
+              <ListChecks className="h-3.5 w-3.5" /> Supporting documents
+            </span>
+            <div className="space-y-1">
+              {inquiry.checklist_responses.map((c) => (
+                <div key={c.label} className="flex items-center gap-2 text-sm">
+                  {c.checked ? (
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                  ) : (
+                    <Circle className="h-4 w-4 shrink-0 text-muted-foreground/40" />
+                  )}
+                  <span className={c.checked ? "" : "text-muted-foreground"}>{c.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground/60">
           <span className="flex items-center gap-1">

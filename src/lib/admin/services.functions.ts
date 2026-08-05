@@ -6,6 +6,7 @@ const ServiceSchema = z.object({
   icon: z.string().min(1).max(50),
   title: z.string().min(1).max(200),
   description: z.string().min(1).max(1000),
+  checklist: z.array(z.string().min(1).max(200)).default([]),
   sort_order: z.number().int().default(0),
   active: z.boolean().default(true),
 });

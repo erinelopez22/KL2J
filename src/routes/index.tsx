@@ -493,9 +493,20 @@ function ContactForm() {
   const [phone, setPhone] = useState("");
   const [service, setService] = useState("");
   const [message, setMessage] = useState("");
+  const [checklistAnswers, setChecklistAnswers] = useState<Record<string, boolean>>({});
   const sendInquiry = useServerFn(submitInquiry);
   const { data: servicesData } = usePublicServices();
   const serviceOptions = servicesData ?? [];
+  const selectedServiceChecklist = serviceOptions.find((s) => s.title === service)?.checklist ?? [];
+
+  function chooseService(title: string) {
+    setService(title);
+    setChecklistAnswers({});
+  }
+
+  function toggleChecklistItem(label: string) {
+    setChecklistAnswers((a) => ({ ...a, [label]: !a[label] }));
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -509,6 +520,10 @@ function ContactForm() {
           service: service || null,
           message: message.trim() || null,
           channel: "quote_form",
+          checklist_responses: selectedServiceChecklist.map((label) => ({
+            label,
+            checked: Boolean(checklistAnswers[label]),
+          })),
           status: "New",
         },
       });
@@ -568,7 +583,7 @@ function ContactForm() {
               </Field>
             </div>
             <Field label="Service needed">
-              <select className="input" value={service} onChange={(e) => setService(e.target.value)}>
+              <select className="input" value={service} onChange={(e) => chooseService(e.target.value)}>
                 <option value="" disabled>
                   Select a service
                 </option>
@@ -578,6 +593,25 @@ function ContactForm() {
                 <option>Not sure yet</option>
               </select>
             </Field>
+            {selectedServiceChecklist.length > 0 && (
+              <div className="rounded-lg border border-border bg-secondary/30 p-3">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Which of these do you already have?
+                </p>
+                <div className="space-y-1.5">
+                  {selectedServiceChecklist.map((item) => (
+                    <label key={item} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(checklistAnswers[item])}
+                        onChange={() => toggleChecklistItem(item)}
+                      />
+                      {item}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
             <Field label="Tell us about your property">
               <textarea
                 rows={4}

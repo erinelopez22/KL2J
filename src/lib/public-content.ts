@@ -1,7 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-export type PublicService = { id: string; icon: string; title: string; description: string; sort_order: number };
+export type PublicService = {
+  id: string;
+  icon: string;
+  title: string;
+  description: string;
+  checklist: string[];
+  sort_order: number;
+};
 export type PublicPhoto = { id: string; url: string; caption: string | null; sort_order: number };
 export type PublicDocument = {
   id: string;
@@ -34,7 +41,7 @@ export function usePublicServices() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("services")
-        .select("id,icon,title,description,sort_order")
+        .select("id,icon,title,description,checklist,sort_order")
         .eq("active", true)
         .order("sort_order");
       if (error) throw error;
