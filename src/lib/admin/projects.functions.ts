@@ -9,12 +9,14 @@ const AttachmentSchema = z.object({
   path: z.string().min(1),
   type: z.enum(["image", "video", "document"]),
   name: z.string().min(1).max(200),
+  description: z.string().max(300).optional(),
 });
 
 const ConfidentialAttachmentSchema = z.object({
   path: z.string().min(1),
   type: z.enum(["image", "video", "document"]),
   name: z.string().min(1).max(200),
+  description: z.string().max(300).optional(),
 });
 
 const ProjectSchema = z.object({

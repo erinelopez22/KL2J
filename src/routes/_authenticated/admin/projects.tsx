@@ -28,6 +28,30 @@ const STATUS_STYLES: Record<ProjectStatus, string> = {
   Cancelled: "bg-destructive/10 text-destructive",
 };
 
+function LinkedInquiryLine({ inquiryId }: { inquiryId: string }) {
+  const { data } = useQuery({
+    queryKey: ["project-linked-inquiry", inquiryId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("inquiries")
+        .select("id, name, contact")
+        .eq("id", inquiryId)
+        .single();
+      if (error) throw error;
+      return data as { id: string; name: string; contact: string };
+    },
+  });
+  if (!data) return null;
+  return (
+    <div className="mt-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+      <span className="text-xs font-semibold uppercase text-muted-foreground">Linked inquiry</span>
+      <p className="mt-0.5 font-medium">
+        {data.name} · {data.contact}
+      </p>
+    </div>
+  );
+}
+
 function AdminProjects() {
   const queryClient = useQueryClient();
   const [viewingId, setViewingId] = useState<string | null>(null);
@@ -137,6 +161,8 @@ function AdminProjects() {
               </button>
             </div>
 
+            {viewingProject.inquiry_id && <LinkedInquiryLine inquiryId={viewingProject.inquiry_id} />}
+
             {viewingProject.cover_photo_url && (
               <img
                 src={viewingProject.cover_photo_url}
@@ -183,17 +209,22 @@ function AdminProjects() {
             {viewingProject.attachments?.length > 0 && (
               <div className="mt-3">
                 <span className="text-xs font-semibold uppercase text-muted-foreground/70">Public files</span>
-                <div className="mt-1.5 grid grid-cols-4 gap-2 sm:grid-cols-6">
+                <div className="mt-1.5 space-y-1.5">
                   {viewingProject.attachments.map((a) => (
                     <a
                       key={a.path}
                       href={a.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex flex-col items-center gap-1 rounded-lg border border-border bg-background p-2 text-center hover:bg-muted"
+                      className="flex items-center gap-2 rounded-lg border border-border bg-background p-2 text-sm hover:bg-muted"
                     >
                       <AttachmentIcon type={a.type} />
-                      <span className="w-full truncate text-[10px] text-muted-foreground">{a.name}</span>
+                      <span className="shrink-0 font-medium">{a.name}</span>
+                      {a.description && (
+                        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                          {a.description}
+                        </span>
+                      )}
                     </a>
                   ))}
                 </div>
@@ -204,16 +235,21 @@ function AdminProjects() {
                 <span className="flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground/70">
                   <Lock className="h-3.5 w-3.5" /> Confidential files
                 </span>
-                <div className="mt-1.5 grid grid-cols-4 gap-2 sm:grid-cols-6">
+                <div className="mt-1.5 space-y-1.5">
                   {viewingProject.confidential_attachments.map((a) => (
                     <button
                       key={a.path}
                       type="button"
                       onClick={() => openConfidentialFile(a)}
-                      className="flex flex-col items-center gap-1 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 text-center hover:bg-amber-500/10"
+                      className="flex w-full items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 text-left text-sm hover:bg-amber-500/10"
                     >
                       <AttachmentIcon type={a.type} />
-                      <span className="w-full truncate text-[10px] text-muted-foreground">{a.name}</span>
+                      <span className="shrink-0 font-medium">{a.name}</span>
+                      {a.description && (
+                        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                          {a.description}
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>

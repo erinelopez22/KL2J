@@ -202,7 +202,13 @@ function LinkedProjectSection({ inquiry }: { inquiry: Inquiry }) {
       {showForm && (
         <ProjectFormModal
           project={null}
-          defaultInquiry={{ id: inquiry.id, label: `${inquiry.name} · ${inquiry.contact}` }}
+          defaultInquiry={{
+            id: inquiry.id,
+            label: `${inquiry.name} · ${inquiry.contact}`,
+            name: inquiry.name,
+            service: inquiry.service,
+            checklist_responses: inquiry.checklist_responses,
+          }}
           onClose={() => setShowForm(false)}
           onSaved={handleSaved}
         />

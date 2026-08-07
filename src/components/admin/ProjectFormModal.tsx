@@ -14,8 +14,35 @@ import { LocationAutosuggest } from "@/components/LocationAutosuggest";
 export const PROJECT_STATUSES = ["Created", "Attended", "On-hold", "Completed", "Cancelled"] as const;
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 
-export type ProjectAttachment = { url: string; path: string; type: "image" | "video" | "document"; name: string };
-export type ConfidentialAttachment = { path: string; type: "image" | "video" | "document"; name: string };
+export type ProjectAttachment = {
+  url: string;
+  path: string;
+  type: "image" | "video" | "document";
+  name: string;
+  description?: string;
+};
+export type ConfidentialAttachment = {
+  path: string;
+  type: "image" | "video" | "document";
+  name: string;
+  description?: string;
+};
+
+export type DefaultInquiry = {
+  id: string;
+  label: string;
+  name: string;
+  service: string | null;
+  checklist_responses: { type: string; answer?: string }[];
+};
+
+function defaultTitleFromInquiry(name: string, service: string | null | undefined): string {
+  return service ? `${service} - ${name}` : name;
+}
+
+function defaultLocationFromInquiry(checklistResponses: { type: string; answer?: string }[] | undefined): string {
+  return checklistResponses?.find((c) => c.type === "location")?.answer?.trim() ?? "";
+}
 
 export type ProjectRecord = {
   id: string;
@@ -55,6 +82,59 @@ function attachmentTypeFor(contentType: string): ProjectAttachment["type"] {
   return "document";
 }
 
+function AttachmentRow({
+  attachment,
+  href,
+  variant,
+  onDescriptionChange,
+  onRemove,
+}: {
+  attachment: { path: string; name: string; type: ProjectAttachment["type"]; description?: string };
+  href?: string;
+  variant: "public" | "confidential";
+  onDescriptionChange: (description: string) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div
+      className={`flex items-center gap-2 rounded-lg border p-2 ${
+        variant === "confidential" ? "border-amber-500/30 bg-amber-500/5" : "border-border bg-background"
+      }`}
+    >
+      <AttachmentIcon type={attachment.type} />
+      {href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={attachment.name}
+          className="w-32 shrink-0 truncate text-xs font-medium hover:underline"
+        >
+          {attachment.name}
+        </a>
+      ) : (
+        <span className="w-32 shrink-0 truncate text-xs font-medium" title={attachment.name}>
+          {attachment.name}
+        </span>
+      )}
+      <input
+        value={attachment.description ?? ""}
+        onChange={(e) => onDescriptionChange(e.target.value)}
+        placeholder="Description (optional)"
+        className="h-8 flex-1 rounded-md border border-border bg-background px-2 text-xs"
+      />
+      <button
+        type="button"
+        onClick={onRemove}
+        className="shrink-0 text-muted-foreground hover:text-destructive"
+        aria-label={`Remove ${attachment.name}`}
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
 export function AttachmentIcon({ type }: { type: ProjectAttachment["type"] }) {
   if (type === "image") return <ImageIcon className="h-4 w-4" />;
   if (type === "video") return <Video className="h-4 w-4" />;
@@ -86,29 +166,36 @@ export function ProjectFormModal({
   onDeleted,
 }: {
   project: ProjectRecord | null;
-  defaultInquiry?: { id: string; label: string };
+  defaultInquiry?: DefaultInquiry;
   onClose: () => void;
   onSaved: () => void;
   onDeleted?: () => void;
 }) {
-  const [form, setForm] = useState<FormState>(() =>
-    project
-      ? {
-          title: project.title,
-          location: project.location ?? "",
-          description: project.description ?? "",
-          service: project.service ?? "",
-          start_date: project.start_date ?? "",
-          end_date: project.end_date ?? "",
-          personnel: project.personnel ?? [],
-          cover_photo_url: project.cover_photo_url ?? "",
-          attachments: project.attachments ?? [],
-          confidential_attachments: project.confidential_attachments ?? [],
-          status: project.status,
-          inquiry_id: project.inquiry_id ?? "",
-        }
-      : emptyForm(),
-  );
+  const [form, setForm] = useState<FormState>(() => {
+    if (project) {
+      return {
+        title: project.title,
+        location: project.location ?? "",
+        description: project.description ?? "",
+        service: project.service ?? "",
+        start_date: project.start_date ?? "",
+        end_date: project.end_date ?? "",
+        personnel: project.personnel ?? [],
+        cover_photo_url: project.cover_photo_url ?? "",
+        attachments: project.attachments ?? [],
+        confidential_attachments: project.confidential_attachments ?? [],
+        status: project.status,
+        inquiry_id: project.inquiry_id ?? "",
+      };
+    }
+    const base = emptyForm();
+    if (defaultInquiry) {
+      base.title = defaultTitleFromInquiry(defaultInquiry.name, defaultInquiry.service);
+      base.location = defaultLocationFromInquiry(defaultInquiry.checklist_responses);
+      base.inquiry_id = defaultInquiry.id;
+    }
+    return base;
+  });
   const [personName, setPersonName] = useState("");
   const [saving, setSaving] = useState(false);
   const doCreate = useServerFn(createProject);
@@ -123,14 +210,32 @@ export function ProjectFormModal({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("inquiries")
-        .select("id, name, contact, service, created_at")
+        .select("id, name, contact, service, created_at, checklist_responses")
         .order("created_at", { ascending: false })
         .limit(200);
       if (error) throw error;
-      return data as { id: string; name: string; contact: string; service: string | null; created_at: string }[];
+      return data as {
+        id: string;
+        name: string;
+        contact: string;
+        service: string | null;
+        created_at: string;
+        checklist_responses: { type: string; answer?: string }[];
+      }[];
     },
     enabled: !defaultInquiry,
   });
+
+  function selectInquiry(id: string) {
+    const inquiry = inquiries?.find((i) => i.id === id);
+    setForm((f) => ({
+      ...f,
+      inquiry_id: id,
+      title: !f.title.trim() && inquiry ? defaultTitleFromInquiry(inquiry.name, inquiry.service) : f.title,
+      location:
+        !f.location.trim() && inquiry ? defaultLocationFromInquiry(inquiry.checklist_responses) : f.location,
+    }));
+  }
 
   const requiredInquiryMissing = !project && !defaultInquiry && !form.inquiry_id;
 
@@ -173,6 +278,22 @@ export function ProjectFormModal({
     } catch (err) {
       console.error(err);
     }
+  }
+
+  function updateAttachmentDescription(path: string, description: string) {
+    setForm((f) => ({
+      ...f,
+      attachments: f.attachments.map((a) => (a.path === path ? { ...a, description } : a)),
+    }));
+  }
+
+  function updateConfidentialAttachmentDescription(path: string, description: string) {
+    setForm((f) => ({
+      ...f,
+      confidential_attachments: f.confidential_attachments.map((a) =>
+        a.path === path ? { ...a, description } : a,
+      ),
+    }));
   }
 
   function addPerson() {
@@ -268,7 +389,7 @@ export function ProjectFormModal({
               </span>
               <select
                 value={form.inquiry_id}
-                onChange={(e) => setForm({ ...form, inquiry_id: e.target.value })}
+                onChange={(e) => selectInquiry(e.target.value)}
                 className={`h-10 w-full rounded-md border bg-background px-3 text-sm ${
                   requiredInquiryMissing ? "border-destructive" : "border-border"
                 }`}
@@ -339,24 +460,26 @@ export function ProjectFormModal({
                   </select>
                 </label>
               )}
-              <label className="block text-sm">
-                <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Start date</span>
-                <input
-                  type="date"
-                  value={form.start_date}
-                  onChange={(e) => setForm({ ...form, start_date: e.target.value })}
-                  className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-                />
-              </label>
-              <label className="block text-sm">
-                <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">End date</span>
-                <input
-                  type="date"
-                  value={form.end_date}
-                  onChange={(e) => setForm({ ...form, end_date: e.target.value })}
-                  className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-                />
-              </label>
+              <div className="text-sm sm:col-span-2">
+                <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Date range</span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    aria-label="Start date"
+                    value={form.start_date}
+                    onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                  />
+                  <span className="shrink-0 text-muted-foreground">–</span>
+                  <input
+                    type="date"
+                    aria-label="End date"
+                    value={form.end_date}
+                    onChange={(e) => setForm({ ...form, end_date: e.target.value })}
+                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                  />
+                </div>
+              </div>
               <label className="block text-sm sm:col-span-2">
                 <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Description</span>
                 <textarea
@@ -441,23 +564,16 @@ export function ProjectFormModal({
                   onUploaded={addAttachment}
                 />
                 {form.attachments.length > 0 && (
-                  <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  <div className="mt-2 space-y-1.5">
                     {form.attachments.map((a) => (
-                      <div
+                      <AttachmentRow
                         key={a.path}
-                        className="group relative flex flex-col items-center gap-1 rounded-lg border border-border bg-background p-2 text-center"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => removeAttachment(a)}
-                          className="absolute -right-1.5 -top-1.5 hidden rounded-full bg-destructive p-0.5 text-white group-hover:block"
-                          aria-label={`Remove ${a.name}`}
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                        <AttachmentIcon type={a.type} />
-                        <span className="w-full truncate text-[10px] text-muted-foreground">{a.name}</span>
-                      </div>
+                        attachment={a}
+                        href={a.url}
+                        variant="public"
+                        onDescriptionChange={(description) => updateAttachmentDescription(a.path, description)}
+                        onRemove={() => removeAttachment(a)}
+                      />
                     ))}
                   </div>
                 )}
@@ -473,23 +589,15 @@ export function ProjectFormModal({
               </p>
               <ConfidentialFileDrop onUploaded={addConfidentialAttachment} />
               {form.confidential_attachments.length > 0 && (
-                <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                <div className="mt-2 space-y-1.5">
                   {form.confidential_attachments.map((a) => (
-                    <div
+                    <AttachmentRow
                       key={a.path}
-                      className="group relative flex flex-col items-center gap-1 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 text-center"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => removeConfidentialAttachment(a)}
-                        className="absolute -right-1.5 -top-1.5 hidden rounded-full bg-destructive p-0.5 text-white group-hover:block"
-                        aria-label={`Remove ${a.name}`}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                      <AttachmentIcon type={a.type} />
-                      <span className="w-full truncate text-[10px] text-muted-foreground">{a.name}</span>
-                    </div>
+                      attachment={a}
+                      variant="confidential"
+                      onDescriptionChange={(description) => updateConfidentialAttachmentDescription(a.path, description)}
+                      onRemove={() => removeConfidentialAttachment(a)}
+                    />
                   ))}
                 </div>
               )}
