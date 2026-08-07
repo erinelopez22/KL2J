@@ -5,7 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Trash2, X, Pencil, Lock, ChevronDown, CheckCircle2, Circle, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { deleteProject } from "@/lib/admin/projects.functions";
+import { deleteProject, updateProject } from "@/lib/admin/projects.functions";
 import { getConfidentialFileUrl } from "@/lib/admin/media.functions";
 import {
   ProjectFormModal,
@@ -46,6 +46,35 @@ function platformLabel(channel: string | null): string {
   if (channel === "quote_form") return "Request a Quote form";
   if (channel) return "Chatbot";
   return "Unknown";
+}
+
+function PublicToggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onChange();
+      }}
+      aria-pressed={checked}
+      className={`flex shrink-0 items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-medium uppercase transition-colors ${
+        checked ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground"
+      }`}
+    >
+      <span
+        className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
+          checked ? "bg-emerald-500" : "bg-border"
+        }`}
+      >
+        <span
+          className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${
+            checked ? "translate-x-3.5" : "translate-x-0.5"
+          }`}
+        />
+      </span>
+      Public
+    </button>
+  );
 }
 
 function DetailRow({ label, children }: { label: string; children: ReactNode }) {
@@ -104,6 +133,7 @@ function AdminProjects() {
   const [viewMediaTab, setViewMediaTab] = useState<"public" | "confidential">("public");
   const [inquiryAccordionOpen, setInquiryAccordionOpen] = useState(false);
   const doDelete = useServerFn(deleteProject);
+  const doUpdate = useServerFn(updateProject);
   const doGetConfidentialUrl = useServerFn(getConfidentialFileUrl);
 
   const { data: projects, isLoading } = useQuery({
@@ -168,6 +198,15 @@ function AdminProjects() {
     }
   }
 
+  async function togglePublic(p: ProjectRecord) {
+    try {
+      await doUpdate({ data: { id: p.id, is_public: !p.is_public } });
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update");
+    }
+  }
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
@@ -203,15 +242,7 @@ function AdminProjects() {
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <span
-                  className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium uppercase ${
-                    viewingProject.is_public
-                      ? "bg-emerald-100 text-emerald-700"
-                      : "bg-muted text-muted-foreground"
-                  }`}
-                >
-                  {viewingProject.is_public ? "Public" : "Reference only"}
-                </span>
+                <PublicToggle checked={viewingProject.is_public} onChange={() => togglePublic(viewingProject)} />
                 <button
                   onClick={() => setViewingId(null)}
                   className="rounded-md p-1 text-muted-foreground hover:bg-muted"
@@ -508,23 +539,23 @@ function AdminProjects() {
 
       <div className="grid gap-3 sm:grid-cols-2">
         {projects?.map((p) => (
-          <button
+          <div
             key={p.id}
-            type="button"
+            role="button"
+            tabIndex={0}
             onClick={() => openView(p)}
-            className="flex gap-3 rounded-lg border border-border bg-card p-3 text-left hover:border-primary/40 hover:shadow-sm"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") openView(p);
+            }}
+            className="flex cursor-pointer gap-3 rounded-lg border border-border bg-card p-3 text-left hover:border-primary/40 hover:shadow-sm"
           >
             {p.cover_photo_url && (
               <img src={p.cover_photo_url} alt={p.title} className="h-16 w-16 shrink-0 rounded-md object-cover" />
             )}
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <span className="font-medium">{p.title}</span>
-                {p.is_public && (
-                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium uppercase text-emerald-700">
-                    Public
-                  </span>
-                )}
+                <span className="min-w-0 flex-1 truncate font-medium">{p.title}</span>
+                <PublicToggle checked={p.is_public} onChange={() => togglePublic(p)} />
               </div>
               {p.location && <div className="text-xs text-muted-foreground">{p.location}</div>}
               <div className="text-xs text-muted-foreground">
@@ -540,7 +571,7 @@ function AdminProjects() {
                 </div>
               )}
             </div>
-          </button>
+          </div>
         ))}
       </div>
     </div>
