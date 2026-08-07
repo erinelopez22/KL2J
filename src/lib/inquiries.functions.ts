@@ -24,7 +24,7 @@ const InquirySchema = z
     message: z.string().max(4000).optional().nullable(),
     channel: z.string().max(50).optional().nullable(),
     checklist_responses: z.array(ChecklistResponseSchema).optional().default([]),
-    status: z.enum(["New", "Attended", "Completed", "Cancelled", "Rejected"]).optional().default("New"),
+    status: z.enum(["New", "Ongoing", "Onhold", "Completed", "Rejected", "Cancelled"]).optional().default("New"),
   })
   .refine((d) => d.email || d.phone, { message: "Provide an email or phone number" });
 

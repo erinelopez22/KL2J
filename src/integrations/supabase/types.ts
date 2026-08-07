@@ -534,12 +534,12 @@ export type Database = {
           end_date: string | null
           id: string
           inquiry_id: string | null
+          is_public: boolean
           location: string
           personnel: string[]
           service: string | null
           sort_order: number
           start_date: string | null
-          status: string
           title: string
         }
         Insert: {
@@ -551,12 +551,12 @@ export type Database = {
           end_date?: string | null
           id?: string
           inquiry_id?: string | null
+          is_public?: boolean
           location: string
           personnel?: string[]
           service?: string | null
           sort_order?: number
           start_date?: string | null
-          status?: string
           title: string
         }
         Update: {
@@ -568,12 +568,12 @@ export type Database = {
           end_date?: string | null
           id?: string
           inquiry_id?: string | null
+          is_public?: boolean
           location?: string
           personnel?: string[]
           service?: string | null
           sort_order?: number
           start_date?: string | null
-          status?: string
           title?: string
         }
         Relationships: [

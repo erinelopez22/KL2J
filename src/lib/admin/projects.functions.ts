@@ -2,8 +2,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-const PROJECT_STATUSES = ["Created", "Attended", "On-hold", "Completed", "Cancelled"] as const;
-
 const AttachmentSchema = z.object({
   url: z.string().url(),
   path: z.string().min(1),
@@ -30,7 +28,7 @@ const ProjectSchema = z.object({
   cover_photo_url: z.string().url().optional(),
   attachments: z.array(AttachmentSchema).default([]),
   confidential_attachments: z.array(ConfidentialAttachmentSchema).default([]),
-  status: z.enum(PROJECT_STATUSES).default("Created"),
+  is_public: z.boolean().default(false),
   sort_order: z.number().int().default(0),
   inquiry_id: z.string().uuid().optional(),
 });

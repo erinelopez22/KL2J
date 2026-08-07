@@ -3,7 +3,7 @@ import { useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Plus, Trash2, X, Pencil, Lock, ChevronDown, CheckCircle2, Circle, FileText } from "lucide-react";
+import { Trash2, X, Pencil, Lock, ChevronDown, CheckCircle2, Circle, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteProject } from "@/lib/admin/projects.functions";
 import { getConfidentialFileUrl } from "@/lib/admin/media.functions";
@@ -14,20 +14,11 @@ import {
   inquiryDocumentsFrom,
   type ProjectAttachment,
   type ProjectRecord,
-  type ProjectStatus,
 } from "@/components/admin/ProjectFormModal";
 
 export const Route = createFileRoute("/_authenticated/admin/projects")({
   component: AdminProjects,
 });
-
-const STATUS_STYLES: Record<ProjectStatus, string> = {
-  Created: "bg-muted text-muted-foreground",
-  Attended: "bg-blue-100 text-blue-700",
-  "On-hold": "bg-amber-100 text-amber-700",
-  Completed: "bg-emerald-100 text-emerald-700",
-  Cancelled: "bg-destructive/10 text-destructive",
-};
 
 type LinkedInquiryChecklistResponse = {
   id: string;
@@ -183,15 +174,15 @@ function AdminProjects() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Reference and documentation for completed inquiries. Only "Completed" projects show on the public site.
-            Click a project to view it; use Edit to update its status or any other field.
+            Reference and documentation for inquiries. Toggle "Show on public site" on a project to include it in
+            the public portfolio.
           </p>
         </div>
         <button
           onClick={() => setFormTarget("create")}
-          className="flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
         >
-          <Plus className="h-4 w-4" /> Add project
+          Add project
         </button>
       </div>
 
@@ -213,9 +204,13 @@ function AdminProjects() {
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <span
-                  className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium uppercase ${STATUS_STYLES[viewingProject.status]}`}
+                  className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium uppercase ${
+                    viewingProject.is_public
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-muted text-muted-foreground"
+                  }`}
                 >
-                  {viewingProject.status}
+                  {viewingProject.is_public ? "Public" : "Reference only"}
                 </span>
                 <button
                   onClick={() => setViewingId(null)}
@@ -525,9 +520,11 @@ function AdminProjects() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="font-medium">{p.title}</span>
-                <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase ${STATUS_STYLES[p.status]}`}>
-                  {p.status}
-                </span>
+                {p.is_public && (
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium uppercase text-emerald-700">
+                    Public
+                  </span>
+                )}
               </div>
               {p.location && <div className="text-xs text-muted-foreground">{p.location}</div>}
               <div className="text-xs text-muted-foreground">

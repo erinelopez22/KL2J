@@ -4,8 +4,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { ProjectFormModal, type ProjectStatus } from "@/components/admin/ProjectFormModal";
+import { ProjectFormModal } from "@/components/admin/ProjectFormModal";
 import { getConfidentialFileUrl } from "@/lib/admin/media.functions";
+import { updateInquiryStatus } from "@/lib/admin/inquiries.functions";
 import {
   MessageCircle,
   RefreshCw,
@@ -30,33 +31,27 @@ export const Route = createFileRoute("/_authenticated/admin/inquiries")({
   component: AdminInquiries,
 });
 
-const STATUS_COLUMNS = ["New", "Attended", "Completed"] as const;
-const HIDDEN_COLUMNS = ["Cancelled", "Rejected"] as const;
+const STATUS_COLUMNS = ["New", "Ongoing", "Onhold", "Completed"] as const;
+const HIDDEN_COLUMNS = ["Rejected", "Cancelled"] as const;
 type Status = (typeof STATUS_COLUMNS)[number] | (typeof HIDDEN_COLUMNS)[number];
 const ALL_STATUSES = [...STATUS_COLUMNS, ...HIDDEN_COLUMNS];
 
 const STATUS_HEADER_STYLES: Record<Status, string> = {
   New: "border-t-blue-500",
-  Attended: "border-t-indigo-500",
+  Ongoing: "border-t-indigo-500",
+  Onhold: "border-t-amber-500",
   Completed: "border-t-emerald-500",
-  Cancelled: "border-t-muted-foreground",
   Rejected: "border-t-destructive",
+  Cancelled: "border-t-muted-foreground",
 };
 
 const STATUS_BADGE_STYLES: Record<Status, string> = {
   New: "bg-blue-100 text-blue-700",
-  Attended: "bg-indigo-100 text-indigo-700",
+  Ongoing: "bg-indigo-100 text-indigo-700",
+  Onhold: "bg-amber-100 text-amber-700",
   Completed: "bg-emerald-100 text-emerald-700",
-  Cancelled: "bg-muted text-muted-foreground",
   Rejected: "bg-destructive/10 text-destructive",
-};
-
-const PROJECT_STATUS_STYLES: Record<ProjectStatus, string> = {
-  Created: "bg-muted text-muted-foreground",
-  Attended: "bg-blue-100 text-blue-700",
-  "On-hold": "bg-amber-100 text-amber-700",
-  Completed: "bg-emerald-100 text-emerald-700",
-  Cancelled: "bg-destructive/10 text-destructive",
+  Cancelled: "bg-muted text-muted-foreground",
 };
 
 type ChecklistResponse = {
@@ -84,13 +79,18 @@ type Inquiry = {
   email_error: string | null;
 };
 
-type LinkedProject = { id: string; title: string; status: ProjectStatus };
+type LinkedProject = { id: string; title: string; is_public: boolean };
 
 function InquiryCard({ inquiry, onOpen }: { inquiry: Inquiry; onOpen: () => void }) {
   return (
     <div
       onClick={onOpen}
-      className="cursor-pointer rounded-lg border border-border bg-card p-3 shadow-sm hover:border-primary/40"
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData("text/plain", inquiry.id);
+        e.dataTransfer.effectAllowed = "move";
+      }}
+      className="cursor-grab rounded-lg border border-border bg-card p-3 shadow-sm hover:border-primary/40 active:cursor-grabbing"
     >
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-sm font-semibold">{inquiry.name}</span>
@@ -128,16 +128,42 @@ function InquiryCard({ inquiry, onOpen }: { inquiry: Inquiry; onOpen: () => void
   );
 }
 
-function StatusColumn({ status, items, onOpen }: { status: Status; items: Inquiry[]; onOpen: (i: Inquiry) => void }) {
+function StatusColumn({
+  status,
+  items,
+  onOpen,
+  onDropInquiry,
+}: {
+  status: Status;
+  items: Inquiry[];
+  onOpen: (i: Inquiry) => void;
+  onDropInquiry: (id: string, status: Status) => void;
+}) {
+  const [dragOver, setDragOver] = useState(false);
+
   return (
     <div
-      className={`flex h-full w-[260px] shrink-0 flex-col rounded-lg border-t-4 bg-muted/30 ${STATUS_HEADER_STYLES[status]}`}
+      className={`flex h-full w-[260px] shrink-0 flex-col rounded-lg border-t-4 bg-muted/30 ${STATUS_HEADER_STYLES[status]} ${dragOver ? "ring-2 ring-primary" : ""}`}
     >
       <div className="flex shrink-0 items-center justify-between px-3 py-2">
         <span className="text-sm font-semibold">{status}</span>
         <span className="text-xs text-muted-foreground">{items.length}</span>
       </div>
-      <div className="flex-1 space-y-2 overflow-y-auto px-2 pb-2" style={{ minHeight: 80 }}>
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+          const id = e.dataTransfer.getData("text/plain");
+          if (id) onDropInquiry(id, status);
+        }}
+        className="flex-1 space-y-2 overflow-y-auto px-2 pb-2"
+        style={{ minHeight: 80 }}
+      >
         {items.map((i) => (
           <InquiryCard key={i.id} inquiry={i} onOpen={() => onOpen(i)} />
         ))}
@@ -155,7 +181,7 @@ function LinkedProjectSection({ inquiry }: { inquiry: Inquiry }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("projects")
-        .select("id, title, status")
+        .select("id, title, is_public")
         .eq("inquiry_id", inquiry.id)
         .maybeSingle();
       if (error) throw error;
@@ -178,11 +204,11 @@ function LinkedProjectSection({ inquiry }: { inquiry: Inquiry }) {
         <div className="flex min-w-0 items-center gap-1.5">
           <FolderKanban className="h-3.5 w-3.5 shrink-0 text-primary" />
           <span className="truncate font-medium">{linkedProject.title}</span>
-          <span
-            className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium uppercase ${PROJECT_STATUS_STYLES[linkedProject.status]}`}
-          >
-            {linkedProject.status}
-          </span>
+          {linkedProject.is_public && (
+            <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-medium uppercase text-emerald-700">
+              Public
+            </span>
+          )}
         </div>
         <Link to="/admin/projects" className="shrink-0 text-primary hover:underline">
           Manage →
@@ -422,6 +448,7 @@ function AdminInquiries() {
   const [loading, setLoading] = useState(true);
   const [showHidden, setShowHidden] = useState(false);
   const [openInquiryId, setOpenInquiryId] = useState<string | null>(null);
+  const doUpdateStatus = useServerFn(updateInquiryStatus);
 
   async function load() {
     setLoading(true);
@@ -450,6 +477,18 @@ function AdminInquiries() {
   const emailFailedCount = items.filter((i) => !i.email_sent).length;
   const openInquiry = openInquiryId ? (items.find((i) => i.id === openInquiryId) ?? null) : null;
 
+  async function moveInquiry(id: string, status: Status) {
+    const current = items.find((i) => i.id === id);
+    if (!current || current.status === status) return;
+    setItems((cur) => cur.map((i) => (i.id === id ? { ...i, status } : i)));
+    try {
+      await doUpdateStatus({ data: { id, status } });
+    } catch (err) {
+      setItems((cur) => cur.map((i) => (i.id === id ? { ...i, status: current.status } : i)));
+      toast.error(err instanceof Error ? err.message : "Failed to update status");
+    }
+  }
+
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -458,8 +497,8 @@ function AdminInquiries() {
             <MessageCircle className="h-6 w-6 text-primary" /> Inquiries
           </h1>
           <p className="text-sm text-muted-foreground">
-            {newCount} new · {items.length} total · click a card to view details. Status moves automatically as its
-            linked project progresses.
+            {newCount} new · {items.length} total · click a card to view details, or drag it to another column to
+            change its status.
             {emailFailedCount > 0 && (
               <span className="ml-2 inline-flex items-center gap-1 font-medium text-destructive">
                 <MailWarning className="h-3.5 w-3.5" />
@@ -476,7 +515,7 @@ function AdminInquiries() {
             }`}
           >
             {showHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            {showHidden ? "Hide" : "Show"} cancelled / rejected
+            {showHidden ? "Hide" : "Show"} rejected / cancelled
           </button>
           <button
             onClick={load}
@@ -502,6 +541,7 @@ function AdminInquiries() {
               status={status}
               items={items.filter((i) => i.status === status)}
               onOpen={(i) => setOpenInquiryId(i.id)}
+              onDropInquiry={moveInquiry}
             />
           ))}
         </div>

@@ -10,9 +10,6 @@ import { FileDrop } from "@/components/admin/FileDrop";
 import { ConfidentialFileDrop } from "@/components/admin/ConfidentialFileDrop";
 import { LocationAutosuggest } from "@/components/LocationAutosuggest";
 
-export const PROJECT_STATUSES = ["Created", "Attended", "On-hold", "Completed", "Cancelled"] as const;
-export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
-
 export type ProjectAttachment = {
   url: string;
   path: string;
@@ -67,7 +64,7 @@ export type ProjectRecord = {
   cover_photo_url: string | null;
   attachments: ProjectAttachment[];
   confidential_attachments: ConfidentialAttachment[];
-  status: ProjectStatus;
+  is_public: boolean;
   inquiry_id: string | null;
   sort_order: number;
 };
@@ -83,7 +80,7 @@ type FormState = {
   cover_photo_url: string;
   attachments: ProjectAttachment[];
   confidential_attachments: ConfidentialAttachment[];
-  status: ProjectStatus;
+  is_public: boolean;
   inquiry_id: string;
 };
 
@@ -164,7 +161,7 @@ function emptyForm(): FormState {
     cover_photo_url: "",
     attachments: [],
     confidential_attachments: [],
-    status: "Created",
+    is_public: false,
     inquiry_id: "",
   };
 }
@@ -195,7 +192,7 @@ export function ProjectFormModal({
         cover_photo_url: project.cover_photo_url ?? "",
         attachments: project.attachments ?? [],
         confidential_attachments: project.confidential_attachments ?? [],
-        status: project.status,
+        is_public: project.is_public ?? false,
         inquiry_id: project.inquiry_id ?? "",
       };
     }
@@ -357,7 +354,7 @@ export function ProjectFormModal({
       cover_photo_url: form.cover_photo_url || undefined,
       attachments: form.attachments,
       confidential_attachments: form.confidential_attachments,
-      status: form.status,
+      is_public: form.is_public,
       inquiry_id: defaultInquiry?.id || form.inquiry_id || undefined,
       sort_order: project?.sort_order ?? 0,
     };
@@ -455,22 +452,15 @@ export function ProjectFormModal({
                 </span>
                 <LocationAutosuggest value={form.location} onChange={(v) => setForm({ ...form, location: v })} />
               </label>
-              {project && (
-                <label className="block text-sm">
-                  <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Status</span>
-                  <select
-                    value={form.status}
-                    onChange={(e) => setForm({ ...form, status: e.target.value as ProjectStatus })}
-                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-                  >
-                    {PROJECT_STATUSES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
+              <label className="flex items-center gap-2 text-sm sm:col-span-2">
+                <input
+                  type="checkbox"
+                  checked={form.is_public}
+                  onChange={(e) => setForm({ ...form, is_public: e.target.checked })}
+                  className="h-4 w-4 rounded border-border"
+                />
+                <span className="text-xs font-semibold uppercase text-muted-foreground">Show on public site</span>
+              </label>
               <div className="text-sm sm:col-span-2">
                 <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Date range</span>
                 <div className="flex items-center gap-2">
