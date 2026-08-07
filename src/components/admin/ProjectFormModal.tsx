@@ -49,7 +49,7 @@ function defaultLocationFromInquiry(checklistResponses: InquiryChecklistItem[] |
   return checklistResponses?.find((c) => c.type === "location")?.answer?.trim() ?? "";
 }
 
-function inquiryDocumentsFrom(
+export function inquiryDocumentsFrom(
   checklistResponses: InquiryChecklistItem[] | undefined,
 ): { path: string; name: string; contentType: string }[] {
   return checklistResponses?.filter((c) => c.type === "document").flatMap((c) => c.documents ?? []) ?? [];

@@ -5,15 +5,15 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Plus, Trash2, X, Pencil, Lock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { updateProject, deleteProject } from "@/lib/admin/projects.functions";
+import { deleteProject } from "@/lib/admin/projects.functions";
 import { getConfidentialFileUrl } from "@/lib/admin/media.functions";
 import {
   ProjectFormModal,
   AttachmentIcon,
-  PROJECT_STATUSES,
+  inquiryDocumentsFrom,
   type ProjectRecord,
   type ProjectStatus,
-  type ConfidentialAttachment,
+  type InquiryChecklistItem,
 } from "@/components/admin/ProjectFormModal";
 
 export const Route = createFileRoute("/_authenticated/admin/projects")({
@@ -56,9 +56,6 @@ function AdminProjects() {
   const queryClient = useQueryClient();
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [formTarget, setFormTarget] = useState<"create" | ProjectRecord | null>(null);
-  const [statusDraft, setStatusDraft] = useState<ProjectStatus | null>(null);
-  const [savingStatus, setSavingStatus] = useState(false);
-  const doUpdate = useServerFn(updateProject);
   const doDelete = useServerFn(deleteProject);
   const doGetConfidentialUrl = useServerFn(getConfidentialFileUrl);
 
@@ -73,6 +70,21 @@ function AdminProjects() {
 
   const viewingProject = viewingId ? (projects?.find((p) => p.id === viewingId) ?? null) : null;
 
+  const { data: linkedInquiryChecklist } = useQuery({
+    queryKey: ["project-linked-inquiry-checklist", viewingProject?.inquiry_id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("inquiries")
+        .select("checklist_responses")
+        .eq("id", viewingProject!.inquiry_id!)
+        .single();
+      if (error) throw error;
+      return data.checklist_responses as InquiryChecklistItem[];
+    },
+    enabled: !!viewingProject?.inquiry_id,
+  });
+  const inquiryDocuments = inquiryDocumentsFrom(linkedInquiryChecklist);
+
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ["admin-projects"] });
     queryClient.invalidateQueries({ queryKey: ["public-projects"] });
@@ -80,23 +92,9 @@ function AdminProjects() {
 
   function openView(p: ProjectRecord) {
     setViewingId(p.id);
-    setStatusDraft(p.status);
   }
 
-  async function saveStatus(id: string, status: ProjectStatus) {
-    setSavingStatus(true);
-    try {
-      await doUpdate({ data: { id, status } });
-      toast.success(`Status set to ${status}`);
-      refresh();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to update status");
-    } finally {
-      setSavingStatus(false);
-    }
-  }
-
-  async function openConfidentialFile(attachment: ConfidentialAttachment) {
+  async function openConfidentialFile(attachment: { path: string }) {
     try {
       const { url } = await doGetConfidentialUrl({ data: { path: attachment.path } });
       window.open(url, "_blank", "noopener,noreferrer");
@@ -122,8 +120,8 @@ function AdminProjects() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Public portfolio / completed-work showcase. Only "Completed" projects show on the public site. Click a
-            project to view or change its status; use Edit to update the rest of the record.
+            Reference and documentation for completed inquiries. Only "Completed" projects show on the public site.
+            Click a project to view it; use Edit to update its status or any other field.
           </p>
         </div>
         <button
@@ -171,26 +169,12 @@ function AdminProjects() {
               />
             )}
 
-            <div className="mt-4 flex gap-2">
-              <select
-                value={statusDraft ?? viewingProject.status}
-                onChange={(e) => setStatusDraft(e.target.value as ProjectStatus)}
-                className={`h-9 rounded-md border border-border px-3 text-xs font-medium ${STATUS_STYLES[statusDraft ?? viewingProject.status]}`}
+            <div className="mt-4">
+              <span
+                className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium uppercase ${STATUS_STYLES[viewingProject.status]}`}
               >
-                {PROJECT_STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                disabled={savingStatus || (statusDraft ?? viewingProject.status) === viewingProject.status}
-                onClick={() => saveStatus(viewingProject.id, statusDraft ?? viewingProject.status)}
-                className="shrink-0 rounded-md bg-primary px-4 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
-              >
-                {savingStatus ? "Saving…" : "Save"}
-              </button>
+                {viewingProject.status}
+              </span>
             </div>
 
             <div className="mt-4 whitespace-pre-wrap rounded-lg border border-border bg-muted/30 p-3 text-sm leading-relaxed">
@@ -230,7 +214,7 @@ function AdminProjects() {
                 </div>
               </div>
             )}
-            {viewingProject.confidential_attachments?.length > 0 && (
+            {(viewingProject.confidential_attachments?.length > 0 || inquiryDocuments.length > 0) && (
               <div className="mt-3">
                 <span className="flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground/70">
                   <Lock className="h-3.5 w-3.5" /> Confidential files
@@ -253,6 +237,34 @@ function AdminProjects() {
                     </button>
                   ))}
                 </div>
+                {inquiryDocuments.length > 0 && (
+                  <div className="mt-2">
+                    <span className="text-[11px] font-medium uppercase text-muted-foreground/60">
+                      From linked inquiry
+                    </span>
+                    <div className="mt-1.5 space-y-1.5">
+                      {inquiryDocuments.map((doc) => (
+                        <button
+                          key={doc.path}
+                          type="button"
+                          onClick={() => openConfidentialFile(doc)}
+                          className="flex w-full items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 text-left text-sm hover:bg-amber-500/10"
+                        >
+                          <AttachmentIcon
+                            type={
+                              doc.contentType.startsWith("image/")
+                                ? "image"
+                                : doc.contentType.startsWith("video/")
+                                  ? "video"
+                                  : "document"
+                            }
+                          />
+                          <span className="min-w-0 flex-1 truncate font-medium">{doc.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
