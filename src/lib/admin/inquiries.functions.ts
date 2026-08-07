@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { ChecklistResponseSchema } from "@/lib/inquiries.functions";
 
 const INQUIRY_STATUSES = ["New", "Ongoing", "Onhold", "Completed", "Rejected", "Cancelled"] as const;
 
@@ -16,6 +17,7 @@ const CreateInquirySchema = z
     phone: z.string().min(1).max(50).optional(),
     service: z.string().max(200).optional(),
     message: z.string().max(4000).optional(),
+    checklist_responses: z.array(ChecklistResponseSchema).optional().default([]),
   })
   .refine((d) => d.email || d.phone, { message: "Provide an email or phone number" });
 
@@ -25,24 +27,17 @@ export const createInquiry = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { assertRole } = await import("@/lib/admin/roles.server");
     await assertRole(context.userId, "admin");
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const contact = data.email || data.phone || "";
-    const { error } = await supabaseAdmin.from("inquiries").insert({
+    const { insertInquiryAndNotify } = await import("@/lib/inquiries-notify.server");
+    return insertInquiryAndNotify({
       name: data.name,
-      contact,
       email: data.email ?? null,
       phone: data.phone ?? null,
       service: data.service ?? null,
       message: data.message ?? null,
       channel: "manual",
+      checklist_responses: data.checklist_responses,
       status: "New",
-      checklist_responses: [],
     });
-    if (error) {
-      console.error("createInquiry failed", error);
-      throw new Error(`Failed to create inquiry: ${error.message}`);
-    }
-    return { ok: true };
   });
 
 export const updateInquiryStatus = createServerFn({ method: "POST" })

@@ -8,6 +8,8 @@ import { ProjectFormModal } from "@/components/admin/ProjectFormModal";
 import { getConfidentialFileUrl } from "@/lib/admin/media.functions";
 import { updateInquiryStatus, createInquiry } from "@/lib/admin/inquiries.functions";
 import { usePublicServices } from "@/lib/public-content";
+import { LocationAutosuggest } from "@/components/LocationAutosuggest";
+import { PublicDocumentUpload, type UploadedDocument } from "@/components/PublicDocumentUpload";
 import {
   MessageCircle,
   RefreshCw,
@@ -446,15 +448,28 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
   );
 }
 
+type ManualChecklistAnswer = { checked?: boolean; answer?: string; documents?: UploadedDocument[] };
+
 function NewInquiryModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [service, setService] = useState("");
   const [message, setMessage] = useState("");
+  const [checklistAnswers, setChecklistAnswers] = useState<Record<string, ManualChecklistAnswer>>({});
   const [saving, setSaving] = useState(false);
   const doCreate = useServerFn(createInquiry);
   const { data: services } = usePublicServices();
+  const selectedServiceChecklist = services?.find((s) => s.title === service)?.checklist ?? [];
+
+  function chooseService(title: string) {
+    setService(title);
+    setChecklistAnswers({});
+  }
+
+  function updateChecklistAnswer(id: string, patch: ManualChecklistAnswer) {
+    setChecklistAnswers((a) => ({ ...a, [id]: { ...a[id], ...patch } }));
+  }
 
   async function submit() {
     if (!name.trim()) {
@@ -474,6 +489,14 @@ function NewInquiryModal({ onClose, onCreated }: { onClose: () => void; onCreate
           phone: phone.trim() || undefined,
           service: service || undefined,
           message: message.trim() || undefined,
+          checklist_responses: selectedServiceChecklist.map((item) => ({
+            id: item.id,
+            label: item.label,
+            type: item.type,
+            checked: checklistAnswers[item.id]?.checked,
+            answer: checklistAnswers[item.id]?.answer,
+            documents: checklistAnswers[item.id]?.documents ?? [],
+          })),
         },
       });
       toast.success("Inquiry created");
@@ -533,7 +556,7 @@ function NewInquiryModal({ onClose, onCreated }: { onClose: () => void; onCreate
             <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Service</span>
             <select
               value={service}
-              onChange={(e) => setService(e.target.value)}
+              onChange={(e) => chooseService(e.target.value)}
               className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
             >
               <option value="">Select a service</option>
@@ -544,6 +567,66 @@ function NewInquiryModal({ onClose, onCreated }: { onClose: () => void; onCreate
               ))}
             </select>
           </label>
+          {selectedServiceChecklist.length > 0 && (
+            <div className="rounded-lg border border-border bg-muted/30 p-3">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                A few details for this service
+              </p>
+              <div className="space-y-3">
+                {selectedServiceChecklist.map((item) => {
+                  const a = checklistAnswers[item.id] ?? {};
+                  if (item.type === "checkbox") {
+                    return (
+                      <label key={item.id} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(a.checked)}
+                          onChange={() => updateChecklistAnswer(item.id, { checked: !a.checked })}
+                        />
+                        {item.label}
+                      </label>
+                    );
+                  }
+                  if (item.type === "document") {
+                    return (
+                      <div key={item.id}>
+                        <span className="mb-1 block text-xs text-muted-foreground">{item.label}</span>
+                        <PublicDocumentUpload
+                          value={a.documents ?? []}
+                          onChange={(docs) => updateChecklistAnswer(item.id, { documents: docs })}
+                        />
+                      </div>
+                    );
+                  }
+                  if (item.type === "location") {
+                    return (
+                      <div key={item.id}>
+                        <span className="mb-1 block text-xs text-muted-foreground">{item.label}</span>
+                        <LocationAutosuggest
+                          value={a.answer ?? ""}
+                          onChange={(v) => updateChecklistAnswer(item.id, { answer: v })}
+                        />
+                      </div>
+                    );
+                  }
+                  return (
+                    <div key={item.id}>
+                      <span className="mb-1 block text-xs text-muted-foreground">{item.label}</span>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type={item.type === "number" ? "number" : "text"}
+                          value={a.answer ?? ""}
+                          onChange={(e) => updateChecklistAnswer(item.id, { answer: e.target.value })}
+                          className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                        />
+                        {item.unit && <span className="shrink-0 text-sm text-muted-foreground">{item.unit}</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <label className="block text-sm">
             <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Message / details</span>
             <textarea
