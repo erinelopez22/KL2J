@@ -1,19 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Plus, Trash2, X, Pencil, Lock } from "lucide-react";
+import { Plus, Trash2, X, Pencil, Lock, ChevronDown, CheckCircle2, Circle, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteProject } from "@/lib/admin/projects.functions";
 import { getConfidentialFileUrl } from "@/lib/admin/media.functions";
 import {
   ProjectFormModal,
   AttachmentIcon,
+  attachmentTypeFor,
   inquiryDocumentsFrom,
+  type ProjectAttachment,
   type ProjectRecord,
   type ProjectStatus,
-  type InquiryChecklistItem,
 } from "@/components/admin/ProjectFormModal";
 
 export const Route = createFileRoute("/_authenticated/admin/projects")({
@@ -28,34 +29,89 @@ const STATUS_STYLES: Record<ProjectStatus, string> = {
   Cancelled: "bg-destructive/10 text-destructive",
 };
 
-function LinkedInquiryLine({ inquiryId }: { inquiryId: string }) {
-  const { data } = useQuery({
-    queryKey: ["project-linked-inquiry", inquiryId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("inquiries")
-        .select("id, name, contact")
-        .eq("id", inquiryId)
-        .single();
-      if (error) throw error;
-      return data as { id: string; name: string; contact: string };
-    },
-  });
-  if (!data) return null;
+type LinkedInquiryChecklistResponse = {
+  id: string;
+  label: string;
+  type: string;
+  checked?: boolean;
+  answer?: string;
+  documents?: { path: string; name: string; contentType: string }[];
+};
+
+type LinkedInquiry = {
+  id: string;
+  created_at: string;
+  name: string;
+  contact: string;
+  email: string | null;
+  phone: string | null;
+  service: string | null;
+  message: string | null;
+  channel: string | null;
+  checklist_responses: LinkedInquiryChecklistResponse[];
+};
+
+function platformLabel(channel: string | null): string {
+  if (channel === "quote_form") return "Request a Quote form";
+  if (channel) return "Chatbot";
+  return "Unknown";
+}
+
+function DetailRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="mt-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
-      <span className="text-xs font-semibold uppercase text-muted-foreground">Linked inquiry</span>
-      <p className="mt-0.5 font-medium">
-        {data.name} · {data.contact}
-      </p>
+    <div className="grid grid-cols-[45%_1fr] items-start gap-3 px-3 py-2.5">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <div className="text-sm">{children}</div>
     </div>
   );
+}
+
+function MediaThumb({ type, url }: { type: ProjectAttachment["type"]; url?: string }) {
+  if (type === "image" && url) {
+    return <img src={url} alt="" className="h-10 w-10 shrink-0 rounded-md border border-border object-cover" />;
+  }
+  if (type === "video" && url) {
+    return (
+      <video
+        src={url}
+        muted
+        playsInline
+        preload="metadata"
+        className="h-10 w-10 shrink-0 rounded-md border border-border object-cover"
+      />
+    );
+  }
+  return (
+    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-muted">
+      <AttachmentIcon type={type} />
+    </div>
+  );
+}
+
+function ConfidentialThumb({
+  path,
+  type,
+  getUrl,
+}: {
+  path: string;
+  type: ProjectAttachment["type"];
+  getUrl: (path: string) => Promise<string>;
+}) {
+  const { data: url } = useQuery({
+    queryKey: ["confidential-thumb", path],
+    queryFn: () => getUrl(path),
+    enabled: type === "image" || type === "video",
+    staleTime: 4 * 60 * 1000,
+  });
+  return <MediaThumb type={type} url={url} />;
 }
 
 function AdminProjects() {
   const queryClient = useQueryClient();
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [formTarget, setFormTarget] = useState<"create" | ProjectRecord | null>(null);
+  const [viewMediaTab, setViewMediaTab] = useState<"public" | "confidential">("public");
+  const [inquiryAccordionOpen, setInquiryAccordionOpen] = useState(false);
   const doDelete = useServerFn(deleteProject);
   const doGetConfidentialUrl = useServerFn(getConfidentialFileUrl);
 
@@ -70,20 +126,25 @@ function AdminProjects() {
 
   const viewingProject = viewingId ? (projects?.find((p) => p.id === viewingId) ?? null) : null;
 
-  const { data: linkedInquiryChecklist } = useQuery({
-    queryKey: ["project-linked-inquiry-checklist", viewingProject?.inquiry_id],
+  const { data: linkedInquiry } = useQuery({
+    queryKey: ["project-linked-inquiry", viewingProject?.inquiry_id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("inquiries")
-        .select("checklist_responses")
+        .select("id, created_at, name, contact, email, phone, service, message, channel, checklist_responses")
         .eq("id", viewingProject!.inquiry_id!)
         .single();
       if (error) throw error;
-      return data.checklist_responses as InquiryChecklistItem[];
+      return data as LinkedInquiry;
     },
     enabled: !!viewingProject?.inquiry_id,
   });
-  const inquiryDocuments = inquiryDocumentsFrom(linkedInquiryChecklist);
+  const inquiryDocuments = inquiryDocumentsFrom(linkedInquiry?.checklist_responses);
+
+  async function fetchConfidentialUrl(path: string): Promise<string> {
+    const { url } = await doGetConfidentialUrl({ data: { path } });
+    return url;
+  }
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ["admin-projects"] });
@@ -92,6 +153,8 @@ function AdminProjects() {
 
   function openView(p: ProjectRecord) {
     setViewingId(p.id);
+    setViewMediaTab("public");
+    setInquiryAccordionOpen(false);
   }
 
   async function openConfidentialFile(attachment: { path: string }) {
@@ -144,22 +207,34 @@ function AdminProjects() {
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <h2 className="truncate text-xl font-bold leading-tight">{viewingProject.title}</h2>
-                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-foreground/80">
-                  {viewingProject.location && <span>{viewingProject.location}</span>}
-                  {viewingProject.location && viewingProject.service && <span className="text-muted-foreground/50">·</span>}
-                  {viewingProject.service && <span>{viewingProject.service}</span>}
-                </p>
+                {viewingProject.location && (
+                  <p className="mt-0.5 text-sm text-foreground/80">{viewingProject.location}</p>
+                )}
               </div>
-              <button
-                onClick={() => setViewingId(null)}
-                className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted"
-                aria-label="Close"
-              >
-                <X className="h-5 w-5" />
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                <span
+                  className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium uppercase ${STATUS_STYLES[viewingProject.status]}`}
+                >
+                  {viewingProject.status}
+                </span>
+                <button
+                  onClick={() => setViewingId(null)}
+                  className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+                  aria-label="Close"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </div>
 
-            {viewingProject.inquiry_id && <LinkedInquiryLine inquiryId={viewingProject.inquiry_id} />}
+            {linkedInquiry && (
+              <div className="mt-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+                <span className="text-xs font-semibold uppercase text-muted-foreground">Linked inquiry</span>
+                <p className="mt-0.5 font-medium">
+                  {linkedInquiry.name} · {linkedInquiry.contact}
+                </p>
+              </div>
+            )}
 
             {viewingProject.cover_photo_url && (
               <img
@@ -169,103 +244,224 @@ function AdminProjects() {
               />
             )}
 
-            <div className="mt-4">
-              <span
-                className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium uppercase ${STATUS_STYLES[viewingProject.status]}`}
-              >
-                {viewingProject.status}
-              </span>
-            </div>
-
-            <div className="mt-4 whitespace-pre-wrap rounded-lg border border-border bg-muted/30 p-3 text-sm leading-relaxed">
-              {viewingProject.description || "No description yet."}
-            </div>
-
-            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground/70">
-              {viewingProject.start_date && (
-                <span>
-                  {viewingProject.start_date}
-                  {viewingProject.end_date ? ` – ${viewingProject.end_date}` : ""}
-                </span>
-              )}
-              {viewingProject.personnel?.length > 0 && <span>Team: {viewingProject.personnel.join(", ")}</span>}
-            </div>
-            {viewingProject.attachments?.length > 0 && (
-              <div className="mt-3">
-                <span className="text-xs font-semibold uppercase text-muted-foreground/70">Public files</span>
-                <div className="mt-1.5 space-y-1.5">
-                  {viewingProject.attachments.map((a) => (
-                    <a
-                      key={a.path}
-                      href={a.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 rounded-lg border border-border bg-background p-2 text-sm hover:bg-muted"
-                    >
-                      <AttachmentIcon type={a.type} />
-                      <span className="shrink-0 font-medium">{a.name}</span>
-                      {a.description && (
-                        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                          {a.description}
-                        </span>
-                      )}
-                    </a>
-                  ))}
-                </div>
+            <section className="mt-5">
+              <h3 className="mb-3 border-b-2 border-primary/30 pb-2 text-sm font-bold uppercase tracking-wide text-foreground">
+                Project details
+              </h3>
+              <div className="divide-y divide-border overflow-hidden rounded-lg border border-border">
+                <DetailRow label="Project Name">{viewingProject.title}</DetailRow>
+                <DetailRow label="Project Type">{linkedInquiry?.service || "—"}</DetailRow>
+                <DetailRow label="Project Date">
+                  {viewingProject.start_date
+                    ? `${viewingProject.start_date}${viewingProject.end_date ? ` – ${viewingProject.end_date}` : ""}`
+                    : "—"}
+                </DetailRow>
+                <DetailRow label="Project Details">
+                  <span className="whitespace-pre-wrap leading-relaxed">
+                    {viewingProject.description || "No description yet."}
+                  </span>
+                </DetailRow>
               </div>
-            )}
-            {(viewingProject.confidential_attachments?.length > 0 || inquiryDocuments.length > 0) && (
-              <div className="mt-3">
-                <span className="flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground/70">
-                  <Lock className="h-3.5 w-3.5" /> Confidential files
-                </span>
-                <div className="mt-1.5 space-y-1.5">
-                  {viewingProject.confidential_attachments.map((a) => (
-                    <button
-                      key={a.path}
-                      type="button"
-                      onClick={() => openConfidentialFile(a)}
-                      className="flex w-full items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 text-left text-sm hover:bg-amber-500/10"
-                    >
-                      <AttachmentIcon type={a.type} />
-                      <span className="shrink-0 font-medium">{a.name}</span>
-                      {a.description && (
-                        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                          {a.description}
-                        </span>
-                      )}
-                    </button>
+            </section>
+
+            <section className="mt-5">
+              <h3 className="mb-3 border-b-2 border-primary/30 pb-2 text-sm font-bold uppercase tracking-wide text-foreground">
+                People involved
+              </h3>
+              {viewingProject.personnel?.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {viewingProject.personnel.map((name) => (
+                    <span key={name} className="rounded-full bg-muted px-2.5 py-1 text-xs">
+                      {name}
+                    </span>
                   ))}
                 </div>
-                {inquiryDocuments.length > 0 && (
-                  <div className="mt-2">
-                    <span className="text-[11px] font-medium uppercase text-muted-foreground/60">
-                      From linked inquiry
-                    </span>
-                    <div className="mt-1.5 space-y-1.5">
-                      {inquiryDocuments.map((doc) => (
-                        <button
-                          key={doc.path}
-                          type="button"
-                          onClick={() => openConfidentialFile(doc)}
-                          className="flex w-full items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 text-left text-sm hover:bg-amber-500/10"
+              ) : (
+                <p className="text-sm text-muted-foreground/70">No one added yet.</p>
+              )}
+            </section>
+
+            <section className="mt-5">
+              <h3 className="mb-3 border-b-2 border-primary/30 pb-2 text-sm font-bold uppercase tracking-wide text-foreground">
+                Media & attachments
+              </h3>
+              <div className="flex gap-1 border-b border-border">
+                <button
+                  type="button"
+                  onClick={() => setViewMediaTab("public")}
+                  className={`border-b-2 px-3 py-2 text-sm font-medium ${
+                    viewMediaTab === "public"
+                      ? "border-primary text-primary"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Public files
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMediaTab("confidential")}
+                  className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium ${
+                    viewMediaTab === "confidential"
+                      ? "border-primary text-primary"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Lock className="h-3.5 w-3.5" /> Confidential files
+                </button>
+              </div>
+
+              {viewMediaTab === "public" ? (
+                <div className="pt-3">
+                  {viewingProject.attachments?.length > 0 ? (
+                    <div className="space-y-1.5">
+                      {viewingProject.attachments.map((a) => (
+                        <a
+                          key={a.path}
+                          href={a.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 rounded-lg border border-border bg-background p-2 text-sm hover:bg-muted"
                         >
-                          <AttachmentIcon
-                            type={
-                              doc.contentType.startsWith("image/")
-                                ? "image"
-                                : doc.contentType.startsWith("video/")
-                                  ? "video"
-                                  : "document"
-                            }
-                          />
-                          <span className="min-w-0 flex-1 truncate font-medium">{doc.name}</span>
-                        </button>
+                          <MediaThumb type={a.type} url={a.url} />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-medium">{a.name}</span>
+                            {a.description && (
+                              <span className="block truncate text-xs text-muted-foreground">{a.description}</span>
+                            )}
+                          </span>
+                        </a>
                       ))}
                     </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground/70">No public files.</p>
+                  )}
+                </div>
+              ) : (
+                <div className="pt-3">
+                  {viewingProject.confidential_attachments?.length > 0 || inquiryDocuments.length > 0 ? (
+                    <div className="space-y-4">
+                      {viewingProject.confidential_attachments?.length > 0 && (
+                        <div className="space-y-1.5">
+                          {viewingProject.confidential_attachments.map((a) => (
+                            <button
+                              key={a.path}
+                              type="button"
+                              onClick={() => openConfidentialFile(a)}
+                              className="flex w-full items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 text-left text-sm hover:bg-amber-500/10"
+                            >
+                              <ConfidentialThumb path={a.path} type={a.type} getUrl={fetchConfidentialUrl} />
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate font-medium">{a.name}</span>
+                                {a.description && (
+                                  <span className="block truncate text-xs text-muted-foreground">
+                                    {a.description}
+                                  </span>
+                                )}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {inquiryDocuments.length > 0 && (
+                        <div>
+                          <span className="mb-1.5 block text-[11px] font-medium uppercase text-muted-foreground/60">
+                            From linked inquiry
+                          </span>
+                          <div className="space-y-1.5">
+                            {inquiryDocuments.map((doc) => {
+                              const type = attachmentTypeFor(doc.contentType);
+                              return (
+                                <button
+                                  key={doc.path}
+                                  type="button"
+                                  onClick={() => openConfidentialFile(doc)}
+                                  className="flex w-full items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 text-left text-sm hover:bg-amber-500/10"
+                                >
+                                  <ConfidentialThumb path={doc.path} type={type} getUrl={fetchConfidentialUrl} />
+                                  <span className="min-w-0 flex-1 truncate font-medium">{doc.name}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground/70">No confidential files.</p>
+                  )}
+                </div>
+              )}
+            </section>
+
+            {viewingProject.inquiry_id && (
+              <section className="mt-5">
+                <button
+                  type="button"
+                  onClick={() => setInquiryAccordionOpen((v) => !v)}
+                  className="flex w-full items-center justify-between border-b-2 border-primary/30 pb-2 text-sm font-bold uppercase tracking-wide text-foreground"
+                >
+                  View inquiry details
+                  <ChevronDown className={`h-4 w-4 transition-transform ${inquiryAccordionOpen ? "rotate-180" : ""}`} />
+                </button>
+                {inquiryAccordionOpen && linkedInquiry && (
+                  <div className="mt-3 space-y-3">
+                    <div className="divide-y divide-border overflow-hidden rounded-lg border border-border">
+                      <DetailRow label="Customer Name">{linkedInquiry.name}</DetailRow>
+                      {linkedInquiry.email && <DetailRow label="Email">{linkedInquiry.email}</DetailRow>}
+                      {linkedInquiry.phone && <DetailRow label="Number">{linkedInquiry.phone}</DetailRow>}
+                      <DetailRow label="Platform">{platformLabel(linkedInquiry.channel)}</DetailRow>
+                      <DetailRow label="Submitted">{new Date(linkedInquiry.created_at).toLocaleString()}</DetailRow>
+                      {linkedInquiry.message && (
+                        <DetailRow label="Inquiry details">
+                          <span className="whitespace-pre-wrap leading-relaxed">{linkedInquiry.message}</span>
+                        </DetailRow>
+                      )}
+                    </div>
+                    {linkedInquiry.checklist_responses?.length > 0 && (
+                      <div className="divide-y divide-border overflow-hidden rounded-lg border border-border">
+                        {linkedInquiry.checklist_responses.map((c) => (
+                          <div key={c.id} className="grid grid-cols-[45%_1fr] items-start gap-3 px-3 py-2.5">
+                            <span className="text-xs font-medium text-muted-foreground">{c.label}</span>
+                            {c.type === "checkbox" ? (
+                              <span className="inline-flex items-center gap-1.5">
+                                {c.checked ? (
+                                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                                ) : (
+                                  <Circle className="h-4 w-4 shrink-0 text-muted-foreground/40" />
+                                )}
+                                <span className={c.checked ? "font-medium text-emerald-700" : "text-muted-foreground"}>
+                                  {c.checked ? "Yes" : "No"}
+                                </span>
+                              </span>
+                            ) : c.type === "document" ? (
+                              c.documents && c.documents.length > 0 ? (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {c.documents.map((doc) => (
+                                    <button
+                                      key={doc.path}
+                                      type="button"
+                                      onClick={() => openConfidentialFile(doc)}
+                                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-primary hover:bg-muted"
+                                    >
+                                      <FileText className="h-3.5 w-3.5" /> {doc.name}
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground/60">Not provided</span>
+                              )
+                            ) : (
+                              <span className={c.answer?.trim() ? "font-medium" : "text-muted-foreground/60"}>
+                                {c.answer?.trim() || "—"}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
+              </section>
             )}
 
             <div className="mt-6 flex items-center gap-2">

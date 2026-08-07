@@ -87,7 +87,7 @@ type FormState = {
   inquiry_id: string;
 };
 
-function attachmentTypeFor(contentType: string): ProjectAttachment["type"] {
+export function attachmentTypeFor(contentType: string): ProjectAttachment["type"] {
   if (contentType.startsWith("image/")) return "image";
   if (contentType.startsWith("video/")) return "video";
   return "document";
