@@ -6,7 +6,6 @@ import { X, Trash2, FileText, Video, Image as ImageIcon, Lock } from "lucide-rea
 import { supabase } from "@/integrations/supabase/client";
 import { createProject, updateProject, deleteProject } from "@/lib/admin/projects.functions";
 import { deleteSiteMedia, deleteConfidentialMedia } from "@/lib/admin/media.functions";
-import { usePublicServices } from "@/lib/public-content";
 import { FileDrop } from "@/components/admin/FileDrop";
 import { ConfidentialFileDrop } from "@/components/admin/ConfidentialFileDrop";
 import { LocationAutosuggest } from "@/components/LocationAutosuggest";
@@ -196,6 +195,7 @@ export function ProjectFormModal({
     }
     return base;
   });
+  const [mediaTab, setMediaTab] = useState<"public" | "confidential">("public");
   const [personName, setPersonName] = useState("");
   const [saving, setSaving] = useState(false);
   const doCreate = useServerFn(createProject);
@@ -203,8 +203,6 @@ export function ProjectFormModal({
   const doDelete = useServerFn(deleteProject);
   const doDeleteMedia = useServerFn(deleteSiteMedia);
   const doDeleteConfidential = useServerFn(deleteConfidentialMedia);
-  const { data: services } = usePublicServices();
-
   const { data: inquiries } = useQuery({
     queryKey: ["admin-inquiries-picker"],
     queryFn: async () => {
@@ -429,21 +427,6 @@ export function ProjectFormModal({
                 </span>
                 <LocationAutosuggest value={form.location} onChange={(v) => setForm({ ...form, location: v })} />
               </label>
-              <label className="block text-sm">
-                <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Service</span>
-                <select
-                  value={form.service}
-                  onChange={(e) => setForm({ ...form, service: e.target.value })}
-                  className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-                >
-                  <option value="">Select a service</option>
-                  {services?.map((s) => (
-                    <option key={s.id} value={s.title}>
-                      {s.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
               {project && (
                 <label className="block text-sm">
                   <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Status</span>
@@ -540,65 +523,77 @@ export function ProjectFormModal({
             <h3 className="mb-5 border-b-2 border-primary/30 pb-2.5 text-sm font-bold uppercase tracking-wide text-foreground">
               Media & attachments
             </h3>
-            <div className="grid gap-4 pl-4 sm:grid-cols-2">
-              <div>
-                <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Cover photo</span>
-                {form.cover_photo_url && (
-                  <img src={form.cover_photo_url} alt="Cover" className="mb-2 h-32 w-full rounded-lg object-cover" />
-                )}
-                <FileDrop
-                  folder="projects"
-                  label="Upload cover photo"
-                  onUploaded={(result) => setForm({ ...form, cover_photo_url: result.url })}
-                />
+            <div className="pl-4">
+              <div className="flex gap-1 border-b border-border">
+                <button
+                  type="button"
+                  onClick={() => setMediaTab("public")}
+                  className={`border-b-2 px-3 py-2 text-sm font-medium ${
+                    mediaTab === "public"
+                      ? "border-primary text-primary"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Public files
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMediaTab("confidential")}
+                  className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium ${
+                    mediaTab === "confidential"
+                      ? "border-primary text-primary"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Lock className="h-3.5 w-3.5" /> Confidential files
+                </button>
               </div>
-              <div>
-                <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
-                  Public files (photos, documents, videos)
-                </span>
-                <p className="mb-1.5 text-[11px] text-muted-foreground/70">Visible to visitors on the public site.</p>
-                <FileDrop
-                  folder="projects"
-                  accept="image/jpeg,image/png,image/webp,application/pdf,video/mp4,video/webm,video/quicktime"
-                  label="Upload a photo, document, or video"
-                  onUploaded={addAttachment}
-                />
-                {form.attachments.length > 0 && (
-                  <div className="mt-2 space-y-1.5">
-                    {form.attachments.map((a) => (
-                      <AttachmentRow
-                        key={a.path}
-                        attachment={a}
-                        href={a.url}
-                        variant="public"
-                        onDescriptionChange={(description) => updateAttachmentDescription(a.path, description)}
-                        onRemove={() => removeAttachment(a)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
 
-            <div className="mt-4 pl-4">
-              <span className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground">
-                <Lock className="h-3.5 w-3.5" /> Confidential files
-              </span>
-              <p className="mb-1.5 text-[11px] text-muted-foreground/70">
-                Only visible to admins here — never shown on the public site.
-              </p>
-              <ConfidentialFileDrop onUploaded={addConfidentialAttachment} />
-              {form.confidential_attachments.length > 0 && (
-                <div className="mt-2 space-y-1.5">
-                  {form.confidential_attachments.map((a) => (
-                    <AttachmentRow
-                      key={a.path}
-                      attachment={a}
-                      variant="confidential"
-                      onDescriptionChange={(description) => updateConfidentialAttachmentDescription(a.path, description)}
-                      onRemove={() => removeConfidentialAttachment(a)}
-                    />
-                  ))}
+              {mediaTab === "public" ? (
+                <div className="pt-3">
+                  <p className="mb-1.5 text-[11px] text-muted-foreground/70">Visible to visitors on the public site.</p>
+                  <FileDrop
+                    folder="projects"
+                    accept="image/jpeg,image/png,image/webp,application/pdf,video/mp4,video/webm,video/quicktime"
+                    label="Upload a photo, document, or video"
+                    onUploaded={addAttachment}
+                  />
+                  {form.attachments.length > 0 && (
+                    <div className="mt-2 space-y-1.5">
+                      {form.attachments.map((a) => (
+                        <AttachmentRow
+                          key={a.path}
+                          attachment={a}
+                          href={a.url}
+                          variant="public"
+                          onDescriptionChange={(description) => updateAttachmentDescription(a.path, description)}
+                          onRemove={() => removeAttachment(a)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="pt-3">
+                  <p className="mb-1.5 text-[11px] text-muted-foreground/70">
+                    Only visible to admins here — never shown on the public site.
+                  </p>
+                  <ConfidentialFileDrop onUploaded={addConfidentialAttachment} />
+                  {form.confidential_attachments.length > 0 && (
+                    <div className="mt-2 space-y-1.5">
+                      {form.confidential_attachments.map((a) => (
+                        <AttachmentRow
+                          key={a.path}
+                          attachment={a}
+                          variant="confidential"
+                          onDescriptionChange={(description) =>
+                            updateConfidentialAttachmentDescription(a.path, description)
+                          }
+                          onRemove={() => removeConfidentialAttachment(a)}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
