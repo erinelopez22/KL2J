@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { X, Trash2, FileText, Video, Image as ImageIcon, Lock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { createProject, updateProject, deleteProject } from "@/lib/admin/projects.functions";
-import { deleteSiteMedia, deleteConfidentialMedia } from "@/lib/admin/media.functions";
+import { deleteSiteMedia, deleteConfidentialMedia, getConfidentialFileUrl } from "@/lib/admin/media.functions";
 import { FileDrop } from "@/components/admin/FileDrop";
 import { ConfidentialFileDrop } from "@/components/admin/ConfidentialFileDrop";
 import { LocationAutosuggest } from "@/components/LocationAutosuggest";
@@ -27,20 +27,32 @@ export type ConfidentialAttachment = {
   description?: string;
 };
 
+export type InquiryChecklistItem = {
+  type: string;
+  answer?: string;
+  documents?: { path: string; name: string; contentType: string }[];
+};
+
 export type DefaultInquiry = {
   id: string;
   label: string;
   name: string;
   service: string | null;
-  checklist_responses: { type: string; answer?: string }[];
+  checklist_responses: InquiryChecklistItem[];
 };
 
 function defaultTitleFromInquiry(name: string, service: string | null | undefined): string {
   return service ? `${service} - ${name}` : name;
 }
 
-function defaultLocationFromInquiry(checklistResponses: { type: string; answer?: string }[] | undefined): string {
+function defaultLocationFromInquiry(checklistResponses: InquiryChecklistItem[] | undefined): string {
   return checklistResponses?.find((c) => c.type === "location")?.answer?.trim() ?? "";
+}
+
+function inquiryDocumentsFrom(
+  checklistResponses: InquiryChecklistItem[] | undefined,
+): { path: string; name: string; contentType: string }[] {
+  return checklistResponses?.filter((c) => c.type === "document").flatMap((c) => c.documents ?? []) ?? [];
 }
 
 export type ProjectRecord = {
@@ -218,7 +230,7 @@ export function ProjectFormModal({
         contact: string;
         service: string | null;
         created_at: string;
-        checklist_responses: { type: string; answer?: string }[];
+        checklist_responses: InquiryChecklistItem[];
       }[];
     },
     enabled: !defaultInquiry,
@@ -229,10 +241,26 @@ export function ProjectFormModal({
     setForm((f) => ({
       ...f,
       inquiry_id: id,
-      title: !f.title.trim() && inquiry ? defaultTitleFromInquiry(inquiry.name, inquiry.service) : f.title,
+      title: (!project || !f.title.trim()) && inquiry ? defaultTitleFromInquiry(inquiry.name, inquiry.service) : f.title,
       location:
-        !f.location.trim() && inquiry ? defaultLocationFromInquiry(inquiry.checklist_responses) : f.location,
+        (!project || !f.location.trim()) && inquiry
+          ? defaultLocationFromInquiry(inquiry.checklist_responses)
+          : f.location,
     }));
+  }
+
+  const selectedInquiryChecklist =
+    defaultInquiry?.checklist_responses ?? inquiries?.find((i) => i.id === form.inquiry_id)?.checklist_responses;
+  const inquiryDocuments = inquiryDocumentsFrom(selectedInquiryChecklist);
+  const doGetConfidentialUrl = useServerFn(getConfidentialFileUrl);
+
+  async function openInquiryDocument(doc: { path: string; name: string }) {
+    try {
+      const { url } = await doGetConfidentialUrl({ data: { path: doc.path } });
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to open file");
+    }
   }
 
   const requiredInquiryMissing = !project && !defaultInquiry && !form.inquiry_id;
@@ -592,6 +620,26 @@ export function ProjectFormModal({
                           onRemove={() => removeConfidentialAttachment(a)}
                         />
                       ))}
+                    </div>
+                  )}
+                  {inquiryDocuments.length > 0 && (
+                    <div className="mt-4">
+                      <span className="mb-1.5 block text-xs font-semibold uppercase text-muted-foreground">
+                        From linked inquiry
+                      </span>
+                      <div className="space-y-1.5">
+                        {inquiryDocuments.map((doc) => (
+                          <button
+                            key={doc.path}
+                            type="button"
+                            onClick={() => openInquiryDocument(doc)}
+                            className="flex w-full items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 text-left text-sm hover:bg-amber-500/10"
+                          >
+                            <AttachmentIcon type={attachmentTypeFor(doc.contentType)} />
+                            <span className="min-w-0 flex-1 truncate font-medium">{doc.name}</span>
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
