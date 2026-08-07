@@ -8,7 +8,7 @@ const VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
 
 const FOLDER_RULES: Record<string, { types: string[]; maxBytes: number }> = {
   branding: { types: IMAGE_TYPES, maxBytes: 5 * 1024 * 1024 },
-  gallery: { types: IMAGE_TYPES, maxBytes: 5 * 1024 * 1024 },
+  gallery: { types: [...IMAGE_TYPES, ...VIDEO_TYPES], maxBytes: 50 * 1024 * 1024 },
   documents: { types: [...IMAGE_TYPES, ...DOC_TYPES], maxBytes: 10 * 1024 * 1024 },
   projects: { types: [...IMAGE_TYPES, ...DOC_TYPES, ...VIDEO_TYPES], maxBytes: 50 * 1024 * 1024 },
   companies: { types: IMAGE_TYPES, maxBytes: 5 * 1024 * 1024 },

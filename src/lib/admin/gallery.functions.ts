@@ -7,6 +7,7 @@ const AddPhotoSchema = z.object({
   storage_path: z.string().min(1),
   caption: z.string().max(300).optional(),
   sort_order: z.number().int().default(0),
+  media_type: z.enum(["photo", "video"]).default("photo"),
 });
 
 export const addGalleryPhoto = createServerFn({ method: "POST" })

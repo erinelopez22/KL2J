@@ -12,7 +12,13 @@ export type PublicService = {
   checklist: ChecklistItem[];
   sort_order: number;
 };
-export type PublicPhoto = { id: string; url: string; caption: string | null; sort_order: number };
+export type PublicPhoto = {
+  id: string;
+  url: string;
+  caption: string | null;
+  sort_order: number;
+  media_type: "photo" | "video";
+};
 export type PublicDocument = {
   id: string;
   title: string;
@@ -60,7 +66,7 @@ export function usePublicGalleryPhotos() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("gallery_photos")
-        .select("id,url,caption,sort_order")
+        .select("id,url,caption,sort_order,media_type")
         .order("sort_order");
       if (error) throw error;
       return data as PublicPhoto[];

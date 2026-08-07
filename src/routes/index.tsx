@@ -27,6 +27,7 @@ import {
   X,
   Maximize2,
   Handshake,
+  Play,
 } from "lucide-react";
 import { ChatWidget } from "@/components/ChatWidget";
 import {
@@ -963,17 +964,64 @@ function Projects() {
   );
 }
 
+type GalleryItem = { url: string; name: string; type: "photo" | "video" };
+
+function GalleryThumb({
+  item,
+  index,
+  onOpen,
+  alt,
+}: {
+  item: GalleryItem;
+  index: number;
+  onOpen: (i: number) => void;
+  alt: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(index)}
+      className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-secondary/40"
+    >
+      {item.type === "video" ? (
+        <>
+          <video src={item.url} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+          <div className="absolute inset-0 flex items-center justify-center bg-slate-950/25 transition group-hover:bg-slate-950/40">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90">
+              <Play className="h-4 w-4 fill-slate-900 text-slate-900" />
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          <img
+            src={item.url}
+            alt={alt}
+            loading="lazy"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.05]"
+          />
+          <div className="absolute inset-0 bg-slate-950/0 group-hover:bg-slate-950/20 transition" />
+        </>
+      )}
+    </button>
+  );
+}
+
 function Photos() {
   const [lightbox, setLightbox] = useState<number | null>(null);
   const [showAll, setShowAll] = useState(false);
   const { data } = usePublicGalleryPhotos();
-  const galleryPhotos =
-    data && data.length > 0 ? data.map((p) => ({ url: p.url, name: p.id })) : FALLBACK_GALLERY_PHOTOS;
+  const galleryItems: GalleryItem[] =
+    data && data.length > 0
+      ? data.map((p) => ({ url: p.url, name: p.id, type: p.media_type }))
+      : FALLBACK_GALLERY_PHOTOS.map((p) => ({ ...p, type: "photo" as const }));
+  const photoItems = galleryItems.map((item, i) => ({ item, i })).filter(({ item }) => item.type === "photo");
+  const videoItems = galleryItems.map((item, i) => ({ item, i })).filter(({ item }) => item.type === "video");
   const close = () => setLightbox(null);
   const prev = () =>
-    setLightbox((i) => (i === null ? null : (i - 1 + galleryPhotos.length) % galleryPhotos.length));
+    setLightbox((i) => (i === null ? null : (i - 1 + galleryItems.length) % galleryItems.length));
   const next = () =>
-    setLightbox((i) => (i === null ? null : (i + 1) % galleryPhotos.length));
+    setLightbox((i) => (i === null ? null : (i + 1) % galleryItems.length));
 
   return (
     <section id="photos" className="max-w-6xl mx-auto px-4 py-14 md:py-16">
@@ -985,7 +1033,7 @@ function Photos() {
           </h2>
           <p className="mt-3 text-muted-foreground">
             Project photos, equipment in action, and completed surveys from KL2J field
-            operations. Tap any image to view it full-size.
+            operations. Tap any photo or video to view it full-size.
           </p>
         </div>
         <button
@@ -997,25 +1045,42 @@ function Photos() {
         </button>
       </div>
 
-      <div className="mt-8 -mx-4 px-4 overflow-x-auto">
-        <div className="grid grid-flow-col grid-rows-2 auto-cols-[140px] sm:auto-cols-[170px] gap-3 pb-2">
-          {galleryPhotos.map((p, i) => (
-            <button
-              key={p.name}
-              type="button"
-              onClick={() => setLightbox(i)}
-              className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-secondary/40"
-            >
-              <img
-                src={p.url}
-                alt={`KL2J field survey photo ${i + 1}`}
-                loading="lazy"
-                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.05]"
-              />
-              <div className="absolute inset-0 bg-slate-950/0 group-hover:bg-slate-950/20 transition" />
-            </button>
-          ))}
+      <div className="mt-8 space-y-6">
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Photos</h3>
+          <div className="mt-3 -mx-4 px-4 overflow-x-auto">
+            <div className="grid grid-flow-col grid-rows-2 auto-cols-[140px] sm:auto-cols-[170px] gap-3 pb-2">
+              {photoItems.map(({ item, i }) => (
+                <GalleryThumb
+                  key={item.name}
+                  item={item}
+                  index={i}
+                  onOpen={setLightbox}
+                  alt={`KL2J field survey photo ${i + 1}`}
+                />
+              ))}
+            </div>
+          </div>
         </div>
+
+        {videoItems.length > 0 && (
+          <div className="border-t border-border pt-6">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Videos</h3>
+            <div className="mt-3 -mx-4 px-4 overflow-x-auto">
+              <div className="grid grid-flow-col grid-rows-2 auto-cols-[140px] sm:auto-cols-[170px] gap-3 pb-2">
+                {videoItems.map(({ item, i }) => (
+                  <GalleryThumb
+                    key={item.name}
+                    item={item}
+                    index={i}
+                    onOpen={setLightbox}
+                    alt={`KL2J field survey video ${i + 1}`}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {showAll && (
@@ -1028,7 +1093,10 @@ function Photos() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between gap-4">
-              <h3 className="text-lg font-semibold">Full gallery ({galleryPhotos.length} photos)</h3>
+              <h3 className="text-lg font-semibold">
+                Full gallery ({photoItems.length} photo{photoItems.length === 1 ? "" : "s"}
+                {videoItems.length > 0 ? `, ${videoItems.length} video${videoItems.length === 1 ? "" : "s"}` : ""})
+              </h3>
               <button
                 onClick={() => setShowAll(false)}
                 className="rounded-md p-1 text-muted-foreground hover:bg-muted"
@@ -1037,23 +1105,37 @@ function Photos() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {galleryPhotos.map((p, i) => (
-                <button
-                  key={p.name}
-                  type="button"
-                  onClick={() => setLightbox(i)}
-                  className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-secondary/40"
-                >
-                  <img
-                    src={p.url}
-                    alt={`KL2J field survey photo ${i + 1}`}
-                    loading="lazy"
-                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.05]"
-                  />
-                  <div className="absolute inset-0 bg-slate-950/0 group-hover:bg-slate-950/20 transition" />
-                </button>
-              ))}
+            <div className="space-y-6">
+              <div>
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Photos</h4>
+                <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  {photoItems.map(({ item, i }) => (
+                    <GalleryThumb
+                      key={item.name}
+                      item={item}
+                      index={i}
+                      onOpen={setLightbox}
+                      alt={`KL2J field survey photo ${i + 1}`}
+                    />
+                  ))}
+                </div>
+              </div>
+              {videoItems.length > 0 && (
+                <div className="border-t border-border pt-6">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Videos</h4>
+                  <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {videoItems.map(({ item, i }) => (
+                      <GalleryThumb
+                        key={item.name}
+                        item={item}
+                        index={i}
+                        onOpen={setLightbox}
+                        alt={`KL2J field survey video ${i + 1}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1084,12 +1166,22 @@ function Photos() {
           >
             ‹
           </button>
-          <img
-            src={galleryPhotos[lightbox].url}
-            alt={`KL2J field survey photo ${lightbox + 1}`}
-            className="max-h-[85vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          />
+          {galleryItems[lightbox].type === "video" ? (
+            <video
+              src={galleryItems[lightbox].url}
+              controls
+              autoPlay
+              className="max-h-[85vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <img
+              src={galleryItems[lightbox].url}
+              alt={`KL2J field survey photo ${lightbox + 1}`}
+              className="max-h-[85vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
           <button
             className="absolute right-4 top-1/2 -translate-y-1/2 h-12 w-12 rounded-full bg-white/10 text-white hover:bg-white/20 flex items-center justify-center text-2xl"
             onClick={(e) => {
@@ -1101,7 +1193,7 @@ function Photos() {
             ›
           </button>
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/70 text-sm">
-            {lightbox + 1} / {galleryPhotos.length}
+            {lightbox + 1} / {galleryItems.length}
           </div>
         </div>
       )}

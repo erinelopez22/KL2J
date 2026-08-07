@@ -285,6 +285,7 @@ export type Database = {
           caption: string | null
           created_at: string
           id: string
+          media_type: string
           sort_order: number
           storage_path: string | null
           url: string
@@ -293,6 +294,7 @@ export type Database = {
           caption?: string | null
           created_at?: string
           id?: string
+          media_type?: string
           sort_order?: number
           storage_path?: string | null
           url: string
@@ -301,6 +303,7 @@ export type Database = {
           caption?: string | null
           created_at?: string
           id?: string
+          media_type?: string
           sort_order?: number
           storage_path?: string | null
           url?: string
