@@ -6,7 +6,8 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { ProjectFormModal } from "@/components/admin/ProjectFormModal";
 import { getConfidentialFileUrl } from "@/lib/admin/media.functions";
-import { updateInquiryStatus } from "@/lib/admin/inquiries.functions";
+import { updateInquiryStatus, createInquiry } from "@/lib/admin/inquiries.functions";
+import { usePublicServices } from "@/lib/public-content";
 import {
   MessageCircle,
   RefreshCw,
@@ -21,6 +22,7 @@ import {
   MessageSquare,
   Globe,
   Bot,
+  UserPlus,
   CheckCircle2,
   Circle,
   ListChecks,
@@ -252,6 +254,7 @@ function parseInquiryMessage(message: string | null): { phone: string | null; de
 
 function platformLabel(channel: string | null): { label: string; icon: typeof Globe } {
   if (channel === "quote_form") return { label: "Request a Quote form", icon: Globe };
+  if (channel === "manual") return { label: "Added by admin", icon: UserPlus };
   if (channel) return { label: "Chatbot", icon: Bot };
   return { label: "Unknown", icon: Globe };
 }
@@ -443,11 +446,137 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
   );
 }
 
+function NewInquiryModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [service, setService] = useState("");
+  const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+  const doCreate = useServerFn(createInquiry);
+  const { data: services } = usePublicServices();
+
+  async function submit() {
+    if (!name.trim()) {
+      toast.error("Name is required");
+      return;
+    }
+    if (!email.trim() && !phone.trim()) {
+      toast.error("Provide an email or phone number");
+      return;
+    }
+    setSaving(true);
+    try {
+      await doCreate({
+        data: {
+          name: name.trim(),
+          email: email.trim() || undefined,
+          phone: phone.trim() || undefined,
+          service: service || undefined,
+          message: message.trim() || undefined,
+        },
+      });
+      toast.success("Inquiry created");
+      onCreated();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create inquiry");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4" onClick={onClose}>
+      <div
+        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-2xl sm:p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">New inquiry</h2>
+          <button onClick={onClose} className="rounded-md p-1 text-muted-foreground hover:bg-muted" aria-label="Close">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <p className="mb-4 text-xs text-muted-foreground">
+          For clients who reached out directly (phone, walk-in, etc.) instead of through the website.
+        </p>
+        <div className="space-y-3">
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
+              Name <span className="text-destructive">(required)</span>
+            </span>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Email</span>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Phone</span>
+            <input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+            />
+          </label>
+          <p className="text-xs text-muted-foreground/70">Provide at least an email or phone number.</p>
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Service</span>
+            <select
+              value={service}
+              onChange={(e) => setService(e.target.value)}
+              className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+            >
+              <option value="">Select a service</option>
+              {services?.map((s) => (
+                <option key={s.id} value={s.title}>
+                  {s.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Message / details</span>
+            <textarea
+              rows={3}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm"
+            />
+          </label>
+        </div>
+        <div className="mt-4 flex gap-2">
+          <button
+            onClick={submit}
+            disabled={saving}
+            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Create inquiry"}
+          </button>
+          <button onClick={onClose} className="rounded-md border border-border px-4 py-2 text-sm hover:bg-muted">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AdminInquiries() {
   const [items, setItems] = useState<Inquiry[]>([]);
   const [loading, setLoading] = useState(true);
   const [showHidden, setShowHidden] = useState(false);
   const [openInquiryId, setOpenInquiryId] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
   const doUpdateStatus = useServerFn(updateInquiryStatus);
 
   async function load() {
@@ -509,6 +638,12 @@ function AdminInquiries() {
         </div>
         <div className="flex gap-2">
           <button
+            onClick={() => setShowCreate(true)}
+            className="flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            <Plus className="h-4 w-4" /> Add inquiry
+          </button>
+          <button
             onClick={() => setShowHidden((v) => !v)}
             className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${
               showHidden ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-card hover:bg-muted"
@@ -548,6 +683,16 @@ function AdminInquiries() {
       )}
 
       {openInquiry && <InquiryDetail inquiry={openInquiry} onClose={() => setOpenInquiryId(null)} />}
+
+      {showCreate && (
+        <NewInquiryModal
+          onClose={() => setShowCreate(false)}
+          onCreated={() => {
+            setShowCreate(false);
+            load();
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -213,15 +213,22 @@ export function ProjectFormModal({
   const doDeleteMedia = useServerFn(deleteSiteMedia);
   const doDeleteConfidential = useServerFn(deleteConfidentialMedia);
   const { data: inquiries } = useQuery({
-    queryKey: ["admin-inquiries-picker"],
+    queryKey: ["admin-inquiries-picker", project?.inquiry_id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("inquiries")
-        .select("id, name, contact, service, created_at, checklist_responses")
-        .order("created_at", { ascending: false })
-        .limit(200);
-      if (error) throw error;
-      return data as {
+      const [inquiriesRes, linkedRes] = await Promise.all([
+        supabase
+          .from("inquiries")
+          .select("id, name, contact, service, created_at, checklist_responses")
+          .order("created_at", { ascending: false })
+          .limit(200),
+        supabase.from("projects").select("inquiry_id").not("inquiry_id", "is", null),
+      ]);
+      if (inquiriesRes.error) throw inquiriesRes.error;
+      if (linkedRes.error) throw linkedRes.error;
+      const linkedIds = new Set(
+        linkedRes.data.map((p) => p.inquiry_id).filter((id) => id !== null && id !== project?.inquiry_id),
+      );
+      return inquiriesRes.data.filter((i) => !linkedIds.has(i.id)) as {
         id: string;
         name: string;
         contact: string;
