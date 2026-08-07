@@ -9,10 +9,10 @@ DROP FUNCTION IF EXISTS public.sync_inquiry_status_from_project();
 
 DROP POLICY IF EXISTS "Public can read completed projects" ON public.projects;
 
-ALTER TABLE public.projects
-  DROP COLUMN status,
-  ADD COLUMN is_public boolean NOT NULL DEFAULT false;
+ALTER TABLE public.projects DROP COLUMN IF EXISTS status;
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS is_public boolean NOT NULL DEFAULT false;
 
+DROP POLICY IF EXISTS "Public can read public projects" ON public.projects;
 CREATE POLICY "Public can read public projects" ON public.projects
   FOR SELECT TO anon, authenticated
   USING (is_public = true);
