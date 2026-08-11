@@ -18,8 +18,7 @@ function DocumentToggle({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label className="flex cursor-pointer items-center justify-between gap-3 text-sm">
-      <span>{label}</span>
+    <label className="flex cursor-pointer items-center gap-3 text-xs text-muted-foreground">
       <button
         type="button"
         role="switch"
@@ -35,6 +34,7 @@ function DocumentToggle({
           }`}
         />
       </button>
+      <span>{label}</span>
     </label>
   );
 }
@@ -75,50 +75,51 @@ export function PublicDocumentUpload({
   }
 
   return (
-    <div className="space-y-2">
-      <DocumentToggle
-        label={`Can you upload ${label}?`}
-        checked={value.hasDocument}
-        onChange={(hasDocument) => onChange({ hasDocument, documents: hasDocument ? value.documents : [] })}
-      />
-      {value.hasDocument && (
-        <div className="space-y-1.5">
-          {value.documents.map((doc, i) => (
-            <div
-              key={doc.path}
-              className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm"
-            >
-              <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span className="min-w-0 flex-1 truncate">{doc.name}</span>
-              <button
-                type="button"
-                onClick={() => removeAt(i)}
-                className="shrink-0 text-muted-foreground hover:text-destructive"
-                aria-label={`Remove ${doc.name}`}
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          ))}
+    <div>
+      <span className="mb-1 block text-xs text-muted-foreground">{label}</span>
+      <div className="space-y-1.5">
+        {value.documents.map((doc, i) => (
           <div
-            onClick={() => !busy && inputRef.current?.click()}
-            className={`flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-sm text-muted-foreground hover:border-primary/50 ${busy ? "pointer-events-none opacity-60" : ""}`}
+            key={doc.path}
+            className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm"
           >
-            <Upload className="h-4 w-4" />
-            {busy ? "Uploading…" : value.documents.length > 0 ? "Add another file (optional)" : "Attach a file (optional)"}
-            <input
-              ref={inputRef}
-              type="file"
-              multiple
-              accept="image/jpeg,image/png,image/webp,application/pdf"
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files && e.target.files.length > 0) handleFiles(e.target.files);
-              }}
-            />
+            <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="min-w-0 flex-1 truncate">{doc.name}</span>
+            <button
+              type="button"
+              onClick={() => removeAt(i)}
+              className="shrink-0 text-muted-foreground hover:text-destructive"
+              aria-label={`Remove ${doc.name}`}
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
+        ))}
+        <div
+          onClick={() => !busy && inputRef.current?.click()}
+          className={`flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-sm text-muted-foreground hover:border-primary/50 ${busy ? "pointer-events-none opacity-60" : ""}`}
+        >
+          <Upload className="h-4 w-4" />
+          {busy ? "Uploading…" : value.documents.length > 0 ? "Add another file (optional)" : "Click to upload (optional)"}
+          <input
+            ref={inputRef}
+            type="file"
+            multiple
+            accept="image/jpeg,image/png,image/webp,application/pdf"
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files && e.target.files.length > 0) handleFiles(e.target.files);
+            }}
+          />
         </div>
-      )}
+      </div>
+      <div className="mt-2">
+        <DocumentToggle
+          label="I have these documents but I prefer not to send it for now"
+          checked={value.hasDocument}
+          onChange={(hasDocument) => onChange({ ...value, hasDocument })}
+        />
+      </div>
     </div>
   );
 }

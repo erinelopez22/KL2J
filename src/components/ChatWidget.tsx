@@ -31,10 +31,8 @@ const FALLBACK_SERVICES = [
 ];
 
 const INTENTS = [
-  { id: "estimate", label: "Get a price estimate" },
-  { id: "surveyor", label: "Talk to a surveyor" },
+  { id: "send_inquiry", label: "Send Inquiry" },
   { id: "requirements", label: "Ask about requirements" },
-  { id: "schedule", label: "Schedule a site visit" },
 ];
 
 type Msg = { from: "bot" | "user"; text: string; options?: { label: string; value: string }[] };
@@ -95,9 +93,26 @@ export function ChatWidget() {
     setChecklistAnswers((a) => ({ ...a, [id]: { ...a[id], ...patch } }));
   }
 
+  function describeRequirements(): string {
+    if (serviceChecklist.length === 0) {
+      return "For this service we just need your contact details and a short description of what you need — no specific documents required upfront.";
+    }
+    const lines = serviceChecklist.map((item) => {
+      if (item.type === "number" && item.unit) return `• ${item.label} (${item.unit})`;
+      if (item.type === "document") return `• ${item.label} (you can confirm you have it without uploading, if you prefer)`;
+      return `• ${item.label}`;
+    });
+    return `Here's what we'll typically need for ${service}:\n${lines.join("\n")}`;
+  }
+
   function chooseIntent(i: { id: string; label: string }) {
     setIntent(i.label);
     pushUser(i.label);
+    if (i.id === "requirements") {
+      pushBot(describeRequirements());
+      pushBot("Would you like to send an inquiry now?");
+      return;
+    }
     pushBot(
       serviceChecklist.length > 0
         ? "Please share your name and a contact number or email so our team can follow up, plus a few quick details for this service below."
