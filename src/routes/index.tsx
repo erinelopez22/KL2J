@@ -513,6 +513,23 @@ function ContactForm() {
     setChecklistAnswers((a) => ({ ...a, [id]: { ...a[id], ...patch } }));
   }
 
+  const hasAnyInput =
+    fullName.trim() !== "" ||
+    email.trim() !== "" ||
+    phone.trim() !== "" ||
+    service !== "" ||
+    message.trim() !== "" ||
+    Object.keys(checklistAnswers).length > 0;
+
+  function clearForm() {
+    setFullName("");
+    setEmail("");
+    setPhone("");
+    setService("");
+    setMessage("");
+    setChecklistAnswers({});
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
@@ -561,7 +578,18 @@ function ContactForm() {
         </div>
       ) : (
         <>
-          <h3 className="text-xl font-semibold">Request a quote</h3>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-xl font-semibold">Request a quote</h3>
+            {hasAnyInput && (
+              <button
+                type="button"
+                onClick={clearForm}
+                className="text-xs font-medium text-muted-foreground hover:text-destructive"
+              >
+                Clear form
+              </button>
+            )}
+          </div>
           <div className="mt-5 grid gap-4">
             <Field label="Full name">
               <input

@@ -41,6 +41,7 @@ type Step = "intro" | "service" | "intent" | "details" | "channel" | "done";
 export function ChatWidget() {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>("intro");
+  const [stepHistory, setStepHistory] = useState<Step[]>([]);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [service, setService] = useState<string>("");
   const [checklistAnswers, setChecklistAnswers] = useState<Record<string, ChecklistAnswer>>({});
@@ -81,12 +82,25 @@ export function ChatWidget() {
     setMessages((m) => [...m, { from: "user", text }]);
   }
 
+  function goToStep(next: Step) {
+    setStepHistory((h) => [...h, step]);
+    setStep(next);
+  }
+
+  function goBack() {
+    setStepHistory((h) => {
+      if (h.length === 0) return h;
+      setStep(h[h.length - 1]);
+      return h.slice(0, -1);
+    });
+  }
+
   function chooseService(s: string) {
     setService(s);
     setChecklistAnswers({});
     pushUser(s);
     pushBot("Got it. How can we help you today?");
-    setStep("intent");
+    goToStep("intent");
   }
 
   function updateChecklistAnswer(id: string, patch: ChecklistAnswer) {
@@ -118,7 +132,7 @@ export function ChatWidget() {
         ? "Please share your name and a contact number or email so our team can follow up, plus a few quick details for this service below."
         : "Please share your name and a contact number or email so our team can follow up. You can also add any details about your property (location, lot size, etc.).",
     );
-    setStep("details");
+    goToStep("details");
   }
 
   function buildChecklistResponses() {
@@ -158,7 +172,7 @@ export function ChatWidget() {
     pushBot(
       "Thank you! Your inquiry has been sent to our team. For a faster reply, you can also reach us directly on any of these channels:",
     );
-    setStep("channel");
+    goToStep("channel");
   }
 
   function prefilledMessage() {
@@ -192,13 +206,14 @@ export function ChatWidget() {
       },
     }).catch((e) => console.error(e));
     window.open(url, "_blank", "noopener,noreferrer");
-    setStep("done");
+    goToStep("done");
     pushBot(`Opening ${channel === "call" ? "phone dialer" : channel}… We'll continue there.`);
   }
 
   function reset() {
     setMessages([]);
     setStep("intro");
+    setStepHistory([]);
     setService("");
     setChecklistAnswers({});
     setIntent("");
@@ -236,12 +251,12 @@ export function ChatWidget() {
               <div className="text-sm font-semibold leading-tight">KL2J Assistant</div>
               <div className="text-xs opacity-80">Typically replies within business hours</div>
             </div>
-            {step !== "intro" && step !== "service" && (
+            {stepHistory.length > 0 && (
               <button
-                onClick={reset}
+                onClick={goBack}
                 className="rounded p-1 hover:bg-primary-foreground/10"
-                aria-label="Restart"
-                title="Start over"
+                aria-label="Go back"
+                title="Go back"
               >
                 <ArrowLeft className="h-4 w-4" />
               </button>
