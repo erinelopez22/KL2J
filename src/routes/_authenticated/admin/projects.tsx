@@ -26,6 +26,7 @@ type LinkedInquiryChecklistResponse = {
   type: string;
   checked?: boolean;
   answer?: string;
+  hasDocument?: boolean;
   documents?: { path: string; name: string; contentType: string }[];
 };
 
@@ -473,8 +474,10 @@ function AdminProjects() {
                                     </button>
                                   ))}
                                 </div>
+                              ) : c.hasDocument ? (
+                                <span className="font-medium text-emerald-700">Yes (not uploaded)</span>
                               ) : (
-                                <span className="text-muted-foreground/60">Not provided</span>
+                                <span className="text-muted-foreground/60">No</span>
                               )
                             ) : (
                               <span className={c.answer?.trim() ? "font-medium" : "text-muted-foreground/60"}>

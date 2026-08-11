@@ -488,7 +488,7 @@ function CTA() {
   );
 }
 
-type ChecklistAnswer = { checked?: boolean; answer?: string; documents?: UploadedDocument[] };
+type ChecklistAnswer = { checked?: boolean; answer?: string; hasDocument?: boolean; documents?: UploadedDocument[] };
 
 function ContactForm() {
   const [sent, setSent] = useState(false);
@@ -531,6 +531,7 @@ function ContactForm() {
             type: item.type,
             checked: checklistAnswers[item.id]?.checked,
             answer: checklistAnswers[item.id]?.answer,
+            hasDocument: checklistAnswers[item.id]?.hasDocument ?? false,
             documents: checklistAnswers[item.id]?.documents ?? [],
           })),
           status: "New",
@@ -624,13 +625,12 @@ function ContactForm() {
                     }
                     if (item.type === "document") {
                       return (
-                        <div key={item.id}>
-                          <span className="mb-1 block text-xs text-muted-foreground">{item.label}</span>
-                          <PublicDocumentUpload
-                            value={a.documents ?? []}
-                            onChange={(docs) => updateChecklistAnswer(item.id, { documents: docs })}
-                          />
-                        </div>
+                        <PublicDocumentUpload
+                          key={item.id}
+                          label={item.label}
+                          value={{ hasDocument: Boolean(a.hasDocument), documents: a.documents ?? [] }}
+                          onChange={(next) => updateChecklistAnswer(item.id, next)}
+                        />
                       );
                     }
                     if (item.type === "location") {

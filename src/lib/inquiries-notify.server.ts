@@ -10,6 +10,7 @@ type ChecklistResponseInput = {
   type: "text" | "number" | "location" | "checkbox" | "document";
   checked?: boolean;
   answer?: string;
+  hasDocument?: boolean;
   documents?: { path: string; name: string; contentType: string }[];
 };
 
@@ -71,11 +72,13 @@ export async function insertInquiryAndNotify(
             .map((c) => {
               if (c.type === "checkbox") return `${c.checked ? "&#9745;" : "&#9744;"} ${esc(c.label)}`;
               if (c.type === "document") {
-                return `${esc(c.label)}: ${
-                  c.documents && c.documents.length > 0
-                    ? `Uploaded (${c.documents.map((d) => esc(d.name)).join(", ")})`
-                    : "Not provided"
-                }`;
+                const hasFiles = c.documents && c.documents.length > 0;
+                const value = hasFiles
+                  ? `Yes — ${c.documents!.map((d) => esc(d.name)).join(", ")}`
+                  : c.hasDocument
+                    ? "Yes (not uploaded)"
+                    : "No";
+                return `${esc(c.label)}: ${value}`;
               }
               return `${esc(c.label)}: ${esc(c.answer || "—")}`;
             })

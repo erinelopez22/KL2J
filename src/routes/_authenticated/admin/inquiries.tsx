@@ -64,6 +64,7 @@ type ChecklistResponse = {
   type: "text" | "number" | "location" | "checkbox" | "document";
   checked?: boolean;
   answer?: string;
+  hasDocument?: boolean;
   documents?: { path: string; name: string; contentType: string }[];
 };
 
@@ -119,7 +120,7 @@ function InquiryCard({ inquiry, onOpen }: { inquiry: Inquiry; onOpen: () => void
       {inquiry.checklist_responses?.length > 0 && (
         <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
           <ListChecks className="h-3 w-3" />
-          {inquiry.checklist_responses.filter((c) => c.checked || c.answer?.trim() || c.documents?.length).length}/
+          {inquiry.checklist_responses.filter((c) => c.checked || c.answer?.trim() || c.hasDocument || c.documents?.length).length}/
           {inquiry.checklist_responses.length} details provided
         </div>
       )}
@@ -413,8 +414,10 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
                         </button>
                       ))}
                     </div>
+                  ) : c.hasDocument ? (
+                    <span className="font-medium text-emerald-700">Yes (not uploaded)</span>
                   ) : (
-                    <span className="text-muted-foreground/60">Not provided</span>
+                    <span className="text-muted-foreground/60">No</span>
                   ))}
                 {c.type !== "checkbox" && c.type !== "document" && (
                   <span className={c.answer?.trim() ? "font-medium" : "text-muted-foreground/60"}>
@@ -448,7 +451,12 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
   );
 }
 
-type ManualChecklistAnswer = { checked?: boolean; answer?: string; documents?: UploadedDocument[] };
+type ManualChecklistAnswer = {
+  checked?: boolean;
+  answer?: string;
+  hasDocument?: boolean;
+  documents?: UploadedDocument[];
+};
 
 function NewInquiryModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [name, setName] = useState("");
@@ -495,6 +503,7 @@ function NewInquiryModal({ onClose, onCreated }: { onClose: () => void; onCreate
             type: item.type,
             checked: checklistAnswers[item.id]?.checked,
             answer: checklistAnswers[item.id]?.answer,
+            hasDocument: checklistAnswers[item.id]?.hasDocument ?? false,
             documents: checklistAnswers[item.id]?.documents ?? [],
           })),
         },
@@ -589,13 +598,12 @@ function NewInquiryModal({ onClose, onCreated }: { onClose: () => void; onCreate
                   }
                   if (item.type === "document") {
                     return (
-                      <div key={item.id}>
-                        <span className="mb-1 block text-xs text-muted-foreground">{item.label}</span>
-                        <PublicDocumentUpload
-                          value={a.documents ?? []}
-                          onChange={(docs) => updateChecklistAnswer(item.id, { documents: docs })}
-                        />
-                      </div>
+                      <PublicDocumentUpload
+                        key={item.id}
+                        label={item.label}
+                        value={{ hasDocument: Boolean(a.hasDocument), documents: a.documents ?? [] }}
+                        onChange={(next) => updateChecklistAnswer(item.id, next)}
+                      />
                     );
                   }
                   if (item.type === "location") {

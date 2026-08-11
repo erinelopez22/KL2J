@@ -7,7 +7,7 @@ import { LocationAutosuggest } from "@/components/LocationAutosuggest";
 import { PublicDocumentUpload, type UploadedDocument } from "@/components/PublicDocumentUpload";
 import logoUrl from "@/assets/kl2j-logo.jpg";
 
-type ChecklistAnswer = { checked?: boolean; answer?: string; documents?: UploadedDocument[] };
+type ChecklistAnswer = { checked?: boolean; answer?: string; hasDocument?: boolean; documents?: UploadedDocument[] };
 
 const FB_PAGE_ID = "61581147040190";
 const MESSENGER_URL = `https://m.me/${FB_PAGE_ID}`;
@@ -113,6 +113,7 @@ export function ChatWidget() {
       type: item.type,
       checked: checklistAnswers[item.id]?.checked,
       answer: checklistAnswers[item.id]?.answer,
+      hasDocument: checklistAnswers[item.id]?.hasDocument ?? false,
       documents: checklistAnswers[item.id]?.documents ?? [],
     }));
   }
@@ -384,13 +385,12 @@ export function ChatWidget() {
                       }
                       if (item.type === "document") {
                         return (
-                          <div key={item.id}>
-                            <span className="mb-1 block text-xs text-muted-foreground">{item.label}</span>
-                            <PublicDocumentUpload
-                              value={a.documents ?? []}
-                              onChange={(docs) => updateChecklistAnswer(item.id, { documents: docs })}
-                            />
-                          </div>
+                          <PublicDocumentUpload
+                            key={item.id}
+                            label={item.label}
+                            value={{ hasDocument: Boolean(a.hasDocument), documents: a.documents ?? [] }}
+                            onChange={(next) => updateChecklistAnswer(item.id, next)}
+                          />
                         );
                       }
                       if (item.type === "location") {

@@ -7,6 +7,7 @@ export const ChecklistResponseSchema = z.object({
   type: z.enum(["text", "number", "location", "checkbox", "document"]),
   checked: z.boolean().optional(),
   answer: z.string().max(500).optional(),
+  hasDocument: z.boolean().optional().default(false),
   documents: z
     .array(z.object({ path: z.string().min(1), name: z.string().min(1).max(200), contentType: z.string().min(1) }))
     .optional()
