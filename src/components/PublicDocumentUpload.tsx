@@ -77,7 +77,7 @@ export function PublicDocumentUpload({
   return (
     <div className="space-y-2">
       <DocumentToggle
-        label={`Do you have ${label}?`}
+        label={`Can you upload ${label}?`}
         checked={value.hasDocument}
         onChange={(hasDocument) => onChange({ hasDocument, documents: hasDocument ? value.documents : [] })}
       />
