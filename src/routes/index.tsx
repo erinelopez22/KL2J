@@ -28,6 +28,7 @@ import {
   Maximize2,
   Handshake,
   Play,
+  LogIn,
 } from "lucide-react";
 import { ChatWidget } from "@/components/ChatWidget";
 import {
@@ -155,14 +156,17 @@ function NavBar() {
   return (
     <header className="sticky top-0 z-40 bg-background/85 backdrop-blur border-b border-border">
       <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-        <a href="#top" className="flex items-center gap-2.5 font-bold">
+        <a href="#top" className="flex shrink-0 items-center gap-2.5 font-bold">
           <img
             src={logo}
             alt="KL2J Land Surveying and Engineering Services"
             className="h-10 w-10 rounded-full object-cover ring-1 ring-border"
           />
-          <span className="text-base tracking-tight">
-            KL2J <span className="text-muted-foreground font-medium hidden sm:inline">Land Surveying and Engineering Services</span>
+          <span className="whitespace-nowrap text-base tracking-tight">
+            KL2J{" "}
+            <span className="hidden whitespace-nowrap font-medium text-muted-foreground lg:inline">
+              Land Surveying and Engineering Services
+            </span>
           </span>
         </a>
         <nav className="hidden md:flex items-center gap-7 text-sm">
@@ -176,7 +180,7 @@ function NavBar() {
             </a>
           ))}
         </nav>
-        <div className="hidden md:flex items-center gap-4 ml-8">
+        <div className="hidden md:flex items-center gap-3 ml-6">
           <a
             href={FACEBOOK_PAGE_URL}
             target="_blank"
@@ -186,6 +190,14 @@ function NavBar() {
           >
             <Facebook className="h-4 w-4" />
           </a>
+          <Link
+            to="/auth"
+            aria-label="Admin login"
+            title="Admin login"
+            className="inline-flex items-center justify-center h-10 w-10 rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+          >
+            <LogIn className="h-4 w-4" />
+          </Link>
           <Link
             to="/my-inquiries"
             className="inline-flex items-center h-10 px-4 rounded-md border border-border text-sm font-semibold whitespace-nowrap hover:bg-accent"
@@ -222,6 +234,13 @@ function NavBar() {
             className="inline-flex items-center justify-center h-10 rounded-md border border-border font-semibold"
           >
             My Inquirie(s)
+          </Link>
+          <Link
+            to="/auth"
+            onClick={() => setOpen(false)}
+            className="inline-flex items-center justify-center gap-2 h-10 rounded-md border border-border font-semibold"
+          >
+            <LogIn className="h-4 w-4" /> Admin login
           </Link>
           <a
             href="#contact"
