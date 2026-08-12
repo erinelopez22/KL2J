@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { ArrowLeft, CheckCircle2, Circle, FileText, Paperclip, X } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Circle, FileText, Paperclip, RefreshCw, X } from "lucide-react";
 import {
   lookupInquiryByCode,
   recoverInquiryCode,
@@ -52,6 +52,7 @@ type InquiryView = {
   created_at: string;
   checklist_responses: ChecklistResponseView[];
   comments: CommentView[];
+  attachments: Attachment[];
 };
 
 function ForgotCodeForm() {
@@ -273,6 +274,8 @@ function InquiryPanel({
   onClose: () => void;
 }) {
   const doGetUrl = useServerFn(getInquiryCommentFileUrl);
+  const doLookup = useServerFn(lookupInquiryByCode);
+  const [refreshing, setRefreshing] = useState(false);
 
   async function openFile(path: string) {
     try {
@@ -280,6 +283,18 @@ function InquiryPanel({
       window.open(url, "_blank", "noopener,noreferrer");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to open file");
+    }
+  }
+
+  async function refresh() {
+    setRefreshing(true);
+    try {
+      const refreshed = await doLookup({ data: { code } });
+      onUpdate(refreshed as unknown as InquiryView);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to refresh");
+    } finally {
+      setRefreshing(false);
     }
   }
 
@@ -292,6 +307,14 @@ function InquiryPanel({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium uppercase">{inquiry.status}</span>
+          <button
+            type="button"
+            onClick={refresh}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} /> Refresh
+          </button>
           <button type="button" onClick={onClose} className="text-sm text-muted-foreground hover:text-foreground">
             Look up another
           </button>
@@ -364,6 +387,24 @@ function InquiryPanel({
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {inquiry.attachments.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold">All files</h3>
+          <div className="flex flex-wrap gap-1.5">
+            {inquiry.attachments.map((a) => (
+              <button
+                key={a.path}
+                type="button"
+                onClick={() => openFile(a.path)}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-primary hover:bg-muted"
+              >
+                <FileText className="h-3.5 w-3.5" /> {a.name}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

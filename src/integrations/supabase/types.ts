@@ -357,6 +357,7 @@ export type Database = {
       }
       inquiries: {
         Row: {
+          attachments: Json
           channel: string | null
           checklist_responses: Json
           contact: string
@@ -373,6 +374,7 @@ export type Database = {
           status: string
         }
         Insert: {
+          attachments?: Json
           channel?: string | null
           checklist_responses?: Json
           contact: string
@@ -389,6 +391,7 @@ export type Database = {
           status?: string
         }
         Update: {
+          attachments?: Json
           channel?: string | null
           checklist_responses?: Json
           contact?: string

@@ -14,6 +14,7 @@ import { fileToBase64 } from "@/lib/admin/fileToBase64";
 import {
   MessageCircle,
   RefreshCw,
+  Search,
   Clock,
   MailWarning,
   Eye,
@@ -82,6 +83,7 @@ type Inquiry = {
   message: string | null;
   channel: string | null;
   checklist_responses: ChecklistResponse[];
+  attachments: CommentAttachment[];
   status: Status;
   email_sent: boolean;
   email_error: string | null;
@@ -670,6 +672,26 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
           </div>
         )}
 
+        {inquiry.attachments?.length > 0 && (
+          <div className="mt-3">
+            <span className="text-xs font-semibold uppercase text-muted-foreground/70">
+              All files (checklist + comments)
+            </span>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {inquiry.attachments.map((a) => (
+                <button
+                  key={a.path}
+                  type="button"
+                  onClick={() => viewChecklistDocument(a)}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-primary hover:bg-muted"
+                >
+                  <FileText className="h-3.5 w-3.5" /> {a.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground/60">
           <span className="flex items-center gap-1">
             <Clock className="h-3 w-3" />
@@ -933,6 +955,8 @@ function AdminInquiries() {
   const [showHidden, setShowHidden] = useState(false);
   const [openInquiryId, setOpenInquiryId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [search, setSearch] = useState("");
+  const [serviceFilter, setServiceFilter] = useState("");
   const doUpdateStatus = useServerFn(updateInquiryStatus);
 
   async function load() {
@@ -958,8 +982,17 @@ function AdminInquiries() {
   }, []);
 
   const columns = showHidden ? ALL_STATUSES : STATUS_COLUMNS;
-  const newCount = items.filter((i) => i.status === "New").length;
-  const emailFailedCount = items.filter((i) => !i.email_sent).length;
+  const serviceOptions = Array.from(new Set(items.map((i) => i.service).filter((s): s is string => Boolean(s)))).sort();
+  const searchLower = search.trim().toLowerCase();
+  const filteredItems = items.filter((i) => {
+    if (serviceFilter && i.service !== serviceFilter) return false;
+    if (!searchLower) return true;
+    return [i.name, i.contact, i.email, i.phone, i.service, i.message, i.inquiry_code]
+      .filter(Boolean)
+      .some((field) => field!.toLowerCase().includes(searchLower));
+  });
+  const newCount = filteredItems.filter((i) => i.status === "New").length;
+  const emailFailedCount = filteredItems.filter((i) => !i.email_sent).length;
   const openInquiry = openInquiryId ? (items.find((i) => i.id === openInquiryId) ?? null) : null;
 
   async function moveInquiry(id: string, status: Status) {
@@ -982,8 +1015,8 @@ function AdminInquiries() {
             <MessageCircle className="h-6 w-6 text-primary" /> Inquiries
           </h1>
           <p className="text-sm text-muted-foreground">
-            {newCount} new · {items.length} total · click a card to view details, or drag it to another column to
-            change its status.
+            {newCount} new · {filteredItems.length} of {items.length} shown · click a card to view details, or drag
+            it to another column to change its status.
             {emailFailedCount > 0 && (
               <span className="ml-2 inline-flex items-center gap-1 font-medium text-destructive">
                 <MailWarning className="h-3.5 w-3.5" />
@@ -1017,20 +1050,61 @@ function AdminInquiries() {
         </div>
       </div>
 
+      <div className="mb-4 flex flex-wrap gap-2">
+        <div className="relative min-w-[220px] flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search name, contact, service, message, code…"
+            className="h-10 w-full rounded-md border border-border bg-card pl-9 pr-3 text-sm"
+          />
+        </div>
+        <select
+          value={serviceFilter}
+          onChange={(e) => setServiceFilter(e.target.value)}
+          className="h-10 rounded-md border border-border bg-card px-3 text-sm"
+        >
+          <option value="">All services</option>
+          {serviceOptions.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+        {(search || serviceFilter) && (
+          <button
+            type="button"
+            onClick={() => {
+              setSearch("");
+              setServiceFilter("");
+            }}
+            className="rounded-md border border-border px-3 text-sm hover:bg-muted"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
       {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
       {!loading && items.length === 0 && (
         <div className="rounded-lg border border-dashed border-border p-10 text-center text-muted-foreground">
           No inquiries yet. Visitors who use the chat widget will show up here in real time.
         </div>
       )}
+      {!loading && items.length > 0 && filteredItems.length === 0 && (
+        <div className="rounded-lg border border-dashed border-border p-10 text-center text-muted-foreground">
+          No inquiries match your search or filter.
+        </div>
+      )}
 
-      {!loading && items.length > 0 && (
+      {!loading && filteredItems.length > 0 && (
         <div className="flex h-[calc(100vh-260px)] gap-3 overflow-x-auto pb-2">
           {columns.map((status) => (
             <StatusColumn
               key={status}
               status={status}
-              items={items.filter((i) => i.status === status)}
+              items={filteredItems.filter((i) => i.status === status)}
               onOpen={(i) => setOpenInquiryId(i.id)}
               onDropInquiry={moveInquiry}
             />

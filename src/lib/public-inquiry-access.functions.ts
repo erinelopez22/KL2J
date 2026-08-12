@@ -30,7 +30,7 @@ export const lookupInquiryByCode = createServerFn({ method: "POST" })
 
     const { data: inquiry, error } = await supabaseAdmin
       .from("inquiries")
-      .select("id, name, email, phone, service, message, status, created_at, checklist_responses")
+      .select("id, name, email, phone, service, message, status, created_at, checklist_responses, attachments")
       .eq("inquiry_code", code)
       .maybeSingle();
     if (error) {
@@ -133,6 +133,10 @@ export const addInquiryComment = createServerFn({ method: "POST" })
       console.error("addInquiryComment failed", error);
       throw new Error("Failed to send message");
     }
+
+    const { appendInquiryAttachments } = await import("@/lib/inquiry-comments.server");
+    await appendInquiryAttachments(inquiry.id, data.attachments);
+
     return { ok: true };
   });
 

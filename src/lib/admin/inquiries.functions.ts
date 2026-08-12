@@ -87,5 +87,12 @@ export const addAdminInquiryComment = createServerFn({ method: "POST" })
       console.error("addAdminInquiryComment failed", error);
       throw new Error(`Failed to send message: ${error.message}`);
     }
+
+    const { appendInquiryAttachments, notifyInquirerOfAdminComment } = await import(
+      "@/lib/inquiry-comments.server"
+    );
+    await appendInquiryAttachments(data.inquiryId, data.attachments);
+    await notifyInquirerOfAdminComment(data.inquiryId, data.message?.trim() || null, data.attachments.length > 0);
+
     return { ok: true };
   });
