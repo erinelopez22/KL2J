@@ -300,7 +300,15 @@ function InquiryPanel({
 
   return (
     <div className="mt-6 space-y-6">
-      <div className="flex items-center justify-between gap-3">
+      <button
+        type="button"
+        onClick={onClose}
+        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="h-4 w-4" /> Look up another inquiry
+      </button>
+
+      <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
         <div className="min-w-0">
           <h2 className="truncate text-lg font-semibold">{inquiry.name}</h2>
           <p className="text-sm text-muted-foreground">{inquiry.service || "General inquiry"}</p>
@@ -314,9 +322,6 @@ function InquiryPanel({
             className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} /> Refresh
-          </button>
-          <button type="button" onClick={onClose} className="text-sm text-muted-foreground hover:text-foreground">
-            Look up another
           </button>
         </div>
       </div>
@@ -453,10 +458,13 @@ function MyInquiriesPage() {
 
       <main className="mx-auto max-w-3xl px-4 py-10">
         <h1 className="text-2xl font-bold tracking-tight">My Inquiries</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Enter the inquiry code you received by email (or right after submitting) to view your inquiry and message
-          our team.
-        </p>
+        {!inquiry && (
+          <p className="mt-1 text-sm text-muted-foreground">
+            Enter the inquiry code you received by email (or right after submitting) to view your inquiry and
+            message our team.
+          </p>
+        )}
+        <div className="mt-4 border-b border-border" />
 
         {!inquiry ? (
           <div className="mt-6 max-w-md">
