@@ -191,14 +191,6 @@ function NavBar() {
             <Facebook className="h-4 w-4" />
           </a>
           <Link
-            to="/auth"
-            aria-label="Admin login"
-            title="Admin login"
-            className="inline-flex items-center justify-center h-10 w-10 rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-accent"
-          >
-            <LogIn className="h-4 w-4" />
-          </Link>
-          <Link
             to="/my-inquiries"
             className="inline-flex items-center h-10 px-4 rounded-md border border-border text-sm font-semibold whitespace-nowrap hover:bg-accent"
           >
@@ -210,6 +202,14 @@ function NavBar() {
           >
             Request a quote <ArrowRight className="h-4 w-4" />
           </a>
+          <Link
+            to="/auth"
+            aria-label="Admin login"
+            title="Admin login"
+            className="inline-flex items-center justify-center h-10 w-10 rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+          >
+            <LogIn className="h-4 w-4" />
+          </Link>
         </div>
         <button
           className="md:hidden p-2 rounded hover:bg-accent"
@@ -235,13 +235,6 @@ function NavBar() {
           >
             My Inquirie(s)
           </Link>
-          <Link
-            to="/auth"
-            onClick={() => setOpen(false)}
-            className="inline-flex items-center justify-center gap-2 h-10 rounded-md border border-border font-semibold"
-          >
-            <LogIn className="h-4 w-4" /> Admin login
-          </Link>
           <a
             href="#contact"
             onClick={() => setOpen(false)}
@@ -249,6 +242,13 @@ function NavBar() {
           >
             Request a quote
           </a>
+          <Link
+            to="/auth"
+            onClick={() => setOpen(false)}
+            className="inline-flex items-center justify-center gap-2 h-10 rounded-md border border-border font-semibold"
+          >
+            <LogIn className="h-4 w-4" /> Admin login
+          </Link>
         </div>
       )}
     </header>
