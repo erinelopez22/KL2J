@@ -54,3 +54,38 @@ export const updateInquiryStatus = createServerFn({ method: "POST" })
     }
     return { ok: true };
   });
+
+const AddAdminCommentSchema = z
+  .object({
+    inquiryId: z.string().uuid(),
+    message: z.string().max(2000).optional(),
+    attachments: z
+      .array(z.object({ path: z.string().min(1), name: z.string().min(1).max(200), contentType: z.string().min(1) }))
+      .optional()
+      .default([]),
+  })
+  .refine((d) => (d.message && d.message.trim().length > 0) || d.attachments.length > 0, {
+    message: "Write a message or attach a file",
+  });
+
+export const addAdminInquiryComment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => AddAdminCommentSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { assertRole } = await import("@/lib/admin/roles.server");
+    await assertRole(context.userId, "admin");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const authorName = typeof context.claims.email === "string" ? context.claims.email : "KL2J Team";
+    const { error } = await supabaseAdmin.from("inquiry_comments").insert({
+      inquiry_id: data.inquiryId,
+      author_type: "admin",
+      author_name: authorName,
+      message: data.message?.trim() || null,
+      attachments: data.attachments,
+    });
+    if (error) {
+      console.error("addAdminInquiryComment failed", error);
+      throw new Error(`Failed to send message: ${error.message}`);
+    }
+    return { ok: true };
+  });

@@ -365,6 +365,7 @@ export type Database = {
           email_error: string | null
           email_sent: boolean
           id: string
+          inquiry_code: string | null
           message: string | null
           name: string
           phone: string | null
@@ -380,6 +381,7 @@ export type Database = {
           email_error?: string | null
           email_sent?: boolean
           id?: string
+          inquiry_code?: string | null
           message?: string | null
           name: string
           phone?: string | null
@@ -395,6 +397,7 @@ export type Database = {
           email_error?: string | null
           email_sent?: boolean
           id?: string
+          inquiry_code?: string | null
           message?: string | null
           name?: string
           phone?: string | null
@@ -402,6 +405,44 @@ export type Database = {
           status?: string
         }
         Relationships: []
+      }
+      inquiry_comments: {
+        Row: {
+          attachments: Json
+          author_name: string | null
+          author_type: string
+          created_at: string
+          id: string
+          inquiry_id: string
+          message: string | null
+        }
+        Insert: {
+          attachments?: Json
+          author_name?: string | null
+          author_type: string
+          created_at?: string
+          id?: string
+          inquiry_id: string
+          message?: string | null
+        }
+        Update: {
+          attachments?: Json
+          author_name?: string | null
+          author_type?: string
+          created_at?: string
+          id?: string
+          inquiry_id?: string
+          message?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inquiry_comments_inquiry_id_fkey"
+            columns: ["inquiry_id"]
+            isOneToOne: false
+            referencedRelation: "inquiries"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       labels: {
         Row: {

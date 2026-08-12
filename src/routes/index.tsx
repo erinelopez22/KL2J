@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -186,6 +186,12 @@ function NavBar() {
           >
             <Facebook className="h-4 w-4" />
           </a>
+          <Link
+            to="/my-inquiries"
+            className="inline-flex items-center h-10 px-4 rounded-md border border-border text-sm font-semibold whitespace-nowrap hover:bg-accent"
+          >
+            My Inquirie(s)
+          </Link>
           <a
             href="#contact"
             className="inline-flex items-center gap-2 h-10 px-4 rounded-md bg-primary text-primary-foreground text-sm font-semibold whitespace-nowrap hover:bg-primary/90"
@@ -210,6 +216,13 @@ function NavBar() {
               {l.label}
             </a>
           ))}
+          <Link
+            to="/my-inquiries"
+            onClick={() => setOpen(false)}
+            className="inline-flex items-center justify-center h-10 rounded-md border border-border font-semibold"
+          >
+            My Inquirie(s)
+          </Link>
           <a
             href="#contact"
             onClick={() => setOpen(false)}
@@ -492,6 +505,7 @@ type ChecklistAnswer = { checked?: boolean; answer?: string; hasDocument?: boole
 
 function ContactForm() {
   const [sent, setSent] = useState(false);
+  const [inquiryCode, setInquiryCode] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -534,7 +548,7 @@ function ContactForm() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await sendInquiry({
+      const result = await sendInquiry({
         data: {
           name: fullName.trim(),
           email: email.trim() || null,
@@ -554,6 +568,7 @@ function ContactForm() {
           status: "New",
         },
       });
+      setInquiryCode(result.inquiryCode);
       setSent(true);
     } catch (err) {
       console.error(err);
@@ -575,6 +590,29 @@ function ContactForm() {
           <p className="mt-2 text-sm text-muted-foreground">
             A geodetic engineer will reach out within one business day.
           </p>
+          {inquiryCode && (
+            <div className="mt-5 mx-auto max-w-xs rounded-lg bg-secondary/40 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Your inquiry code</p>
+              <p className="mt-1 text-2xl font-bold tracking-wide text-primary">{inquiryCode}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(inquiryCode);
+                  toast.success("Code copied");
+                }}
+                className="mt-2 text-xs font-medium text-primary hover:underline"
+              >
+                Copy code
+              </button>
+              <p className="mt-2 text-xs text-muted-foreground">
+                We've also emailed it to you. Use it at{" "}
+                <Link to="/my-inquiries" className="text-primary hover:underline">
+                  My Inquiries
+                </Link>{" "}
+                to check your status or message us.
+              </p>
+            </div>
+          )}
         </div>
       ) : (
         <>

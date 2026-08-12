@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as MyInquiriesRouteImport } from './routes/my-inquiries'
 import { Route as AuthenticatedAdminRouteRouteImport } from './routes/_authenticated/admin/route'
 import { Route as AuthenticatedBoardsRouteImport } from './routes/_authenticated/boards'
 import { Route as AuthenticatedInboxRouteImport } from './routes/_authenticated/inbox'
@@ -41,6 +42,11 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MyInquiriesRoute = MyInquiriesRouteImport.update({
+  id: '/my-inquiries',
+  path: '/my-inquiries',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedAdminRouteRoute = AuthenticatedAdminRouteRouteImport.update({
@@ -137,6 +143,7 @@ const ApiAuthGoogleBusinessCallbackRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/my-inquiries': typeof MyInquiriesRoute
   '/admin': typeof AuthenticatedAdminRouteRouteWithChildren
   '/boards': typeof AuthenticatedBoardsRoute
   '/inbox': typeof AuthenticatedInboxRoute
@@ -157,6 +164,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/my-inquiries': typeof MyInquiriesRoute
   '/boards': typeof AuthenticatedBoardsRoute
   '/inbox': typeof AuthenticatedInboxRoute
   '/admin/branding': typeof AuthenticatedAdminBrandingRoute
@@ -178,6 +186,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/my-inquiries': typeof MyInquiriesRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteRouteWithChildren
   '/_authenticated/boards': typeof AuthenticatedBoardsRoute
   '/_authenticated/inbox': typeof AuthenticatedInboxRoute
@@ -200,6 +209,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/my-inquiries'
     | '/admin'
     | '/boards'
     | '/inbox'
@@ -220,6 +230,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/my-inquiries'
     | '/boards'
     | '/inbox'
     | '/admin/branding'
@@ -240,6 +251,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/my-inquiries'
     | '/_authenticated/admin'
     | '/_authenticated/boards'
     | '/_authenticated/inbox'
@@ -262,6 +274,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  MyInquiriesRoute: typeof MyInquiriesRoute
   ApiAuthGoogleBusinessCallbackRoute: typeof ApiAuthGoogleBusinessCallbackRoute
 }
 
@@ -286,6 +299,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/my-inquiries': {
+      id: '/my-inquiries'
+      path: '/my-inquiries'
+      fullPath: '/my-inquiries'
+      preLoaderRoute: typeof MyInquiriesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/admin': {
@@ -459,6 +479,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  MyInquiriesRoute: MyInquiriesRoute,
   ApiAuthGoogleBusinessCallbackRoute: ApiAuthGoogleBusinessCallbackRoute,
 }
 export const routeTree = rootRouteImport

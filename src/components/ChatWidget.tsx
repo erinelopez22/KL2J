@@ -152,8 +152,9 @@ export function ChatWidget() {
     setSubmitting(true);
     const contactSummary = [email.trim(), phone.trim()].filter(Boolean).join(" · ");
     pushUser(`${name} · ${contactSummary}${note ? " · " + note : ""}`);
+    let inquiryCode: string | null = null;
     try {
-      await sendInquiry({
+      const result = await sendInquiry({
         data: {
           name: name.trim(),
           email: email.trim() || null,
@@ -165,12 +166,15 @@ export function ChatWidget() {
           status: "New",
         },
       });
+      inquiryCode = result.inquiryCode;
     } catch (e) {
       console.error(e);
     }
     setSubmitting(false);
     pushBot(
-      "Thank you! Your inquiry has been sent to our team. For a faster reply, you can also reach us directly on any of these channels:",
+      inquiryCode
+        ? `Thank you! Your inquiry has been sent to our team. Your inquiry code is ${inquiryCode} — save this (we've also emailed it to you) to check your status anytime on the "My Inquirie(s)" page. For a faster reply, you can also reach us directly on any of these channels:`
+        : "Thank you! Your inquiry has been sent to our team. For a faster reply, you can also reach us directly on any of these channels:",
     );
     goToStep("channel");
   }

@@ -1,15 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { ProjectFormModal } from "@/components/admin/ProjectFormModal";
-import { getConfidentialFileUrl } from "@/lib/admin/media.functions";
-import { updateInquiryStatus, createInquiry } from "@/lib/admin/inquiries.functions";
+import { getConfidentialFileUrl, uploadConfidentialMedia } from "@/lib/admin/media.functions";
+import { updateInquiryStatus, createInquiry, addAdminInquiryComment } from "@/lib/admin/inquiries.functions";
 import { usePublicServices } from "@/lib/public-content";
 import { LocationAutosuggest } from "@/components/LocationAutosuggest";
 import { PublicDocumentUpload, type UploadedDocument } from "@/components/PublicDocumentUpload";
+import { fileToBase64 } from "@/lib/admin/fileToBase64";
 import {
   MessageCircle,
   RefreshCw,
@@ -29,6 +30,7 @@ import {
   Circle,
   ListChecks,
   FileText,
+  Paperclip,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/inquiries")({
@@ -71,6 +73,7 @@ type ChecklistResponse = {
 type Inquiry = {
   id: string;
   created_at: string;
+  inquiry_code: string | null;
   name: string;
   contact: string;
   email: string | null;
@@ -266,6 +269,208 @@ function emailComposeUrl(to: string, subject: string) {
   return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}`;
 }
 
+type CommentAttachment = { path: string; name: string; contentType: string };
+type InquiryComment = {
+  id: string;
+  author_type: "admin" | "inquirer";
+  author_name: string | null;
+  message: string | null;
+  attachments: CommentAttachment[];
+  created_at: string;
+};
+
+function AttachButton({ onUploaded }: { onUploaded: (result: CommentAttachment) => void }) {
+  const [busy, setBusy] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const upload = useServerFn(uploadConfidentialMedia);
+
+  async function handleFile(file: File) {
+    setBusy(true);
+    try {
+      const base64 = await fileToBase64(file);
+      const result = await upload({ data: { filename: file.name, contentType: file.type, base64 } });
+      onUploaded({ ...result, name: file.name });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => !busy && inputRef.current?.click()}
+        disabled={busy}
+        className="flex shrink-0 items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
+      >
+        <Paperclip className="h-4 w-4" /> {busy ? "Uploading…" : "Attach"}
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        className="hidden"
+        accept="image/jpeg,image/png,image/webp,application/pdf,video/mp4,video/webm,video/quicktime"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleFile(file);
+        }}
+      />
+    </>
+  );
+}
+
+function AdminCommentComposer({ inquiryId, onSent }: { inquiryId: string; onSent: () => void }) {
+  const [message, setMessage] = useState("");
+  const [attachments, setAttachments] = useState<CommentAttachment[]>([]);
+  const [sending, setSending] = useState(false);
+  const doAddComment = useServerFn(addAdminInquiryComment);
+
+  function removeAttachment(path: string) {
+    setAttachments((a) => a.filter((x) => x.path !== path));
+  }
+
+  async function send() {
+    if (!message.trim() && attachments.length === 0) {
+      toast.error("Write a message or attach a file");
+      return;
+    }
+    setSending(true);
+    try {
+      await doAddComment({ data: { inquiryId, message: message.trim() || undefined, attachments } });
+      setMessage("");
+      setAttachments([]);
+      onSent();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to send message");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <textarea
+        rows={2}
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        placeholder="Write a message to the inquirer…"
+        className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm"
+      />
+      {attachments.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {attachments.map((a) => (
+            <span key={a.path} className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs">
+              {a.name}
+              <button type="button" onClick={() => removeAttachment(a.path)} aria-label={`Remove ${a.name}`}>
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="flex items-center gap-2">
+        <AttachButton onUploaded={(a) => setAttachments((cur) => [...cur, a])} />
+        <button
+          type="button"
+          onClick={send}
+          disabled={sending}
+          className="ml-auto rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+        >
+          {sending ? "Sending…" : "Send"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function InquiryCommentsTab({ inquiryId }: { inquiryId: string }) {
+  const doGetUrl = useServerFn(getConfidentialFileUrl);
+  const {
+    data: comments,
+    isLoading,
+    refetch,
+  } = useQuery({
+    queryKey: ["inquiry-comments", inquiryId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("inquiry_comments")
+        .select("id, author_type, author_name, message, attachments, created_at")
+        .eq("inquiry_id", inquiryId)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data as unknown as InquiryComment[];
+    },
+  });
+
+  async function openFile(path: string) {
+    try {
+      const { url } = await doGetUrl({ data: { path } });
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to open file");
+    }
+  }
+
+  return (
+    <div className="mt-3 flex flex-col gap-3">
+      <div className="flex items-center justify-end">
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <RefreshCw className="h-3 w-3" /> Refresh
+        </button>
+      </div>
+      <div className="max-h-[40vh] min-h-[120px] space-y-3 overflow-y-auto rounded-lg border border-border bg-muted/20 p-3">
+        {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+        {!isLoading && comments?.length === 0 && <p className="text-sm text-muted-foreground">No messages yet.</p>}
+        {comments?.map((c) => (
+          <div key={c.id} className={`flex ${c.author_type === "admin" ? "justify-end" : "justify-start"}`}>
+            <div
+              className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
+                c.author_type === "admin" ? "bg-primary text-primary-foreground" : "border border-border bg-card"
+              }`}
+            >
+              <div
+                className={`mb-0.5 text-[10px] font-medium uppercase ${
+                  c.author_type === "admin" ? "text-primary-foreground/70" : "text-muted-foreground"
+                }`}
+              >
+                {c.author_type === "admin" ? "You" : c.author_name || "Inquirer"} ·{" "}
+                {new Date(c.created_at).toLocaleString()}
+              </div>
+              {c.message && <p className="whitespace-pre-wrap leading-relaxed">{c.message}</p>}
+              {c.attachments?.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {c.attachments.map((a) => (
+                    <button
+                      key={a.path}
+                      type="button"
+                      onClick={() => openFile(a.path)}
+                      className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium ${
+                        c.author_type === "admin"
+                          ? "bg-primary-foreground/15 hover:bg-primary-foreground/25"
+                          : "bg-muted hover:bg-muted/70"
+                      }`}
+                    >
+                      <FileText className="h-3 w-3" /> {a.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+      <AdminCommentComposer inquiryId={inquiryId} onSent={() => refetch()} />
+    </div>
+  );
+}
+
 function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => void }) {
   // Newer inquiries have dedicated email/phone columns. Older rows only have
   // "contact" (email or phone, whichever the customer entered) with the
@@ -278,6 +483,7 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
   const details = hasDedicatedFields ? inquiry.message : legacy.details;
   const platform = platformLabel(inquiry.channel);
   const doGetConfidentialUrl = useServerFn(getConfidentialFileUrl);
+  const [tab, setTab] = useState<"details" | "comments">("details");
 
   async function viewChecklistDocument(doc: { path: string; name: string }) {
     try {
@@ -330,6 +536,41 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
           </button>
         </div>
 
+        {inquiry.inquiry_code && (
+          <div className="mt-2 text-xs text-muted-foreground">
+            Inquiry Code: <span className="font-mono font-semibold text-foreground">{inquiry.inquiry_code}</span>
+          </div>
+        )}
+
+        <div className="mt-3 flex gap-1 border-b border-border">
+          <button
+            type="button"
+            onClick={() => setTab("details")}
+            className={`border-b-2 px-3 py-2 text-sm font-medium ${
+              tab === "details"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Details
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("comments")}
+            className={`border-b-2 px-3 py-2 text-sm font-medium ${
+              tab === "comments"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Comments
+          </button>
+        </div>
+
+        {tab === "comments" && <InquiryCommentsTab inquiryId={inquiry.id} />}
+
+        {tab === "details" && (
+        <>
         {inquiry.service && (
           <div className="mt-3 rounded-lg bg-primary/10 px-3 py-2.5">
             <span className="text-sm font-bold text-primary">Service Type : {inquiry.service}</span>
@@ -446,6 +687,8 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
         <div className="mt-3 border-t border-border pt-3">
           <LinkedProjectSection inquiry={inquiry} />
         </div>
+        </>
+        )}
       </div>
     </div>
   );
@@ -466,6 +709,7 @@ function NewInquiryModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [message, setMessage] = useState("");
   const [checklistAnswers, setChecklistAnswers] = useState<Record<string, ManualChecklistAnswer>>({});
   const [saving, setSaving] = useState(false);
+  const [createdCode, setCreatedCode] = useState<string | null>(null);
   const doCreate = useServerFn(createInquiry);
   const { data: services } = usePublicServices();
   const selectedServiceChecklist = services?.find((s) => s.title === service)?.checklist ?? [];
@@ -490,7 +734,7 @@ function NewInquiryModal({ onClose, onCreated }: { onClose: () => void; onCreate
     }
     setSaving(true);
     try {
-      await doCreate({
+      const result = await doCreate({
         data: {
           name: name.trim(),
           email: email.trim() || undefined,
@@ -509,7 +753,7 @@ function NewInquiryModal({ onClose, onCreated }: { onClose: () => void; onCreate
         },
       });
       toast.success("Inquiry created");
-      onCreated();
+      setCreatedCode(result.inquiryCode);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create inquiry");
     } finally {
@@ -529,6 +773,25 @@ function NewInquiryModal({ onClose, onCreated }: { onClose: () => void; onCreate
             <X className="h-5 w-5" />
           </button>
         </div>
+        {createdCode ? (
+          <div className="text-center py-6">
+            <p className="text-sm text-muted-foreground">Inquiry created. Share this code with the client:</p>
+            <p className="mt-3 rounded-lg bg-secondary/40 py-4 text-2xl font-bold tracking-wide text-primary">
+              {createdCode}
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {"They can use it on the public \"My Inquirie(s)\" page to check status or message us."}
+            </p>
+            <button
+              type="button"
+              onClick={onCreated}
+              className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              Done
+            </button>
+          </div>
+        ) : (
+        <>
         <p className="mb-4 text-xs text-muted-foreground">
           For clients who reached out directly (phone, walk-in, etc.) instead of through the website.
         </p>
@@ -657,6 +920,8 @@ function NewInquiryModal({ onClose, onCreated }: { onClose: () => void; onCreate
             Cancel
           </button>
         </div>
+        </>
+        )}
       </div>
     </div>
   );
@@ -677,7 +942,7 @@ function AdminInquiries() {
       .select("*")
       .order("created_at", { ascending: false })
       .limit(500);
-    setItems((data as Inquiry[]) ?? []);
+    setItems((data as unknown as Inquiry[]) ?? []);
     setLoading(false);
   }
 
