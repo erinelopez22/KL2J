@@ -23,10 +23,12 @@ export const Route = createFileRoute("/_authenticated/admin")({
 function AdminLayout() {
   const { isAdmin, isSuperAdmin } = Route.useRouteContext();
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-slate-100">
       <AdminNav isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} />
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-        <Outlet />
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+        <div className="rounded-xl border border-border bg-background p-6 shadow-md sm:p-8">
+          <Outlet />
+        </div>
       </main>
     </div>
   );

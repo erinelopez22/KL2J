@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import logoIcon from "@/assets/kl2j-logo.jpg?url";
 import { supabase } from "@/integrations/supabase/client";
+import { ConfirmDialogProvider } from "@/components/ConfirmDialogProvider";
 import { Toaster } from "sonner";
 
 function NotFoundComponent() {
@@ -110,8 +111,10 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Outlet />
-      <Toaster position="bottom-right" richColors />
+      <ConfirmDialogProvider>
+        <Outlet />
+        <Toaster position="bottom-right" richColors />
+      </ConfirmDialogProvider>
     </QueryClientProvider>
   );
 }

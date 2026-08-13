@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { FormEvent, useState } from "react";
 import { toast } from "sonner";
 import { useSession } from "@/hooks/use-session";
+import { useConfirm } from "@/components/ConfirmDialogProvider";
 import { listAdminUsers, grantRole, revokeRole, createUser, updateUser, deleteUser } from "@/lib/admin/users.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/users")({
@@ -16,6 +17,7 @@ export const Route = createFileRoute("/_authenticated/admin/users")({
 function AdminUsers() {
   const queryClient = useQueryClient();
   const { user } = useSession();
+  const confirm = useConfirm();
   const { isSuperAdmin } = Route.useRouteContext();
   const listUsers = useServerFn(listAdminUsers);
   const doCreateUser = useServerFn(createUser);
@@ -101,7 +103,7 @@ function AdminUsers() {
   }
 
   async function deleteExistingUser(targetUserId: string) {
-    if (!confirm("Delete this user? This cannot be undone.")) return;
+    if (!(await confirm("Delete this user? This cannot be undone.", { destructive: true }))) return;
     try {
       await doDeleteUser({ data: { targetUserId } });
       toast.success("User deleted");

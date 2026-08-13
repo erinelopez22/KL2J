@@ -155,7 +155,7 @@ function NavBar() {
   ];
   return (
     <header className="sticky top-0 z-40 bg-background/85 backdrop-blur border-b border-border">
-      <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-y-2">
         <a href="#top" className="flex shrink-0 items-center gap-2.5 font-bold">
           <img
             src={logo}
@@ -180,37 +180,6 @@ function NavBar() {
             </a>
           ))}
         </nav>
-        <div className="hidden md:flex items-center gap-3 ml-6">
-          <a
-            href={FACEBOOK_PAGE_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Facebook page"
-            className="inline-flex items-center justify-center h-10 w-10 rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-accent"
-          >
-            <Facebook className="h-4 w-4" />
-          </a>
-          <Link
-            to="/my-inquiries"
-            className="inline-flex items-center h-10 px-4 rounded-md border border-border text-sm font-semibold whitespace-nowrap hover:bg-accent"
-          >
-            My Inquirie(s)
-          </Link>
-          <a
-            href="#contact"
-            className="inline-flex items-center gap-2 h-10 px-4 rounded-md bg-primary text-primary-foreground text-sm font-semibold whitespace-nowrap hover:bg-primary/90"
-          >
-            Request a quote <ArrowRight className="h-4 w-4" />
-          </a>
-          <Link
-            to="/auth"
-            aria-label="Admin login"
-            title="Admin login"
-            className="inline-flex items-center justify-center h-10 w-10 rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-accent"
-          >
-            <LogIn className="h-4 w-4" />
-          </Link>
-        </div>
         <button
           className="md:hidden p-2 rounded hover:bg-accent"
           onClick={() => setOpen((v) => !v)}
@@ -294,17 +263,29 @@ function Hero() {
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           <a
-            href="#contact"
-            className="inline-flex items-center gap-2 h-12 px-6 rounded-md bg-primary text-primary-foreground font-semibold hover:bg-primary/90"
-          >
-            Request a free quote <ArrowRight className="h-4 w-4" />
-          </a>
-          <a
             href="#services"
-            className="inline-flex items-center gap-2 h-12 px-6 rounded-md bg-white/10 border border-white/25 font-semibold hover:bg-white/20"
+            className="inline-flex items-center gap-2 h-12 px-5 rounded-md bg-primary text-primary-foreground font-semibold whitespace-nowrap hover:bg-primary/90"
           >
             Explore our services
           </a>
+          <Link
+            to="/my-inquiries"
+            className="inline-flex items-center h-12 px-5 rounded-md bg-primary text-primary-foreground font-semibold whitespace-nowrap hover:bg-primary/90"
+          >
+            My Inquirie(s)
+          </Link>
+          <a
+            href="#contact"
+            className="inline-flex items-center gap-2 h-12 px-5 rounded-md bg-primary text-primary-foreground font-semibold whitespace-nowrap hover:bg-primary/90"
+          >
+            Request a quote <ArrowRight className="h-4 w-4" />
+          </a>
+          <Link
+            to="/auth"
+            className="inline-flex items-center gap-2 h-12 px-5 rounded-md bg-primary text-primary-foreground font-semibold whitespace-nowrap hover:bg-primary/90"
+          >
+            <LogIn className="h-4 w-4" /> Admin login
+          </Link>
         </div>
       </div>
     </section>

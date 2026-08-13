@@ -6,6 +6,7 @@ import { Trash2, Play } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { addGalleryPhoto, deleteGalleryPhoto } from "@/lib/admin/gallery.functions";
 import { FileDrop } from "@/components/admin/FileDrop";
+import { useConfirm } from "@/components/ConfirmDialogProvider";
 
 export const Route = createFileRoute("/_authenticated/admin/gallery")({
   component: AdminGallery,
@@ -24,6 +25,7 @@ function AdminGallery() {
   const queryClient = useQueryClient();
   const doAdd = useServerFn(addGalleryPhoto);
   const doDelete = useServerFn(deleteGalleryPhoto);
+  const confirm = useConfirm();
 
   const { data: photos, isLoading } = useQuery({
     queryKey: ["admin-gallery"],
@@ -56,6 +58,7 @@ function AdminGallery() {
   }
 
   async function remove(photo: Photo) {
+    if (!(await confirm("Delete this photo/video? This cannot be undone.", { destructive: true }))) return;
     try {
       await doDelete({ data: { id: photo.id, storage_path: photo.storage_path ?? undefined } });
       toast.success("Photo deleted");

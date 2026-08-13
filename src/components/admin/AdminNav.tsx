@@ -40,7 +40,7 @@ export function AdminNav({ isAdmin, isSuperAdmin }: { isAdmin: boolean; isSuperA
 
   return (
     <header className="relative sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-1 px-4 py-3 sm:px-6">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-1 px-4 py-3 sm:px-6">
         <span className="mr-4 text-sm font-bold tracking-tight">KL2J Admin</span>
         <div className="flex flex-wrap items-center gap-1">
           {links.map((l) => (

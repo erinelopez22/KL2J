@@ -7,6 +7,7 @@ import { Trash2, FileText as FileIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { addDocument, deleteDocument } from "@/lib/admin/documents.functions";
 import { FileDrop } from "@/components/admin/FileDrop";
+import { useConfirm } from "@/components/ConfirmDialogProvider";
 
 export const Route = createFileRoute("/_authenticated/admin/documents")({
   component: AdminDocuments,
@@ -26,6 +27,7 @@ function AdminDocuments() {
   const queryClient = useQueryClient();
   const doAdd = useServerFn(addDocument);
   const doDelete = useServerFn(deleteDocument);
+  const confirm = useConfirm();
   const [pending, setPending] = useState<{ url: string; path: string } | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -73,6 +75,7 @@ function AdminDocuments() {
   }
 
   async function remove(doc: Doc) {
+    if (!(await confirm("Delete this document? This cannot be undone.", { destructive: true }))) return;
     try {
       await doDelete({ data: { id: doc.id, storage_path: doc.storage_path ?? undefined } });
       toast.success("Document deleted");

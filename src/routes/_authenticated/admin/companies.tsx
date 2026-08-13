@@ -7,6 +7,7 @@ import { Trash2, Building2, ExternalLink } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { addPartnerCompany, deletePartnerCompany } from "@/lib/admin/companies.functions";
 import { FileDrop } from "@/components/admin/FileDrop";
+import { useConfirm } from "@/components/ConfirmDialogProvider";
 
 export const Route = createFileRoute("/_authenticated/admin/companies")({
   component: AdminCompanies,
@@ -25,6 +26,7 @@ function AdminCompanies() {
   const queryClient = useQueryClient();
   const doAdd = useServerFn(addPartnerCompany);
   const doDelete = useServerFn(deletePartnerCompany);
+  const confirm = useConfirm();
   const [pending, setPending] = useState<{ url: string; path: string } | null>(null);
   const [name, setName] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
@@ -69,6 +71,7 @@ function AdminCompanies() {
   }
 
   async function remove(company: Company) {
+    if (!(await confirm("Remove this company? This cannot be undone.", { destructive: true }))) return;
     try {
       await doDelete({ data: { id: company.id, storage_path: company.storage_path ?? undefined } });
       toast.success("Company removed");
@@ -133,9 +136,10 @@ function AdminCompanies() {
                   href={c.website_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-xs text-primary hover:underline"
+                  className="flex min-w-0 items-center gap-1 text-xs text-primary hover:underline"
                 >
-                  {c.website_url} <ExternalLink className="h-3 w-3" />
+                  <span className="min-w-0 break-all">{c.website_url}</span>
+                  <ExternalLink className="h-3 w-3 shrink-0" />
                 </a>
               )}
             </div>

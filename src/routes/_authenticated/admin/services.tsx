@@ -14,6 +14,7 @@ import {
   type ChecklistItemType,
 } from "@/lib/admin/services.functions";
 import { SERVICE_ICON_NAMES, getServiceIcon } from "@/lib/admin/iconMap";
+import { useConfirm } from "@/components/ConfirmDialogProvider";
 
 export const Route = createFileRoute("/_authenticated/admin/services")({
   component: AdminServices,
@@ -67,6 +68,7 @@ function AdminServices() {
   const doCreate = useServerFn(createService);
   const doUpdate = useServerFn(updateService);
   const doDelete = useServerFn(deleteService);
+  const confirm = useConfirm();
 
   function resetItemForm() {
     setItemLabel("");
@@ -158,6 +160,7 @@ function AdminServices() {
   }
 
   async function remove(id: string) {
+    if (!(await confirm("Delete this service? This cannot be undone.", { destructive: true }))) return;
     try {
       await doDelete({ data: { id } });
       toast.success("Service deleted");

@@ -14,6 +14,7 @@ import {
   getGoogleBusinessInsights,
   getGoogleBusinessReviews,
 } from "@/lib/admin/google-business.functions";
+import { useConfirm } from "@/components/ConfirmDialogProvider";
 
 export const Route = createFileRoute("/_authenticated/admin/google-business")({
   component: AdminGoogleBusiness,
@@ -39,6 +40,7 @@ function AdminGoogleBusiness() {
   const { isSuperAdmin } = Route.useRouteContext();
   const doStartConnect = useServerFn(startGoogleBusinessConnect);
   const doDisconnect = useServerFn(disconnectGoogleBusiness);
+  const confirm = useConfirm();
   const doSelectLocation = useServerFn(selectGoogleBusinessLocation);
   const [connecting, setConnecting] = useState(false);
 
@@ -111,7 +113,7 @@ function AdminGoogleBusiness() {
   }
 
   async function disconnect() {
-    if (!confirm("Disconnect Google Business Profile? You'll need to reconnect and re-select the location.")) return;
+    if (!(await confirm("Disconnect Google Business Profile? You'll need to reconnect and re-select the location.", { destructive: true }))) return;
     try {
       await doDisconnect();
       toast.success("Disconnected");
@@ -244,9 +246,9 @@ function AdminGoogleBusiness() {
                     href={infoQuery.data.websiteUri}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-sm text-primary hover:underline"
+                    className="flex min-w-0 items-center gap-2 text-sm text-primary hover:underline"
                   >
-                    <Globe className="h-4 w-4" /> {infoQuery.data.websiteUri}
+                    <Globe className="h-4 w-4 shrink-0" /> <span className="min-w-0 break-all">{infoQuery.data.websiteUri}</span>
                   </a>
                 )}
                 {infoQuery.data.storefrontAddress && (

@@ -9,6 +9,7 @@ import { deleteSiteMedia, deleteConfidentialMedia, getConfidentialFileUrl } from
 import { FileDrop } from "@/components/admin/FileDrop";
 import { ConfidentialFileDrop } from "@/components/admin/ConfidentialFileDrop";
 import { LocationAutosuggest } from "@/components/LocationAutosuggest";
+import { useConfirm } from "@/components/ConfirmDialogProvider";
 
 export type ProjectAttachment = {
   url: string;
@@ -212,6 +213,7 @@ export function ProjectFormModal({
   const doDelete = useServerFn(deleteProject);
   const doDeleteMedia = useServerFn(deleteSiteMedia);
   const doDeleteConfidential = useServerFn(deleteConfidentialMedia);
+  const confirm = useConfirm();
   const { data: inquiries } = useQuery({
     queryKey: ["admin-inquiries-picker", project?.inquiry_id],
     queryFn: async () => {
@@ -280,6 +282,7 @@ export function ProjectFormModal({
   }
 
   async function removeAttachment(attachment: ProjectAttachment) {
+    if (!(await confirm("Remove this file? This cannot be undone.", { destructive: true }))) return;
     setForm((f) => ({ ...f, attachments: f.attachments.filter((a) => a.path !== attachment.path) }));
     try {
       await doDeleteMedia({ data: { path: attachment.path } });
@@ -299,6 +302,7 @@ export function ProjectFormModal({
   }
 
   async function removeConfidentialAttachment(attachment: ConfidentialAttachment) {
+    if (!(await confirm("Remove this file? This cannot be undone.", { destructive: true }))) return;
     setForm((f) => ({
       ...f,
       confidential_attachments: f.confidential_attachments.filter((a) => a.path !== attachment.path),
@@ -384,6 +388,7 @@ export function ProjectFormModal({
 
   async function handleDelete() {
     if (!project) return;
+    if (!(await confirm("Delete this project? This cannot be undone.", { destructive: true }))) return;
     try {
       await doDelete({ data: { id: project.id } });
       toast.success("Project deleted");

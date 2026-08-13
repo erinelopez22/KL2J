@@ -15,6 +15,7 @@ import {
   type ProjectAttachment,
   type ProjectRecord,
 } from "@/components/admin/ProjectFormModal";
+import { useConfirm } from "@/components/ConfirmDialogProvider";
 
 export const Route = createFileRoute("/_authenticated/admin/projects")({
   component: AdminProjects,
@@ -134,6 +135,7 @@ function AdminProjects() {
   const [viewMediaTab, setViewMediaTab] = useState<"public" | "confidential">("public");
   const [inquiryAccordionOpen, setInquiryAccordionOpen] = useState(false);
   const doDelete = useServerFn(deleteProject);
+  const confirm = useConfirm();
   const doUpdate = useServerFn(updateProject);
   const doGetConfidentialUrl = useServerFn(getConfidentialFileUrl);
 
@@ -189,6 +191,7 @@ function AdminProjects() {
   }
 
   async function remove(id: string) {
+    if (!(await confirm("Delete this project? This cannot be undone.", { destructive: true }))) return;
     try {
       await doDelete({ data: { id } });
       toast.success("Project deleted");
@@ -550,7 +553,7 @@ function AdminProjects() {
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") openView(p);
             }}
-            className="flex cursor-pointer gap-3 rounded-lg border border-border bg-card p-3 text-left hover:border-primary/40 hover:shadow-sm"
+            className="flex min-w-0 cursor-pointer gap-3 rounded-lg border border-border bg-card p-3 text-left hover:border-primary/40 hover:shadow-sm"
           >
             {p.cover_photo_url && (
               <img src={p.cover_photo_url} alt={p.title} className="h-16 w-16 shrink-0 rounded-md object-cover" />

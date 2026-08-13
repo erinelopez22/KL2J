@@ -11,6 +11,7 @@ import { usePublicServices } from "@/lib/public-content";
 import { LocationAutosuggest } from "@/components/LocationAutosuggest";
 import { PublicDocumentUpload, type UploadedDocument } from "@/components/PublicDocumentUpload";
 import { fileToBase64 } from "@/lib/admin/fileToBase64";
+import { useConfirm } from "@/components/ConfirmDialogProvider";
 import {
   MessageCircle,
   RefreshCw,
@@ -153,7 +154,7 @@ function StatusColumn({
 
   return (
     <div
-      className={`flex h-full w-[260px] shrink-0 flex-col rounded-lg border-t-4 bg-muted/30 ${STATUS_HEADER_STYLES[status]} ${dragOver ? "ring-2 ring-primary" : ""}`}
+      className={`flex h-full w-[85vw] max-w-[300px] shrink-0 snap-start flex-col rounded-lg border-t-4 bg-muted/30 sm:w-[260px] sm:max-w-none ${STATUS_HEADER_STYLES[status]} ${dragOver ? "ring-2 ring-primary" : ""}`}
     >
       <div className="flex shrink-0 items-center justify-between px-3 py-2">
         <span className="text-sm font-semibold">{status}</span>
@@ -486,6 +487,7 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
   const platform = platformLabel(inquiry.channel);
   const doGetConfidentialUrl = useServerFn(getConfidentialFileUrl);
   const [tab, setTab] = useState<"details" | "comments">("details");
+  const confirm = useConfirm();
 
   async function viewChecklistDocument(doc: { path: string; name: string }) {
     try {
@@ -496,9 +498,9 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
     }
   }
 
-  function emailInquirer() {
+  async function emailInquirer() {
     if (!email) return;
-    if (confirm(`Send an email to: ${inquiry.name} (${email})?`)) {
+    if (await confirm(`Send an email to: ${inquiry.name} (${email})?`)) {
       window.open(
         emailComposeUrl(email, `Re: Your inquiry to KL2J`),
         "_blank",
@@ -507,9 +509,9 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
     }
   }
 
-  function smsInquirer() {
+  async function smsInquirer() {
     if (!phone) return;
-    if (confirm(`Send an SMS to: ${inquiry.name} (${phone})?`)) {
+    if (await confirm(`Send an SMS to: ${inquiry.name} (${phone})?`)) {
       // sms: is a custom URI scheme handled by the OS's default messaging
       // app (if one is registered) — it must be a direct navigation, not
       // window.open, same as how tel: links work elsewhere in this app.
@@ -591,8 +593,8 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
               className="grid w-full grid-cols-[45%_1fr] items-center gap-3 px-3 py-2 text-left hover:bg-muted/50"
             >
               <span className="text-xs font-medium text-muted-foreground">Email</span>
-              <span className="flex items-center gap-1.5 text-primary hover:underline">
-                <Mail className="h-3.5 w-3.5" /> {email}
+              <span className="flex min-w-0 items-center gap-1.5 text-primary hover:underline">
+                <Mail className="h-3.5 w-3.5 shrink-0" /> <span className="min-w-0 break-all">{email}</span>
               </span>
             </button>
           )}
@@ -603,8 +605,8 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
               className="grid w-full grid-cols-[45%_1fr] items-center gap-3 px-3 py-2 text-left hover:bg-muted/50"
             >
               <span className="text-xs font-medium text-muted-foreground">Number</span>
-              <span className="flex items-center gap-1.5 text-primary hover:underline">
-                <MessageSquare className="h-3.5 w-3.5" /> {phone}
+              <span className="flex min-w-0 items-center gap-1.5 text-primary hover:underline">
+                <MessageSquare className="h-3.5 w-3.5 shrink-0" /> <span className="min-w-0 break-all">{phone}</span>
               </span>
             </button>
           )}
@@ -1025,16 +1027,16 @@ function AdminInquiries() {
             )}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            className="flex items-center gap-2 whitespace-nowrap rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
           >
             <Plus className="h-4 w-4" /> Add inquiry
           </button>
           <button
             onClick={() => setShowHidden((v) => !v)}
-            className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${
+            className={`flex items-center gap-2 whitespace-nowrap rounded-md border px-3 py-2 text-sm ${
               showHidden ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-card hover:bg-muted"
             }`}
           >
@@ -1043,7 +1045,7 @@ function AdminInquiries() {
           </button>
           <button
             onClick={load}
-            className="flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm hover:bg-muted"
+            className="flex items-center gap-2 whitespace-nowrap rounded-md border border-border bg-card px-3 py-2 text-sm hover:bg-muted"
           >
             <RefreshCw className="h-4 w-4" /> Refresh
           </button>
@@ -1099,7 +1101,7 @@ function AdminInquiries() {
       )}
 
       {!loading && filteredItems.length > 0 && (
-        <div className="flex h-[calc(100vh-260px)] gap-3 overflow-x-auto pb-2">
+        <div className="flex h-[calc(100vh-260px)] snap-x snap-mandatory gap-3 overflow-x-auto pb-2">
           {columns.map((status) => (
             <StatusColumn
               key={status}

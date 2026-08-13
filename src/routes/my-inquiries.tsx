@@ -443,7 +443,7 @@ function MyInquiriesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-slate-100">
       <header className="border-b border-border bg-background">
         <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-4">
           <Link to="/" className="flex items-center gap-2.5 font-bold">
@@ -457,44 +457,46 @@ function MyInquiriesPage() {
       </header>
 
       <main className="mx-auto max-w-3xl px-4 py-10">
-        <h1 className="text-2xl font-bold tracking-tight">My Inquiries</h1>
-        {!inquiry && (
-          <p className="mt-1 text-sm text-muted-foreground">
-            Enter the inquiry code you received by email (or right after submitting) to view your inquiry and
-            message our team.
-          </p>
-        )}
-        <div className="mt-4 border-b border-border" />
+        <div className="rounded-xl border border-border bg-background p-6 shadow-md sm:p-8">
+          <h1 className="text-2xl font-bold tracking-tight">My Inquiries</h1>
+          {!inquiry && (
+            <p className="mt-1 text-sm text-muted-foreground">
+              Enter the inquiry code you received by email (or right after submitting) to view your inquiry and
+              message our team.
+            </p>
+          )}
+          <div className="mt-4 border-b border-border" />
 
-        {!inquiry ? (
-          <div className="mt-6 max-w-md">
-            <form onSubmit={submitCode} className="flex gap-2">
-              <input
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                placeholder="e.g. KL-7F3QX9"
-                className="h-11 flex-1 rounded-md border border-border bg-background px-3 text-sm uppercase tracking-wide"
-              />
+          {!inquiry ? (
+            <div className="mt-6 max-w-md">
+              <form onSubmit={submitCode} className="flex gap-2">
+                <input
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  placeholder="e.g. KL-7F3QX9"
+                  className="h-11 flex-1 rounded-md border border-border bg-background px-3 text-sm uppercase tracking-wide"
+                />
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="h-11 shrink-0 rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {loading ? "Checking…" : "View"}
+                </button>
+              </form>
               <button
-                type="submit"
-                disabled={loading}
-                className="h-11 shrink-0 rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                type="button"
+                onClick={() => setShowForgot((v) => !v)}
+                className="mt-3 text-sm text-primary hover:underline"
               >
-                {loading ? "Checking…" : "View"}
+                Forgot your code?
               </button>
-            </form>
-            <button
-              type="button"
-              onClick={() => setShowForgot((v) => !v)}
-              className="mt-3 text-sm text-primary hover:underline"
-            >
-              Forgot your code?
-            </button>
-            {showForgot && <ForgotCodeForm />}
-          </div>
-        ) : (
-          <InquiryPanel inquiry={inquiry} code={code.trim()} onUpdate={setInquiry} onClose={() => setInquiry(null)} />
-        )}
+              {showForgot && <ForgotCodeForm />}
+            </div>
+          ) : (
+            <InquiryPanel inquiry={inquiry} code={code.trim()} onUpdate={setInquiry} onClose={() => setInquiry(null)} />
+          )}
+        </div>
       </main>
     </div>
   );
