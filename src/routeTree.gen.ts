@@ -25,6 +25,7 @@ import { Route as AuthenticatedAdminGalleryRouteImport } from './routes/_authent
 import { Route as AuthenticatedAdminGoogleBusinessRouteImport } from './routes/_authenticated/admin/google-business'
 import { Route as AuthenticatedAdminInquiriesRouteImport } from './routes/_authenticated/admin/inquiries'
 import { Route as AuthenticatedAdminProjectsRouteImport } from './routes/_authenticated/admin/projects'
+import { Route as AuthenticatedAdminReviewsRouteImport } from './routes/_authenticated/admin/reviews'
 import { Route as AuthenticatedAdminServicesRouteImport } from './routes/_authenticated/admin/services'
 import { Route as AuthenticatedAdminUsersRouteImport } from './routes/_authenticated/admin/users'
 import { Route as AuthenticatedBBoardIdRouteImport } from './routes/_authenticated/b.$boardId'
@@ -117,6 +118,12 @@ const AuthenticatedAdminProjectsRoute =
     path: '/projects',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminReviewsRoute =
+  AuthenticatedAdminReviewsRouteImport.update({
+    id: '/reviews',
+    path: '/reviews',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminServicesRoute =
   AuthenticatedAdminServicesRouteImport.update({
     id: '/services',
@@ -155,6 +162,7 @@ export interface FileRoutesByFullPath {
   '/admin/google-business': typeof AuthenticatedAdminGoogleBusinessRoute
   '/admin/inquiries': typeof AuthenticatedAdminInquiriesRoute
   '/admin/projects': typeof AuthenticatedAdminProjectsRoute
+  '/admin/reviews': typeof AuthenticatedAdminReviewsRoute
   '/admin/services': typeof AuthenticatedAdminServicesRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/b/$boardId': typeof AuthenticatedBBoardIdRoute
@@ -175,6 +183,7 @@ export interface FileRoutesByTo {
   '/admin/google-business': typeof AuthenticatedAdminGoogleBusinessRoute
   '/admin/inquiries': typeof AuthenticatedAdminInquiriesRoute
   '/admin/projects': typeof AuthenticatedAdminProjectsRoute
+  '/admin/reviews': typeof AuthenticatedAdminReviewsRoute
   '/admin/services': typeof AuthenticatedAdminServicesRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/b/$boardId': typeof AuthenticatedBBoardIdRoute
@@ -198,6 +207,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/google-business': typeof AuthenticatedAdminGoogleBusinessRoute
   '/_authenticated/admin/inquiries': typeof AuthenticatedAdminInquiriesRoute
   '/_authenticated/admin/projects': typeof AuthenticatedAdminProjectsRoute
+  '/_authenticated/admin/reviews': typeof AuthenticatedAdminReviewsRoute
   '/_authenticated/admin/services': typeof AuthenticatedAdminServicesRoute
   '/_authenticated/admin/users': typeof AuthenticatedAdminUsersRoute
   '/_authenticated/b/$boardId': typeof AuthenticatedBBoardIdRoute
@@ -221,6 +231,7 @@ export interface FileRouteTypes {
     | '/admin/google-business'
     | '/admin/inquiries'
     | '/admin/projects'
+    | '/admin/reviews'
     | '/admin/services'
     | '/admin/users'
     | '/b/$boardId'
@@ -241,6 +252,7 @@ export interface FileRouteTypes {
     | '/admin/google-business'
     | '/admin/inquiries'
     | '/admin/projects'
+    | '/admin/reviews'
     | '/admin/services'
     | '/admin/users'
     | '/b/$boardId'
@@ -263,6 +275,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/google-business'
     | '/_authenticated/admin/inquiries'
     | '/_authenticated/admin/projects'
+    | '/_authenticated/admin/reviews'
     | '/_authenticated/admin/services'
     | '/_authenticated/admin/users'
     | '/_authenticated/b/$boardId'
@@ -392,6 +405,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminProjectsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/reviews': {
+      id: '/_authenticated/admin/reviews'
+      path: '/reviews'
+      fullPath: '/admin/reviews'
+      preLoaderRoute: typeof AuthenticatedAdminReviewsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/services': {
       id: '/_authenticated/admin/services'
       path: '/services'
@@ -432,6 +452,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminGoogleBusinessRoute: typeof AuthenticatedAdminGoogleBusinessRoute
   AuthenticatedAdminInquiriesRoute: typeof AuthenticatedAdminInquiriesRoute
   AuthenticatedAdminProjectsRoute: typeof AuthenticatedAdminProjectsRoute
+  AuthenticatedAdminReviewsRoute: typeof AuthenticatedAdminReviewsRoute
   AuthenticatedAdminServicesRoute: typeof AuthenticatedAdminServicesRoute
   AuthenticatedAdminUsersRoute: typeof AuthenticatedAdminUsersRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
@@ -448,6 +469,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminGoogleBusinessRoute,
     AuthenticatedAdminInquiriesRoute: AuthenticatedAdminInquiriesRoute,
     AuthenticatedAdminProjectsRoute: AuthenticatedAdminProjectsRoute,
+    AuthenticatedAdminReviewsRoute: AuthenticatedAdminReviewsRoute,
     AuthenticatedAdminServicesRoute: AuthenticatedAdminServicesRoute,
     AuthenticatedAdminUsersRoute: AuthenticatedAdminUsersRoute,
     AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,

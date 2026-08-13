@@ -630,6 +630,36 @@ export type Database = {
           },
         ]
       }
+      reviews: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          rating: number
+          review_text: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          rating: number
+          review_text?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          rating?: number
+          review_text?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       services: {
         Row: {
           active: boolean

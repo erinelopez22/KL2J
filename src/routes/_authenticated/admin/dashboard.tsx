@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { MessageCircle, Image as ImageIcon, FileText, Wrench, FolderKanban } from "lucide-react";
+import { MessageCircle, Image as ImageIcon, FileText, Wrench, FolderKanban, Star } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/dashboard")({
   component: AdminDashboard,
@@ -45,12 +45,27 @@ function StatCard({
   );
 }
 
+function usePendingReviewCount() {
+  return useQuery({
+    queryKey: ["admin-count", "reviews", "pending"],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("reviews")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending");
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+}
+
 function AdminDashboard() {
   const inquiries = useCount("inquiries");
   const services = useCount("services");
   const gallery = useCount("gallery_photos");
   const documents = useCount("documents");
   const projects = useCount("projects");
+  const pendingReviews = usePendingReviewCount();
 
   return (
     <div>
@@ -58,6 +73,7 @@ function AdminDashboard() {
       <p className="mt-1 text-sm text-muted-foreground">Manage your site's content and inquiries.</p>
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard to="/admin/inquiries" label="Inquiries" count={inquiries.data} icon={MessageCircle} />
+        <StatCard to="/admin/reviews" label="Pending reviews" count={pendingReviews.data} icon={Star} />
         <StatCard to="/admin/services" label="Services" count={services.data} icon={Wrench} />
         <StatCard to="/admin/gallery" label="Gallery photos" count={gallery.data} icon={ImageIcon} />
         <StatCard to="/admin/documents" label="Documents" count={documents.data} icon={FileText} />

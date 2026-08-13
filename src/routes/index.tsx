@@ -28,7 +28,7 @@ import {
   Maximize2,
   Handshake,
   Play,
-  LogIn,
+  Star,
 } from "lucide-react";
 import { ChatWidget } from "@/components/ChatWidget";
 import {
@@ -38,10 +38,13 @@ import {
   usePublicProjects,
   usePublicSiteSettings,
   usePublicPartnerCompanies,
+  usePublicReviews,
+  type PublicReview,
 } from "@/lib/public-content";
 import { LocationAutosuggest } from "@/components/LocationAutosuggest";
 import { PublicDocumentUpload, type UploadedDocument } from "@/components/PublicDocumentUpload";
 import { getServiceIcon } from "@/lib/admin/iconMap";
+import { WriteReviewModal } from "@/components/WriteReviewModal";
 
 const FACEBOOK_PAGE_URL = "https://www.facebook.com/profile.php?id=61581147040190";
 const FACEBOOK_DOCS_URL =
@@ -130,6 +133,7 @@ function LandingPage() {
       <WhyUs />
       <Credentials />
       <Projects />
+      <Reviews />
       <FacebookCTA />
       <Photos />
       <CTA />
@@ -149,6 +153,7 @@ function NavBar() {
     { href: "#process", label: "Process" },
     { href: "#credentials", label: "Credentials" },
     { href: "#projects", label: "Projects" },
+    { href: "#reviews", label: "Reviews" },
     { href: "#photos", label: "Photos" },
     { href: "#why", label: "Why us" },
     { href: "#contact", label: "Contact" },
@@ -211,13 +216,6 @@ function NavBar() {
           >
             Request a quote
           </a>
-          <Link
-            to="/auth"
-            onClick={() => setOpen(false)}
-            className="inline-flex items-center justify-center gap-2 h-10 rounded-md border border-border font-semibold"
-          >
-            <LogIn className="h-4 w-4" /> Admin login
-          </Link>
         </div>
       )}
     </header>
@@ -280,12 +278,6 @@ function Hero() {
           >
             Request a quote <ArrowRight className="h-4 w-4" />
           </a>
-          <Link
-            to="/auth"
-            className="inline-flex items-center gap-2 h-12 px-5 rounded-md bg-primary text-primary-foreground font-semibold whitespace-nowrap hover:bg-primary/90"
-          >
-            <LogIn className="h-4 w-4" /> Admin login
-          </Link>
         </div>
       </div>
     </section>
@@ -1026,6 +1018,91 @@ function Projects() {
           </div>
         </div>
       )}
+    </section>
+  );
+}
+
+function StarRatingDisplay({ rating, size = "h-4 w-4" }: { rating: number; size?: string }) {
+  return (
+    <div className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <Star
+          key={n}
+          className={`${size} ${n <= Math.round(rating) ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"}`}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ReviewCard({ review }: { review: PublicReview }) {
+  const initial = review.name.trim().charAt(0).toUpperCase() || "?";
+  return (
+    <div className="w-[280px] shrink-0 rounded-xl border border-border bg-card p-5 shadow-sm">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+          {initial}
+        </div>
+        <div className="min-w-0">
+          <div className="truncate font-medium">{review.name}</div>
+          <div className="text-xs text-muted-foreground">{new Date(review.created_at).toLocaleDateString()}</div>
+        </div>
+      </div>
+      <div className="mt-3">
+        <StarRatingDisplay rating={review.rating} />
+      </div>
+      {review.review_text && <p className="mt-2 line-clamp-5 text-sm text-muted-foreground">{review.review_text}</p>}
+    </div>
+  );
+}
+
+function Reviews() {
+  const { data } = usePublicReviews();
+  const [showForm, setShowForm] = useState(false);
+  const reviews = data ?? [];
+  const count = reviews.length;
+  const average = count > 0 ? reviews.reduce((sum, r) => sum + r.rating, 0) / count : 0;
+
+  return (
+    <section id="reviews" className="border-y border-border bg-secondary/40">
+      <div className="max-w-6xl mx-auto px-4 py-14 md:py-16">
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div className="max-w-2xl">
+            <p className="text-sm font-semibold uppercase tracking-wider text-primary">Client Reviews</p>
+            <h2 className="mt-2 text-3xl md:text-4xl font-bold tracking-tight">What clients say</h2>
+            {count > 0 ? (
+              <div className="mt-3 flex items-center gap-2">
+                <span className="text-2xl font-bold">{average.toFixed(1)}</span>
+                <StarRatingDisplay rating={average} size="h-5 w-5" />
+                <span className="text-sm text-muted-foreground">
+                  ({count} review{count === 1 ? "" : "s"})
+                </span>
+              </div>
+            ) : (
+              <p className="mt-3 text-muted-foreground">Be the first to share your experience with KL2J.</p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowForm(true)}
+            className="inline-flex h-11 shrink-0 items-center gap-2 self-start rounded-md bg-primary px-5 font-semibold text-primary-foreground hover:bg-primary/90"
+          >
+            <Star className="h-4 w-4" /> Write a review
+          </button>
+        </div>
+
+        {count > 0 && (
+          <div className="-mx-4 mt-8 overflow-x-auto px-4">
+            <div className="flex gap-4 pb-2">
+              {reviews.map((r) => (
+                <ReviewCard key={r.id} review={r} />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {showForm && <WriteReviewModal onClose={() => setShowForm(false)} />}
     </section>
   );
 }

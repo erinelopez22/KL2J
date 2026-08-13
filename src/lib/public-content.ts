@@ -124,6 +124,31 @@ export function usePublicProjects() {
   });
 }
 
+export type PublicReview = {
+  id: string;
+  name: string;
+  rating: number;
+  review_text: string | null;
+  created_at: string;
+};
+
+export function usePublicReviews() {
+  return useQuery({
+    queryKey: ["public-reviews"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("reviews")
+        .select("id,name,rating,review_text,created_at")
+        .eq("status", "approved")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      return data as PublicReview[];
+    },
+    staleTime: 60_000,
+  });
+}
+
 export function usePublicSiteSettings() {
   return useQuery({
     queryKey: ["site-settings"],

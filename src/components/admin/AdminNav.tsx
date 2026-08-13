@@ -13,11 +13,13 @@ import {
   LogOut,
   Building2,
   Handshake,
+  Star,
 } from "lucide-react";
 
 const links = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/admin/inquiries", label: "Inquiries", icon: MessageCircle },
+  { to: "/admin/reviews", label: "Reviews", icon: Star },
   { to: "/admin/branding", label: "Branding", icon: Palette },
   { to: "/admin/services", label: "Services", icon: Wrench },
   { to: "/admin/gallery", label: "Gallery", icon: ImageIcon },

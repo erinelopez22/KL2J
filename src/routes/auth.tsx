@@ -48,7 +48,7 @@ function AuthPage() {
       style={{ backgroundImage: `url(${bgUrl})` }}
     >
       <div className="absolute inset-0 bg-slate-950/70" />
-      <div className="relative w-full max-w-lg translate-x-34 sm:-translate-x-50 md:-translate-x-66 rounded-2xl border border-border bg-card shadow-2xl px-8 py-14">
+      <div className="relative w-full max-w-lg lg:-translate-x-50 xl:-translate-x-66 rounded-2xl border border-border bg-card shadow-2xl px-8 py-14">
         <div className="flex items-center gap-2 mb-8">
           <img src={logoUrl} alt="KL2J logo" className="h-9 w-9 rounded-full object-cover ring-1 ring-border" />
           <span className="text-lg font-bold tracking-tight">KL2J Land Surveying and Engineering Services</span>

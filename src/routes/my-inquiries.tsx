@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { ArrowLeft, CheckCircle2, Circle, FileText, Paperclip, RefreshCw, X } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Circle, FileText, Paperclip, RefreshCw, Star, X } from "lucide-react";
 import {
   lookupInquiryByCode,
   recoverInquiryCode,
@@ -11,6 +11,7 @@ import {
 } from "@/lib/public-inquiry-access.functions";
 import { uploadInquiryDocument } from "@/lib/public-media.functions";
 import { fileToBase64 } from "@/lib/admin/fileToBase64";
+import { WriteReviewModal } from "@/components/WriteReviewModal";
 import logoUrl from "@/assets/kl2j-logo.jpg";
 
 export const Route = createFileRoute("/my-inquiries")({
@@ -276,6 +277,7 @@ function InquiryPanel({
   const doGetUrl = useServerFn(getInquiryCommentFileUrl);
   const doLookup = useServerFn(lookupInquiryByCode);
   const [refreshing, setRefreshing] = useState(false);
+  const [showReview, setShowReview] = useState(false);
 
   async function openFile(path: string) {
     try {
@@ -414,9 +416,39 @@ function InquiryPanel({
       )}
 
       <div>
-        <h3 className="mb-2 text-sm font-semibold">Messages</h3>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <h3 className="text-sm font-semibold">Messages</h3>
+          <button
+            type="button"
+            onClick={refresh}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} /> Refresh
+          </button>
+        </div>
         <CommentsThread inquiry={inquiry} code={code} onUpdate={onUpdate} onOpenFile={openFile} />
       </div>
+
+      <div className="rounded-lg border border-border bg-muted/20 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold">How was our service?</h3>
+            <p className="text-sm text-muted-foreground">
+              Rate KL2J and share your experience — it may be featured on our site once approved.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowReview(true)}
+            className="inline-flex shrink-0 items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+          >
+            <Star className="h-4 w-4" /> Write a review
+          </button>
+        </div>
+      </div>
+
+      {showReview && <WriteReviewModal onClose={() => setShowReview(false)} defaultName={inquiry.name} />}
     </div>
   );
 }
