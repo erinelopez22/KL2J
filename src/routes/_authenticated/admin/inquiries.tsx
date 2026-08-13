@@ -33,6 +33,8 @@ import {
   ListChecks,
   FileText,
   Paperclip,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/inquiries")({
@@ -179,6 +181,70 @@ function StatusColumn({
           <InquiryCard key={i.id} inquiry={i} onOpen={() => onOpen(i)} />
         ))}
       </div>
+    </div>
+  );
+}
+
+function InquiryListRow({
+  inquiry,
+  onOpen,
+  onStatusChange,
+  statusOptions,
+}: {
+  inquiry: Inquiry;
+  onOpen: () => void;
+  onStatusChange: (status: Status) => void;
+  statusOptions: readonly Status[];
+}) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") onOpen();
+      }}
+      className="flex cursor-pointer flex-wrap items-center gap-3 rounded-lg border border-border bg-card p-3 text-left hover:border-primary/40 hover:shadow-sm"
+    >
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-sm font-semibold">{inquiry.name}</span>
+          {inquiry.channel && (
+            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
+              {inquiry.channel}
+            </span>
+          )}
+          {!inquiry.email_sent && (
+            <span
+              title={inquiry.email_error ?? "Notification email failed to send"}
+              className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-1.5 py-0.5 text-[9px] font-medium uppercase text-destructive"
+            >
+              <MailWarning className="h-3 w-3" />
+            </span>
+          )}
+        </div>
+        <div className="mt-1 truncate text-xs text-muted-foreground">
+          {[inquiry.email, inquiry.phone].filter(Boolean).join(" · ") || inquiry.contact}
+          {inquiry.service && <span className="ml-2 font-medium text-primary">{inquiry.service}</span>}
+        </div>
+        {inquiry.message && <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{inquiry.message}</p>}
+      </div>
+      <div className="flex shrink-0 items-center gap-1 whitespace-nowrap text-[10px] text-muted-foreground">
+        <Clock className="h-3 w-3" />
+        {new Date(inquiry.created_at).toLocaleDateString()}
+      </div>
+      <select
+        value={inquiry.status}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => onStatusChange(e.target.value as Status)}
+        className={`shrink-0 rounded-full border-0 px-2.5 py-1 text-[11px] font-medium uppercase ${STATUS_BADGE_STYLES[inquiry.status]}`}
+      >
+        {statusOptions.map((s) => (
+          <option key={s} value={s}>
+            {s}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
@@ -955,6 +1021,7 @@ function AdminInquiries() {
   const [items, setItems] = useState<Inquiry[]>([]);
   const [loading, setLoading] = useState(true);
   const [showHidden, setShowHidden] = useState(false);
+  const [view, setView] = useState<"board" | "list">("board");
   const [openInquiryId, setOpenInquiryId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [search, setSearch] = useState("");
@@ -1017,8 +1084,11 @@ function AdminInquiries() {
             <MessageCircle className="h-6 w-6 text-primary" /> Inquiries
           </h1>
           <p className="text-sm text-muted-foreground">
-            {newCount} new · {filteredItems.length} of {items.length} shown · click a card to view details, or drag
-            it to another column to change its status.
+            {newCount} new · {filteredItems.length} of {items.length} shown · click{" "}
+            {view === "board" ? "a card" : "a row"} to view details
+            {view === "board"
+              ? ", or drag it to another column to change its status."
+              : ", or use the status dropdown to change its status directly."}
             {emailFailedCount > 0 && (
               <span className="ml-2 inline-flex items-center gap-1 font-medium text-destructive">
                 <MailWarning className="h-3.5 w-3.5" />
@@ -1028,6 +1098,28 @@ function AdminInquiries() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <div className="flex shrink-0 rounded-md border border-border bg-card p-0.5">
+            <button
+              type="button"
+              onClick={() => setView("board")}
+              aria-pressed={view === "board"}
+              className={`flex items-center gap-1.5 rounded px-2.5 py-1.5 text-sm ${
+                view === "board" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              <LayoutGrid className="h-4 w-4" /> Board
+            </button>
+            <button
+              type="button"
+              onClick={() => setView("list")}
+              aria-pressed={view === "list"}
+              className={`flex items-center gap-1.5 rounded px-2.5 py-1.5 text-sm ${
+                view === "list" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              <List className="h-4 w-4" /> List
+            </button>
+          </div>
           <button
             onClick={() => setShowCreate(true)}
             className="flex items-center gap-2 whitespace-nowrap rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
@@ -1100,7 +1192,7 @@ function AdminInquiries() {
         </div>
       )}
 
-      {!loading && filteredItems.length > 0 && (
+      {!loading && filteredItems.length > 0 && view === "board" && (
         <div className="flex h-[calc(100vh-260px)] snap-x snap-mandatory gap-3 overflow-x-auto pb-2">
           {columns.map((status) => (
             <StatusColumn
@@ -1109,6 +1201,20 @@ function AdminInquiries() {
               items={filteredItems.filter((i) => i.status === status)}
               onOpen={(i) => setOpenInquiryId(i.id)}
               onDropInquiry={moveInquiry}
+            />
+          ))}
+        </div>
+      )}
+
+      {!loading && filteredItems.length > 0 && view === "list" && (
+        <div className="max-h-[calc(100vh-260px)] space-y-2 overflow-y-auto pr-1">
+          {filteredItems.map((i) => (
+            <InquiryListRow
+              key={i.id}
+              inquiry={i}
+              onOpen={() => setOpenInquiryId(i.id)}
+              onStatusChange={(status) => moveInquiry(i.id, status)}
+              statusOptions={columns}
             />
           ))}
         </div>
