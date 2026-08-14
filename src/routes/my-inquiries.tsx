@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { ArrowLeft, CheckCircle2, Circle, FileText, Paperclip, RefreshCw, Star, X } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Circle, FileText, Paperclip, RefreshCw, X } from "lucide-react";
 import {
   lookupInquiryByCode,
   recoverInquiryCode,
@@ -11,7 +11,10 @@ import {
 } from "@/lib/public-inquiry-access.functions";
 import { uploadInquiryDocument } from "@/lib/public-media.functions";
 import { fileToBase64 } from "@/lib/admin/fileToBase64";
-import { WriteReviewModal } from "@/components/WriteReviewModal";
+import { DraggableReviewPrompt } from "@/components/DraggableReviewPrompt";
+import { isOversizedFile } from "@/lib/uploadLimits";
+import { OversizeFileLinkPrompt } from "@/components/OversizeFileLinkPrompt";
+import { AttachmentLightbox, kindFromContentType, type LightboxItem } from "@/components/AttachmentLightbox";
 import logoUrl from "@/assets/kl2j-logo.jpg";
 
 export const Route = createFileRoute("/my-inquiries")({
@@ -21,10 +24,13 @@ export const Route = createFileRoute("/my-inquiries")({
       { name: "description", content: "Check the status of your inquiry and message our team." },
     ],
   }),
+  validateSearch: (search: Record<string, unknown>): { code?: string } => ({
+    code: typeof search.code === "string" ? search.code : undefined,
+  }),
   component: MyInquiriesPage,
 });
 
-type Attachment = { path: string; name: string; contentType: string };
+type Attachment = { path: string; name: string; contentType: string; isExternalLink?: boolean };
 type ChecklistResponseView = {
   id: string;
   label: string;
@@ -118,34 +124,54 @@ function CommentsThread({
   inquiry,
   code,
   onUpdate,
-  onOpenFile,
+  onOpenAttachments,
 }: {
   inquiry: InquiryView;
   code: string;
   onUpdate: (i: InquiryView) => void;
-  onOpenFile: (path: string) => void;
+  onOpenAttachments: (docs: Attachment[], startIndex: number) => void;
 }) {
   const [message, setMessage] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [oversizeQueue, setOversizeQueue] = useState<File[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const doAddComment = useServerFn(addInquiryComment);
   const doUpload = useServerFn(uploadInquiryDocument);
   const doLookup = useServerFn(lookupInquiryByCode);
 
-  async function handleFile(file: File) {
+  async function handleFiles(files: FileList) {
+    const okFiles: File[] = [];
+    const oversized: File[] = [];
+    for (const file of Array.from(files)) {
+      (isOversizedFile(file) ? oversized : okFiles).push(file);
+    }
+    if (oversized.length > 0) setOversizeQueue((q) => [...q, ...oversized]);
+    if (okFiles.length === 0) {
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
     setUploading(true);
     try {
-      const base64 = await fileToBase64(file);
-      const result = await doUpload({ data: { filename: file.name, contentType: file.type, base64 } });
-      setAttachments((a) => [...a, { path: result.path, name: file.name, contentType: result.contentType }]);
+      for (const file of okFiles) {
+        const base64 = await fileToBase64(file);
+        const result = await doUpload({ data: { filename: file.name, contentType: file.type, base64 } });
+        setAttachments((a) => [...a, { path: result.path, name: file.name, contentType: result.contentType }]);
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
     }
+  }
+
+  function saveOversizeLink(link: string) {
+    const file = oversizeQueue[0];
+    if (!file) return;
+    setAttachments((a) => [...a, { path: link, name: file.name, contentType: file.type, isExternalLink: true }]);
+    setOversizeQueue((q) => q.slice(1));
   }
 
   async function send() {
@@ -188,11 +214,11 @@ function CommentsThread({
               {c.message && <p className="whitespace-pre-wrap leading-relaxed">{c.message}</p>}
               {c.attachments?.length > 0 && (
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {c.attachments.map((a) => (
+                  {c.attachments.map((a, i) => (
                     <button
                       key={a.path}
                       type="button"
-                      onClick={() => onOpenFile(a.path)}
+                      onClick={() => onOpenAttachments(c.attachments, i)}
                       className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium ${
                         c.author_type === "inquirer"
                           ? "bg-primary-foreground/15 hover:bg-primary-foreground/25"
@@ -231,6 +257,13 @@ function CommentsThread({
           ))}
         </div>
       )}
+      {oversizeQueue.length > 0 && (
+        <OversizeFileLinkPrompt
+          fileName={oversizeQueue[0].name}
+          onCancel={() => setOversizeQueue((q) => q.slice(1))}
+          onSave={saveOversizeLink}
+        />
+      )}
       <div className="flex items-center gap-2">
         <button
           type="button"
@@ -243,11 +276,11 @@ function CommentsThread({
         <input
           ref={inputRef}
           type="file"
+          multiple
           className="hidden"
           accept="image/jpeg,image/png,image/webp,application/pdf"
           onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) handleFile(file);
+            if (e.target.files && e.target.files.length > 0) handleFiles(e.target.files);
           }}
         />
         <button
@@ -277,15 +310,17 @@ function InquiryPanel({
   const doGetUrl = useServerFn(getInquiryCommentFileUrl);
   const doLookup = useServerFn(lookupInquiryByCode);
   const [refreshing, setRefreshing] = useState(false);
-  const [showReview, setShowReview] = useState(false);
+  const [lightbox, setLightbox] = useState<{ items: LightboxItem[]; index: number } | null>(null);
+  const [tab, setTab] = useState<"details" | "messages" | "attachments">("details");
 
-  async function openFile(path: string) {
-    try {
-      const { url } = await doGetUrl({ data: { code, path } });
-      window.open(url, "_blank", "noopener,noreferrer");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to open file");
-    }
+  function openAttachments(docs: Attachment[], startIndex: number) {
+    const items: LightboxItem[] = docs.map((d) => ({
+      name: d.name,
+      kind: kindFromContentType(d.contentType, d.isExternalLink),
+      resolveUrl: () =>
+        d.isExternalLink ? d.path : doGetUrl({ data: { code, path: d.path } }).then((r) => r.url),
+    }));
+    setLightbox({ items, index: startIndex });
   }
 
   async function refresh() {
@@ -328,150 +363,194 @@ function InquiryPanel({
         </div>
       </div>
 
-      <div className="divide-y divide-border overflow-hidden rounded-lg border border-border text-sm">
-        <div className="grid grid-cols-[35%_1fr] gap-3 px-3 py-2.5">
-          <span className="text-xs font-medium text-muted-foreground">Submitted</span>
-          <span>{new Date(inquiry.created_at).toLocaleString()}</span>
-        </div>
-        {inquiry.email && (
-          <div className="grid grid-cols-[35%_1fr] gap-3 px-3 py-2.5">
-            <span className="text-xs font-medium text-muted-foreground">Email</span>
-            <span>{inquiry.email}</span>
-          </div>
-        )}
-        {inquiry.phone && (
-          <div className="grid grid-cols-[35%_1fr] gap-3 px-3 py-2.5">
-            <span className="text-xs font-medium text-muted-foreground">Phone</span>
-            <span>{inquiry.phone}</span>
-          </div>
-        )}
-        {inquiry.message && (
-          <div className="px-3 py-2.5">
-            <span className="mb-1 block text-xs font-medium text-muted-foreground">Message</span>
-            <p className="whitespace-pre-wrap leading-relaxed">{inquiry.message}</p>
-          </div>
-        )}
+      <div className="flex gap-1 border-b border-border">
+        {(["details", "messages", "attachments"] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setTab(t)}
+            className={`border-b-2 px-3 py-2 text-sm font-medium capitalize ${
+              tab === t
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t}
+          </button>
+        ))}
       </div>
 
-      {inquiry.checklist_responses.length > 0 && (
-        <div className="divide-y divide-border overflow-hidden rounded-lg border border-border text-sm">
-          <div className="bg-muted/40 px-3 py-2 text-xs font-semibold uppercase text-muted-foreground">
-            Details you provided
-          </div>
-          {inquiry.checklist_responses.map((c) => (
-            <div key={c.id} className="grid grid-cols-[35%_1fr] items-start gap-3 px-3 py-2.5">
-              <span className="text-xs font-medium text-muted-foreground">{c.label}</span>
-              {c.type === "checkbox" ? (
-                <span className="inline-flex items-center gap-1.5">
-                  {c.checked ? (
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                  ) : (
-                    <Circle className="h-4 w-4 text-muted-foreground/40" />
-                  )}
-                  {c.checked ? "Yes" : "No"}
-                </span>
-              ) : c.type === "document" ? (
-                c.documents && c.documents.length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5">
-                    {c.documents.map((d) => (
-                      <button
-                        key={d.path}
-                        type="button"
-                        onClick={() => openFile(d.path)}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-primary hover:bg-muted"
-                      >
-                        <FileText className="h-3.5 w-3.5" /> {d.name}
-                      </button>
-                    ))}
-                  </div>
-                ) : c.hasDocument ? (
-                  <span className="font-medium text-emerald-700">Yes (not uploaded)</span>
-                ) : (
-                  <span className="text-muted-foreground/60">No</span>
-                )
-              ) : (
-                <span>{c.answer?.trim() || "—"}</span>
-              )}
+      {tab === "details" && (
+        <div className="space-y-6">
+          <div className="divide-y divide-border overflow-hidden rounded-lg border border-border text-sm">
+            <div className="grid grid-cols-[35%_1fr] gap-3 px-3 py-2.5">
+              <span className="text-xs font-medium text-muted-foreground">Submitted</span>
+              <span>{new Date(inquiry.created_at).toLocaleString()}</span>
             </div>
-          ))}
+            {inquiry.email && (
+              <div className="grid grid-cols-[35%_1fr] gap-3 px-3 py-2.5">
+                <span className="text-xs font-medium text-muted-foreground">Email</span>
+                <span>{inquiry.email}</span>
+              </div>
+            )}
+            {inquiry.phone && (
+              <div className="grid grid-cols-[35%_1fr] gap-3 px-3 py-2.5">
+                <span className="text-xs font-medium text-muted-foreground">Phone</span>
+                <span>{inquiry.phone}</span>
+              </div>
+            )}
+            {inquiry.message && (
+              <div className="px-3 py-2.5">
+                <span className="mb-1 block text-xs font-medium text-muted-foreground">Message</span>
+                <p className="whitespace-pre-wrap leading-relaxed">{inquiry.message}</p>
+              </div>
+            )}
+          </div>
+
+          {inquiry.checklist_responses.length > 0 && (
+            <div className="divide-y divide-border overflow-hidden rounded-lg border border-border text-sm">
+              <div className="bg-muted/40 px-3 py-2 text-xs font-semibold uppercase text-muted-foreground">
+                Details you provided
+              </div>
+              {inquiry.checklist_responses.map((c) => (
+                <div key={c.id} className="grid grid-cols-[35%_1fr] items-start gap-3 px-3 py-2.5">
+                  <span className="text-xs font-medium text-muted-foreground">{c.label}</span>
+                  {c.type === "checkbox" ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      {c.checked ? (
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                      ) : (
+                        <Circle className="h-4 w-4 text-muted-foreground/40" />
+                      )}
+                      {c.checked ? "Yes" : "No"}
+                    </span>
+                  ) : c.type === "document" ? (
+                    c.documents && c.documents.length > 0 ? (
+                      <span className="font-medium text-emerald-700">
+                        Yes — {c.documents.length} file{c.documents.length === 1 ? "" : "s"} (see Attachments)
+                      </span>
+                    ) : c.hasDocument ? (
+                      <span className="font-medium text-emerald-700">Yes (not uploaded)</span>
+                    ) : (
+                      <span className="text-muted-foreground/60">No</span>
+                    )
+                  ) : (
+                    <span>{c.answer?.trim() || "—"}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {inquiry.attachments.length > 0 && (
+      {tab === "messages" && (
         <div>
-          <h3 className="mb-2 text-sm font-semibold">All files</h3>
-          <div className="flex flex-wrap gap-1.5">
-            {inquiry.attachments.map((a) => (
-              <button
-                key={a.path}
-                type="button"
-                onClick={() => openFile(a.path)}
-                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-primary hover:bg-muted"
-              >
-                <FileText className="h-3.5 w-3.5" /> {a.name}
-              </button>
-            ))}
+          <div className="mb-2 flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={refresh}
+              disabled={refreshing}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} /> Refresh
+            </button>
+          </div>
+          <CommentsThread inquiry={inquiry} code={code} onUpdate={onUpdate} onOpenAttachments={openAttachments} />
+        </div>
+      )}
+
+      {tab === "attachments" && (
+        <div className="space-y-6">
+          {inquiry.checklist_responses.filter((c) => c.type === "document" && c.documents?.length).length > 0 && (
+            <div>
+              <h3 className="mb-2 text-sm font-semibold">Supporting documents</h3>
+              <div className="space-y-2">
+                {inquiry.checklist_responses
+                  .filter((c) => c.type === "document" && c.documents?.length)
+                  .map((c) => (
+                    <div key={c.id}>
+                      <span className="mb-1 block text-xs text-muted-foreground">{c.label}</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {c.documents!.map((d, i) => (
+                          <button
+                            key={d.path}
+                            type="button"
+                            onClick={() => openAttachments(c.documents!, i)}
+                            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-primary hover:bg-muted"
+                          >
+                            <FileText className="h-3.5 w-3.5" /> {d.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">All files</h3>
+            {inquiry.attachments.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No files shared yet.</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {inquiry.attachments.map((a, i) => (
+                  <button
+                    key={a.path}
+                    type="button"
+                    onClick={() => openAttachments(inquiry.attachments, i)}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-primary hover:bg-muted"
+                  >
+                    <FileText className="h-3.5 w-3.5" /> {a.name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      <div>
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <h3 className="text-sm font-semibold">Messages</h3>
-          <button
-            type="button"
-            onClick={refresh}
-            disabled={refreshing}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} /> Refresh
-          </button>
-        </div>
-        <CommentsThread inquiry={inquiry} code={code} onUpdate={onUpdate} onOpenFile={openFile} />
-      </div>
-
-      <div className="rounded-lg border border-border bg-muted/20 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-semibold">How was our service?</h3>
-            <p className="text-sm text-muted-foreground">
-              Rate KL2J and share your experience — it may be featured on our site once approved.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowReview(true)}
-            className="inline-flex shrink-0 items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
-          >
-            <Star className="h-4 w-4" /> Write a review
-          </button>
-        </div>
-      </div>
-
-      {showReview && <WriteReviewModal onClose={() => setShowReview(false)} defaultName={inquiry.name} />}
+      <DraggableReviewPrompt defaultName={inquiry.name} />
+      {lightbox && (
+        <AttachmentLightbox items={lightbox.items} startIndex={lightbox.index} onClose={() => setLightbox(null)} />
+      )}
     </div>
   );
 }
 
 function MyInquiriesPage() {
-  const [code, setCode] = useState("");
+  const search = Route.useSearch();
+  const [code, setCode] = useState(search.code ?? "");
   const [inquiry, setInquiry] = useState<InquiryView | null>(null);
   const [loading, setLoading] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
   const doLookup = useServerFn(lookupInquiryByCode);
 
-  async function submitCode(e: React.FormEvent) {
-    e.preventDefault();
-    if (!code.trim()) return;
+  async function lookup(codeToLookup: string) {
+    if (!codeToLookup.trim()) return;
     setLoading(true);
     try {
-      const result = await doLookup({ data: { code: code.trim() } });
+      const result = await doLookup({ data: { code: codeToLookup.trim() } });
       setInquiry(result as unknown as InquiryView);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to look up inquiry");
     } finally {
       setLoading(false);
     }
+  }
+
+  // A code arriving via a link (e.g. from an email) skips the manual entry
+  // form entirely — visiting /my-inquiries directly from the site nav still
+  // shows the normal code-entry prompt since there's no ?code= in that case.
+  useEffect(() => {
+    if (search.code) lookup(search.code);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search.code]);
+
+  async function submitCode(e: React.FormEvent) {
+    e.preventDefault();
+    await lookup(code);
   }
 
   return (
@@ -491,7 +570,7 @@ function MyInquiriesPage() {
       <main className="mx-auto max-w-3xl px-4 py-10">
         <div className="rounded-xl border border-border bg-background p-6 shadow-md sm:p-8">
           <h1 className="text-2xl font-bold tracking-tight">My Inquiries</h1>
-          {!inquiry && (
+          {!inquiry && !(search.code && loading) && (
             <p className="mt-1 text-sm text-muted-foreground">
               Enter the inquiry code you received by email (or right after submitting) to view your inquiry and
               message our team.
@@ -499,7 +578,9 @@ function MyInquiriesPage() {
           )}
           <div className="mt-4 border-b border-border" />
 
-          {!inquiry ? (
+          {search.code && loading && !inquiry ? (
+            <p className="mt-6 text-sm text-muted-foreground">Looking up your inquiry…</p>
+          ) : !inquiry ? (
             <div className="mt-6 max-w-md">
               <form onSubmit={submitCode} className="flex gap-2">
                 <input

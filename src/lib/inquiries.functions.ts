@@ -9,7 +9,14 @@ export const ChecklistResponseSchema = z.object({
   answer: z.string().max(500).optional(),
   hasDocument: z.boolean().optional().default(false),
   documents: z
-    .array(z.object({ path: z.string().min(1), name: z.string().min(1).max(200), contentType: z.string().min(1) }))
+    .array(
+      z.object({
+        path: z.string().min(1),
+        name: z.string().min(1).max(200),
+        contentType: z.string().min(1),
+        isExternalLink: z.boolean().optional(),
+      }),
+    )
     .optional()
     .default([]),
 });

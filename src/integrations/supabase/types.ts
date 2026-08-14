@@ -544,6 +544,117 @@ export type Database = {
         }
         Relationships: []
       }
+      post_recipients: {
+        Row: {
+          created_at: string
+          email: string
+          error: string | null
+          id: string
+          inquiry_id: string | null
+          name: string | null
+          post_id: string
+          sent_at: string | null
+          source: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          error?: string | null
+          id?: string
+          inquiry_id?: string | null
+          name?: string | null
+          post_id: string
+          sent_at?: string | null
+          source: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          error?: string | null
+          id?: string
+          inquiry_id?: string | null
+          name?: string | null
+          post_id?: string
+          sent_at?: string | null
+          source?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_recipients_inquiry_id_fkey"
+            columns: ["inquiry_id"]
+            isOneToOne: false
+            referencedRelation: "inquiries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_recipients_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      posts: {
+        Row: {
+          attachments: Json
+          body_html: string
+          created_at: string
+          created_by: string | null
+          failed_count: number
+          id: string
+          project_ids: string[]
+          recipient_mode: string
+          sent_at: string | null
+          sent_count: number
+          status: string
+          subject: string
+          title: string
+          total_count: number
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          attachments?: Json
+          body_html: string
+          created_at?: string
+          created_by?: string | null
+          failed_count?: number
+          id?: string
+          project_ids?: string[]
+          recipient_mode?: string
+          sent_at?: string | null
+          sent_count?: number
+          status?: string
+          subject: string
+          title: string
+          total_count?: number
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          attachments?: Json
+          body_html?: string
+          created_at?: string
+          created_by?: string | null
+          failed_count?: number
+          id?: string
+          project_ids?: string[]
+          recipient_mode?: string
+          sent_at?: string | null
+          sent_count?: number
+          status?: string
+          subject?: string
+          title?: string
+          total_count?: number
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null

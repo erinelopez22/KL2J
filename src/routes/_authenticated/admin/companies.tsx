@@ -27,7 +27,7 @@ function AdminCompanies() {
   const doAdd = useServerFn(addPartnerCompany);
   const doDelete = useServerFn(deletePartnerCompany);
   const confirm = useConfirm();
-  const [pending, setPending] = useState<{ url: string; path: string } | null>(null);
+  const [pending, setPending] = useState<{ url: string; path?: string } | null>(null);
   const [name, setName] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
 
@@ -92,6 +92,8 @@ function AdminCompanies() {
         <FileDrop
           folder="companies"
           label={pending ? "Logo ready — fill details below" : "Upload a company logo"}
+          allowExternalLink={false}
+          multiple={false}
           onUploaded={setPending}
         />
         <div className="mt-3 grid gap-3">

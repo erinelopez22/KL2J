@@ -75,7 +75,7 @@ function AdminDashboard() {
         <StatCard to="/admin/inquiries" label="Inquiries" count={inquiries.data} icon={MessageCircle} />
         <StatCard to="/admin/reviews" label="Pending reviews" count={pendingReviews.data} icon={Star} />
         <StatCard to="/admin/services" label="Services" count={services.data} icon={Wrench} />
-        <StatCard to="/admin/gallery" label="Gallery photos" count={gallery.data} icon={ImageIcon} />
+        <StatCard to="/admin/gallery" label="Gallery (Photos/Videos)" count={gallery.data} icon={ImageIcon} />
         <StatCard to="/admin/documents" label="Documents" count={documents.data} icon={FileText} />
         <StatCard to="/admin/projects" label="Projects" count={projects.data} icon={FolderKanban} />
       </div>

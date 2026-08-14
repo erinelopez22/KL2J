@@ -5,6 +5,7 @@ import { submitInquiry } from "@/lib/inquiries.functions";
 import { usePublicServices, usePublicSiteSettings } from "@/lib/public-content";
 import { LocationAutosuggest } from "@/components/LocationAutosuggest";
 import { PublicDocumentUpload, type UploadedDocument } from "@/components/PublicDocumentUpload";
+import { splitAreaAnswer, joinAreaAnswer } from "@/lib/areaUnit";
 import logoUrl from "@/assets/kl2j-logo.jpg";
 
 type ChecklistAnswer = { checked?: boolean; answer?: string; hasDocument?: boolean; documents?: UploadedDocument[] };
@@ -435,6 +436,36 @@ export function ChatWidget() {
                               value={a.answer ?? ""}
                               onChange={(v) => updateChecklistAnswer(item.id, { answer: v })}
                             />
+                          </div>
+                        );
+                      }
+                      if (item.type === "number" && item.unit === "sqm") {
+                        const { value: areaValue, unit: areaUnit } = splitAreaAnswer(a.answer);
+                        return (
+                          <div key={item.id}>
+                            <span className="mb-1 block text-xs text-muted-foreground">{item.label}</span>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                value={areaValue}
+                                onChange={(e) =>
+                                  updateChecklistAnswer(item.id, { answer: joinAreaAnswer(e.target.value, areaUnit) })
+                                }
+                                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                              />
+                              <select
+                                value={areaUnit}
+                                onChange={(e) =>
+                                  updateChecklistAnswer(item.id, {
+                                    answer: joinAreaAnswer(areaValue, e.target.value as "sqm" | "hectares"),
+                                  })
+                                }
+                                className="h-9 shrink-0 rounded-md border border-border bg-background px-2 text-xs"
+                              >
+                                <option value="sqm">sqm</option>
+                                <option value="hectares">hectares</option>
+                              </select>
+                            </div>
                           </div>
                         );
                       }

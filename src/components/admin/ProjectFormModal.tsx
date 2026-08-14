@@ -10,6 +10,7 @@ import { FileDrop } from "@/components/admin/FileDrop";
 import { ConfidentialFileDrop } from "@/components/admin/ConfidentialFileDrop";
 import { LocationAutosuggest } from "@/components/LocationAutosuggest";
 import { useConfirm } from "@/components/ConfirmDialogProvider";
+import { AttachmentLightbox, kindFromContentType, type LightboxItem } from "@/components/AttachmentLightbox";
 
 export type ProjectAttachment = {
   url: string;
@@ -17,18 +18,20 @@ export type ProjectAttachment = {
   type: "image" | "video" | "document";
   name: string;
   description?: string;
+  isExternalLink?: boolean;
 };
 export type ConfidentialAttachment = {
   path: string;
   type: "image" | "video" | "document";
   name: string;
   description?: string;
+  isExternalLink?: boolean;
 };
 
 export type InquiryChecklistItem = {
   type: string;
   answer?: string;
-  documents?: { path: string; name: string; contentType: string }[];
+  documents?: { path: string; name: string; contentType: string; isExternalLink?: boolean }[];
 };
 
 export type DefaultInquiry = {
@@ -49,7 +52,7 @@ function defaultLocationFromInquiry(checklistResponses: InquiryChecklistItem[] |
 
 export function inquiryDocumentsFrom(
   checklistResponses: InquiryChecklistItem[] | undefined,
-): { path: string; name: string; contentType: string }[] {
+): { path: string; name: string; contentType: string; isExternalLink?: boolean }[] {
   return checklistResponses?.filter((c) => c.type === "document").flatMap((c) => c.documents ?? []) ?? [];
 }
 
@@ -93,13 +96,13 @@ export function attachmentTypeFor(contentType: string): ProjectAttachment["type"
 
 function AttachmentRow({
   attachment,
-  href,
+  onOpen,
   variant,
   onDescriptionChange,
   onRemove,
 }: {
   attachment: { path: string; name: string; type: ProjectAttachment["type"]; description?: string };
-  href?: string;
+  onOpen?: () => void;
   variant: "public" | "confidential";
   onDescriptionChange: (description: string) => void;
   onRemove: () => void;
@@ -111,16 +114,15 @@ function AttachmentRow({
       }`}
     >
       <AttachmentIcon type={attachment.type} />
-      {href ? (
-        <a
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
+      {onOpen ? (
+        <button
+          type="button"
+          onClick={onOpen}
           title={attachment.name}
-          className="w-32 shrink-0 truncate text-xs font-medium hover:underline"
+          className="w-32 shrink-0 truncate text-left text-xs font-medium hover:underline"
         >
           {attachment.name}
-        </a>
+        </button>
       ) : (
         <span className="w-32 shrink-0 truncate text-xs font-medium" title={attachment.name}>
           {attachment.name}
@@ -259,24 +261,50 @@ export function ProjectFormModal({
     defaultInquiry?.checklist_responses ?? inquiries?.find((i) => i.id === form.inquiry_id)?.checklist_responses;
   const inquiryDocuments = inquiryDocumentsFrom(selectedInquiryChecklist);
   const doGetConfidentialUrl = useServerFn(getConfidentialFileUrl);
+  const [lightbox, setLightbox] = useState<{ items: LightboxItem[]; index: number } | null>(null);
 
-  async function openInquiryDocument(doc: { path: string; name: string }) {
-    try {
-      const { url } = await doGetConfidentialUrl({ data: { path: doc.path } });
-      window.open(url, "_blank", "noopener,noreferrer");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to open file");
-    }
+  function openPublicAttachmentsLightbox(docs: ProjectAttachment[], startIndex: number) {
+    const items: LightboxItem[] = docs.map((d) => ({
+      name: d.name,
+      kind: d.isExternalLink ? "external" : d.type,
+      resolveUrl: () => d.url,
+    }));
+    setLightbox({ items, index: startIndex });
+  }
+
+  function openConfidentialAttachmentsLightbox(
+    docs: { path: string; name: string; type?: ProjectAttachment["type"]; contentType?: string; isExternalLink?: boolean }[],
+    startIndex: number,
+  ) {
+    const items: LightboxItem[] = docs.map((d) => ({
+      name: d.name,
+      kind: d.isExternalLink ? "external" : d.type ?? kindFromContentType(d.contentType ?? "", d.isExternalLink),
+      resolveUrl: () =>
+        d.isExternalLink ? d.path : doGetConfidentialUrl({ data: { path: d.path } }).then((r) => r.url),
+    }));
+    setLightbox({ items, index: startIndex });
   }
 
   const requiredInquiryMissing = !project && !defaultInquiry && !form.inquiry_id;
 
-  function addAttachment(result: { url: string; path: string; contentType: string; name: string }) {
+  function addAttachment(result: {
+    url: string;
+    path?: string;
+    contentType: string;
+    name: string;
+    isExternalLink?: boolean;
+  }) {
     setForm((f) => ({
       ...f,
       attachments: [
         ...f.attachments,
-        { url: result.url, path: result.path, type: attachmentTypeFor(result.contentType), name: result.name },
+        {
+          url: result.url,
+          path: result.isExternalLink ? result.url : (result.path ?? result.url),
+          type: result.isExternalLink ? "document" : attachmentTypeFor(result.contentType),
+          name: result.name,
+          isExternalLink: result.isExternalLink,
+        },
       ],
     }));
   }
@@ -284,6 +312,7 @@ export function ProjectFormModal({
   async function removeAttachment(attachment: ProjectAttachment) {
     if (!(await confirm("Remove this file? This cannot be undone.", { destructive: true }))) return;
     setForm((f) => ({ ...f, attachments: f.attachments.filter((a) => a.path !== attachment.path) }));
+    if (attachment.isExternalLink) return;
     try {
       await doDeleteMedia({ data: { path: attachment.path } });
     } catch (err) {
@@ -291,12 +320,22 @@ export function ProjectFormModal({
     }
   }
 
-  function addConfidentialAttachment(result: { path: string; contentType: string; name: string }) {
+  function addConfidentialAttachment(result: {
+    path: string;
+    contentType: string;
+    name: string;
+    isExternalLink?: boolean;
+  }) {
     setForm((f) => ({
       ...f,
       confidential_attachments: [
         ...f.confidential_attachments,
-        { path: result.path, type: attachmentTypeFor(result.contentType), name: result.name },
+        {
+          path: result.path,
+          type: result.isExternalLink ? "document" : attachmentTypeFor(result.contentType),
+          name: result.name,
+          isExternalLink: result.isExternalLink,
+        },
       ],
     }));
   }
@@ -307,6 +346,7 @@ export function ProjectFormModal({
       ...f,
       confidential_attachments: f.confidential_attachments.filter((a) => a.path !== attachment.path),
     }));
+    if (attachment.isExternalLink) return;
     try {
       await doDeleteConfidential({ data: { path: attachment.path } });
     } catch (err) {
@@ -399,6 +439,7 @@ export function ProjectFormModal({
   }
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4" onClick={onClose}>
       <div
         className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-2xl sm:p-6"
@@ -590,11 +631,11 @@ export function ProjectFormModal({
                   />
                   {form.attachments.length > 0 && (
                     <div className="mt-2 space-y-1.5">
-                      {form.attachments.map((a) => (
+                      {form.attachments.map((a, i) => (
                         <AttachmentRow
                           key={a.path}
                           attachment={a}
-                          href={a.url}
+                          onOpen={() => openPublicAttachmentsLightbox(form.attachments, i)}
                           variant="public"
                           onDescriptionChange={(description) => updateAttachmentDescription(a.path, description)}
                           onRemove={() => removeAttachment(a)}
@@ -611,10 +652,11 @@ export function ProjectFormModal({
                   <ConfidentialFileDrop onUploaded={addConfidentialAttachment} />
                   {form.confidential_attachments.length > 0 && (
                     <div className="mt-2 space-y-1.5">
-                      {form.confidential_attachments.map((a) => (
+                      {form.confidential_attachments.map((a, i) => (
                         <AttachmentRow
                           key={a.path}
                           attachment={a}
+                          onOpen={() => openConfidentialAttachmentsLightbox(form.confidential_attachments, i)}
                           variant="confidential"
                           onDescriptionChange={(description) =>
                             updateConfidentialAttachmentDescription(a.path, description)
@@ -630,11 +672,11 @@ export function ProjectFormModal({
                         From linked inquiry
                       </span>
                       <div className="space-y-1.5">
-                        {inquiryDocuments.map((doc) => (
+                        {inquiryDocuments.map((doc, i) => (
                           <button
                             key={doc.path}
                             type="button"
-                            onClick={() => openInquiryDocument(doc)}
+                            onClick={() => openConfidentialAttachmentsLightbox(inquiryDocuments, i)}
                             className="flex w-full items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 text-left text-sm hover:bg-amber-500/10"
                           >
                             <AttachmentIcon type={attachmentTypeFor(doc.contentType)} />
@@ -672,5 +714,9 @@ export function ProjectFormModal({
         </div>
       </div>
     </div>
+    {lightbox && (
+      <AttachmentLightbox items={lightbox.items} startIndex={lightbox.index} onClose={() => setLightbox(null)} />
+    )}
+    </>
   );
 }

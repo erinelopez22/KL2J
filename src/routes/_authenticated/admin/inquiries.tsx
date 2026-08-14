@@ -12,6 +12,9 @@ import { LocationAutosuggest } from "@/components/LocationAutosuggest";
 import { PublicDocumentUpload, type UploadedDocument } from "@/components/PublicDocumentUpload";
 import { fileToBase64 } from "@/lib/admin/fileToBase64";
 import { useConfirm } from "@/components/ConfirmDialogProvider";
+import { isOversizedFile } from "@/lib/uploadLimits";
+import { OversizeFileLinkPrompt } from "@/components/OversizeFileLinkPrompt";
+import { AttachmentLightbox, kindFromContentType, type LightboxItem } from "@/components/AttachmentLightbox";
 import {
   MessageCircle,
   RefreshCw,
@@ -71,7 +74,7 @@ type ChecklistResponse = {
   checked?: boolean;
   answer?: string;
   hasDocument?: boolean;
-  documents?: { path: string; name: string; contentType: string }[];
+  documents?: { path: string; name: string; contentType: string; isExternalLink?: boolean }[];
 };
 
 type Inquiry = {
@@ -338,7 +341,7 @@ function emailComposeUrl(to: string, subject: string) {
   return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}`;
 }
 
-type CommentAttachment = { path: string; name: string; contentType: string };
+type CommentAttachment = { path: string; name: string; contentType: string; isExternalLink?: boolean };
 type InquiryComment = {
   id: string;
   author_type: "admin" | "inquirer";
@@ -350,21 +353,48 @@ type InquiryComment = {
 
 function AttachButton({ onUploaded }: { onUploaded: (result: CommentAttachment) => void }) {
   const [busy, setBusy] = useState(false);
+  const [oversizeQueue, setOversizeQueue] = useState<File[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const upload = useServerFn(uploadConfidentialMedia);
 
-  async function handleFile(file: File) {
+  async function handleFiles(files: FileList) {
+    const okFiles: File[] = [];
+    const oversized: File[] = [];
+    for (const file of Array.from(files)) {
+      (isOversizedFile(file) ? oversized : okFiles).push(file);
+    }
+    if (oversized.length > 0) setOversizeQueue((q) => [...q, ...oversized]);
+    if (okFiles.length === 0) {
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
     setBusy(true);
     try {
-      const base64 = await fileToBase64(file);
-      const result = await upload({ data: { filename: file.name, contentType: file.type, base64 } });
-      onUploaded({ ...result, name: file.name });
+      for (const file of okFiles) {
+        const base64 = await fileToBase64(file);
+        const result = await upload({ data: { filename: file.name, contentType: file.type, base64 } });
+        onUploaded({ ...result, name: file.name });
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";
     }
+  }
+
+  if (oversizeQueue.length > 0) {
+    return (
+      <OversizeFileLinkPrompt
+        fileName={oversizeQueue[0].name}
+        onCancel={() => setOversizeQueue((q) => q.slice(1))}
+        onSave={(link) => {
+          const file = oversizeQueue[0];
+          onUploaded({ path: link, contentType: file.type, name: file.name, isExternalLink: true });
+          setOversizeQueue((q) => q.slice(1));
+        }}
+      />
+    );
   }
 
   return (
@@ -380,11 +410,11 @@ function AttachButton({ onUploaded }: { onUploaded: (result: CommentAttachment) 
       <input
         ref={inputRef}
         type="file"
+        multiple
         className="hidden"
         accept="image/jpeg,image/png,image/webp,application/pdf,video/mp4,video/webm,video/quicktime"
         onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) handleFile(file);
+          if (e.target.files && e.target.files.length > 0) handleFiles(e.target.files);
         }}
       />
     </>
@@ -457,6 +487,7 @@ function AdminCommentComposer({ inquiryId, onSent }: { inquiryId: string; onSent
 
 function InquiryCommentsTab({ inquiryId }: { inquiryId: string }) {
   const doGetUrl = useServerFn(getConfidentialFileUrl);
+  const [lightbox, setLightbox] = useState<{ items: LightboxItem[]; index: number } | null>(null);
   const {
     data: comments,
     isLoading,
@@ -474,13 +505,14 @@ function InquiryCommentsTab({ inquiryId }: { inquiryId: string }) {
     },
   });
 
-  async function openFile(path: string) {
-    try {
-      const { url } = await doGetUrl({ data: { path } });
-      window.open(url, "_blank", "noopener,noreferrer");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to open file");
-    }
+  function openAttachments(docs: CommentAttachment[], startIndex: number) {
+    const items: LightboxItem[] = docs.map((d) => ({
+      name: d.name,
+      kind: kindFromContentType(d.contentType, d.isExternalLink),
+      resolveUrl: () =>
+        d.isExternalLink ? d.path : doGetUrl({ data: { path: d.path } }).then((r) => r.url),
+    }));
+    setLightbox({ items, index: startIndex });
   }
 
   return (
@@ -515,11 +547,11 @@ function InquiryCommentsTab({ inquiryId }: { inquiryId: string }) {
               {c.message && <p className="whitespace-pre-wrap leading-relaxed">{c.message}</p>}
               {c.attachments?.length > 0 && (
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {c.attachments.map((a) => (
+                  {c.attachments.map((a, i) => (
                     <button
                       key={a.path}
                       type="button"
-                      onClick={() => openFile(a.path)}
+                      onClick={() => openAttachments(c.attachments, i)}
                       className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium ${
                         c.author_type === "admin"
                           ? "bg-primary-foreground/15 hover:bg-primary-foreground/25"
@@ -536,6 +568,9 @@ function InquiryCommentsTab({ inquiryId }: { inquiryId: string }) {
         ))}
       </div>
       <AdminCommentComposer inquiryId={inquiryId} onSent={() => refetch()} />
+      {lightbox && (
+        <AttachmentLightbox items={lightbox.items} startIndex={lightbox.index} onClose={() => setLightbox(null)} />
+      )}
     </div>
   );
 }
@@ -552,16 +587,18 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
   const details = hasDedicatedFields ? inquiry.message : legacy.details;
   const platform = platformLabel(inquiry.channel);
   const doGetConfidentialUrl = useServerFn(getConfidentialFileUrl);
-  const [tab, setTab] = useState<"details" | "comments">("details");
+  const [tab, setTab] = useState<"details" | "comments" | "attachments">("details");
+  const [lightbox, setLightbox] = useState<{ items: LightboxItem[]; index: number } | null>(null);
   const confirm = useConfirm();
 
-  async function viewChecklistDocument(doc: { path: string; name: string }) {
-    try {
-      const { url } = await doGetConfidentialUrl({ data: { path: doc.path } });
-      window.open(url, "_blank", "noopener,noreferrer");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to open file");
-    }
+  function openAttachments(docs: { path: string; name: string; contentType?: string; isExternalLink?: boolean }[], startIndex: number) {
+    const items: LightboxItem[] = docs.map((d) => ({
+      name: d.name,
+      kind: kindFromContentType(d.contentType ?? "", d.isExternalLink),
+      resolveUrl: () =>
+        d.isExternalLink ? d.path : doGetConfidentialUrl({ data: { path: d.path } }).then((r) => r.url),
+    }));
+    setLightbox({ items, index: startIndex });
   }
 
   async function emailInquirer() {
@@ -635,6 +672,17 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
           >
             Comments
           </button>
+          <button
+            type="button"
+            onClick={() => setTab("attachments")}
+            className={`border-b-2 px-3 py-2 text-sm font-medium ${
+              tab === "attachments"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Attachments
+          </button>
         </div>
 
         {tab === "comments" && <InquiryCommentsTab inquiryId={inquiry.id} />}
@@ -690,6 +738,20 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
           )}
         </div>
 
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground/60">
+          <span className="flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            {new Date(inquiry.created_at).toLocaleString()}
+          </span>
+        </div>
+
+        {!inquiry.email_sent && (
+          <div className="mt-2 flex items-center gap-1.5 rounded-md bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive">
+            <MailWarning className="h-3.5 w-3.5" />
+            {inquiry.email_error ?? "Notification email failed to send"}
+          </div>
+        )}
+
         {inquiry.checklist_responses?.length > 0 && (
           <div className="mt-3 divide-y divide-border overflow-hidden rounded-lg border border-border text-sm">
             <div className="flex items-center gap-1.5 bg-muted/40 px-3 py-2">
@@ -713,18 +775,9 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
                 )}
                 {c.type === "document" &&
                   (c.documents && c.documents.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {c.documents.map((doc) => (
-                        <button
-                          key={doc.path}
-                          type="button"
-                          onClick={() => viewChecklistDocument(doc)}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-primary hover:bg-muted"
-                        >
-                          <FileText className="h-3.5 w-3.5" /> {doc.name}
-                        </button>
-                      ))}
-                    </div>
+                    <span className="font-medium text-emerald-700">
+                      Yes — {c.documents.length} file{c.documents.length === 1 ? "" : "s"} (see Attachments)
+                    </span>
                   ) : c.hasDocument ? (
                     <span className="font-medium text-emerald-700">Yes (not uploaded)</span>
                   ) : (
@@ -740,46 +793,70 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
           </div>
         )}
 
-        {inquiry.attachments?.length > 0 && (
-          <div className="mt-3">
-            <span className="text-xs font-semibold uppercase text-muted-foreground/70">
-              All files (checklist + comments)
-            </span>
+        <div className="mt-3 border-t border-border pt-3">
+          <LinkedProjectSection inquiry={inquiry} />
+        </div>
+        </>
+        )}
+
+        {tab === "attachments" && (
+        <>
+        {inquiry.checklist_responses?.filter((c) => c.type === "document" && c.documents && c.documents.length > 0)
+          .length > 0 && (
+          <div className="mt-3 divide-y divide-border overflow-hidden rounded-lg border border-border text-sm">
+            <div className="flex items-center gap-1.5 bg-muted/40 px-3 py-2">
+              <ListChecks className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs font-semibold uppercase text-muted-foreground">Supporting documents</span>
+            </div>
+            {inquiry.checklist_responses
+              .filter((c) => c.type === "document" && c.documents && c.documents.length > 0)
+              .map((c) => (
+                <div key={c.id} className="grid grid-cols-[45%_1fr] items-start gap-3 px-3 py-2.5">
+                  <span className="text-xs font-medium text-muted-foreground">{c.label}</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {c.documents!.map((doc, i) => (
+                      <button
+                        key={doc.path}
+                        type="button"
+                        onClick={() => openAttachments(c.documents!, i)}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-primary hover:bg-muted"
+                      >
+                        <FileText className="h-3.5 w-3.5" /> {doc.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
+
+        <div className="mt-3">
+          <span className="text-xs font-semibold uppercase text-muted-foreground/70">
+            All files (checklist + comments)
+          </span>
+          {inquiry.attachments?.length > 0 ? (
             <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {inquiry.attachments.map((a) => (
+              {inquiry.attachments.map((a, i) => (
                 <button
                   key={a.path}
                   type="button"
-                  onClick={() => viewChecklistDocument(a)}
+                  onClick={() => openAttachments(inquiry.attachments, i)}
                   className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-primary hover:bg-muted"
                 >
                   <FileText className="h-3.5 w-3.5" /> {a.name}
                 </button>
               ))}
             </div>
-          </div>
-        )}
-
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground/60">
-          <span className="flex items-center gap-1">
-            <Clock className="h-3 w-3" />
-            {new Date(inquiry.created_at).toLocaleString()}
-          </span>
-        </div>
-
-        {!inquiry.email_sent && (
-          <div className="mt-2 flex items-center gap-1.5 rounded-md bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive">
-            <MailWarning className="h-3.5 w-3.5" />
-            {inquiry.email_error ?? "Notification email failed to send"}
-          </div>
-        )}
-
-        <div className="mt-3 border-t border-border pt-3">
-          <LinkedProjectSection inquiry={inquiry} />
+          ) : (
+            <p className="mt-1.5 text-sm text-muted-foreground">No files shared yet.</p>
+          )}
         </div>
         </>
         )}
       </div>
+      {lightbox && (
+        <AttachmentLightbox items={lightbox.items} startIndex={lightbox.index} onClose={() => setLightbox(null)} />
+      )}
     </div>
   );
 }
@@ -1017,6 +1094,17 @@ function NewInquiryModal({ onClose, onCreated }: { onClose: () => void; onCreate
   );
 }
 
+const INQUIRY_SORT_OPTIONS = {
+  newest: { label: "Newest first", cmp: (a: Inquiry, b: Inquiry) => b.created_at.localeCompare(a.created_at) },
+  oldest: { label: "Oldest first", cmp: (a: Inquiry, b: Inquiry) => a.created_at.localeCompare(b.created_at) },
+  name_asc: { label: "Name A-Z", cmp: (a: Inquiry, b: Inquiry) => a.name.localeCompare(b.name) },
+  service_asc: {
+    label: "Service A-Z",
+    cmp: (a: Inquiry, b: Inquiry) => (a.service ?? "").localeCompare(b.service ?? ""),
+  },
+} as const;
+type InquirySortKey = keyof typeof INQUIRY_SORT_OPTIONS;
+
 function AdminInquiries() {
   const [items, setItems] = useState<Inquiry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1026,6 +1114,7 @@ function AdminInquiries() {
   const [showCreate, setShowCreate] = useState(false);
   const [search, setSearch] = useState("");
   const [serviceFilter, setServiceFilter] = useState("");
+  const [sortKey, setSortKey] = useState<InquirySortKey>("newest");
   const doUpdateStatus = useServerFn(updateInquiryStatus);
 
   async function load() {
@@ -1053,13 +1142,15 @@ function AdminInquiries() {
   const columns = showHidden ? ALL_STATUSES : STATUS_COLUMNS;
   const serviceOptions = Array.from(new Set(items.map((i) => i.service).filter((s): s is string => Boolean(s)))).sort();
   const searchLower = search.trim().toLowerCase();
-  const filteredItems = items.filter((i) => {
-    if (serviceFilter && i.service !== serviceFilter) return false;
-    if (!searchLower) return true;
-    return [i.name, i.contact, i.email, i.phone, i.service, i.message, i.inquiry_code]
-      .filter(Boolean)
-      .some((field) => field!.toLowerCase().includes(searchLower));
-  });
+  const filteredItems = items
+    .filter((i) => {
+      if (serviceFilter && i.service !== serviceFilter) return false;
+      if (!searchLower) return true;
+      return [i.name, i.contact, i.email, i.phone, i.service, i.message, i.inquiry_code]
+        .filter(Boolean)
+        .some((field) => field!.toLowerCase().includes(searchLower));
+    })
+    .sort(INQUIRY_SORT_OPTIONS[sortKey].cmp);
   const newCount = filteredItems.filter((i) => i.status === "New").length;
   const emailFailedCount = filteredItems.filter((i) => !i.email_sent).length;
   const openInquiry = openInquiryId ? (items.find((i) => i.id === openInquiryId) ?? null) : null;
@@ -1163,6 +1254,17 @@ function AdminInquiries() {
           {serviceOptions.map((s) => (
             <option key={s} value={s}>
               {s}
+            </option>
+          ))}
+        </select>
+        <select
+          value={sortKey}
+          onChange={(e) => setSortKey(e.target.value as InquirySortKey)}
+          className="h-10 rounded-md border border-border bg-card px-3 text-sm"
+        >
+          {Object.entries(INQUIRY_SORT_OPTIONS).map(([key, opt]) => (
+            <option key={key} value={key}>
+              Sort: {opt.label}
             </option>
           ))}
         </select>

@@ -8,6 +8,7 @@ const AttachmentSchema = z.object({
   type: z.enum(["image", "video", "document"]),
   name: z.string().min(1).max(200),
   description: z.string().max(300).optional(),
+  isExternalLink: z.boolean().optional(),
 });
 
 const ConfidentialAttachmentSchema = z.object({
@@ -15,6 +16,7 @@ const ConfidentialAttachmentSchema = z.object({
   type: z.enum(["image", "video", "document"]),
   name: z.string().min(1).max(200),
   description: z.string().max(300).optional(),
+  isExternalLink: z.boolean().optional(),
 });
 
 const ProjectSchema = z.object({

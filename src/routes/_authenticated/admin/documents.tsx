@@ -28,7 +28,7 @@ function AdminDocuments() {
   const doAdd = useServerFn(addDocument);
   const doDelete = useServerFn(deleteDocument);
   const confirm = useConfirm();
-  const [pending, setPending] = useState<{ url: string; path: string } | null>(null);
+  const [pending, setPending] = useState<{ url: string; path?: string } | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<"license" | "registration" | "other">("other");
@@ -97,6 +97,7 @@ function AdminDocuments() {
           folder="documents"
           accept="image/jpeg,image/png,image/webp,application/pdf"
           label={pending ? "File ready — fill details below" : "Upload a document or image"}
+          multiple={false}
           onUploaded={setPending}
         />
         <div className="mt-3 grid gap-3">

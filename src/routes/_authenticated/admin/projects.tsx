@@ -16,6 +16,7 @@ import {
   type ProjectRecord,
 } from "@/components/admin/ProjectFormModal";
 import { useConfirm } from "@/components/ConfirmDialogProvider";
+import { AttachmentLightbox, kindFromContentType, type LightboxItem } from "@/components/AttachmentLightbox";
 
 export const Route = createFileRoute("/_authenticated/admin/projects")({
   component: AdminProjects,
@@ -28,7 +29,7 @@ type LinkedInquiryChecklistResponse = {
   checked?: boolean;
   answer?: string;
   hasDocument?: boolean;
-  documents?: { path: string; name: string; contentType: string }[];
+  documents?: { path: string; name: string; contentType: string; isExternalLink?: boolean }[];
 };
 
 type LinkedInquiry = {
@@ -170,6 +171,33 @@ function AdminProjects() {
     return url;
   }
 
+  const [lightbox, setLightbox] = useState<{ items: LightboxItem[]; index: number } | null>(null);
+
+  function openPublicAttachments(
+    docs: { url: string; name: string; type: ProjectAttachment["type"]; isExternalLink?: boolean }[],
+    startIndex: number,
+  ) {
+    const items: LightboxItem[] = docs.map((d) => ({
+      name: d.name,
+      kind: d.isExternalLink ? "external" : d.type,
+      resolveUrl: () => d.url,
+    }));
+    setLightbox({ items, index: startIndex });
+  }
+
+  function openConfidentialAttachments(
+    docs: { path: string; name: string; contentType?: string; type?: ProjectAttachment["type"]; isExternalLink?: boolean }[],
+    startIndex: number,
+  ) {
+    const items: LightboxItem[] = docs.map((d) => ({
+      name: d.name,
+      kind: d.isExternalLink ? "external" : d.type ?? kindFromContentType(d.contentType ?? "", d.isExternalLink),
+      resolveUrl: () =>
+        d.isExternalLink ? d.path : doGetConfidentialUrl({ data: { path: d.path } }).then((r) => r.url),
+    }));
+    setLightbox({ items, index: startIndex });
+  }
+
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ["admin-projects"] });
     queryClient.invalidateQueries({ queryKey: ["public-projects"] });
@@ -179,15 +207,6 @@ function AdminProjects() {
     setViewingId(p.id);
     setViewMediaTab("public");
     setInquiryAccordionOpen(false);
-  }
-
-  async function openConfidentialFile(attachment: { path: string }) {
-    try {
-      const { url } = await doGetConfidentialUrl({ data: { path: attachment.path } });
-      window.open(url, "_blank", "noopener,noreferrer");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to open file");
-    }
   }
 
   async function remove(id: string) {
@@ -344,13 +363,12 @@ function AdminProjects() {
                 <div className="pt-3">
                   {viewingProject.attachments?.length > 0 ? (
                     <div className="space-y-1.5">
-                      {viewingProject.attachments.map((a) => (
-                        <a
+                      {viewingProject.attachments.map((a, i) => (
+                        <button
                           key={a.path}
-                          href={a.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2 rounded-lg border border-border bg-background p-2 text-sm hover:bg-muted"
+                          type="button"
+                          onClick={() => openPublicAttachments(viewingProject.attachments, i)}
+                          className="flex w-full items-center gap-2 rounded-lg border border-border bg-background p-2 text-left text-sm hover:bg-muted"
                         >
                           <MediaThumb type={a.type} url={a.url} />
                           <span className="min-w-0 flex-1">
@@ -359,7 +377,7 @@ function AdminProjects() {
                               <span className="block truncate text-xs text-muted-foreground">{a.description}</span>
                             )}
                           </span>
-                        </a>
+                        </button>
                       ))}
                     </div>
                   ) : (
@@ -372,11 +390,11 @@ function AdminProjects() {
                     <div className="space-y-4">
                       {viewingProject.confidential_attachments?.length > 0 && (
                         <div className="space-y-1.5">
-                          {viewingProject.confidential_attachments.map((a) => (
+                          {viewingProject.confidential_attachments.map((a, i) => (
                             <button
                               key={a.path}
                               type="button"
-                              onClick={() => openConfidentialFile(a)}
+                              onClick={() => openConfidentialAttachments(viewingProject.confidential_attachments, i)}
                               className="flex w-full items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 text-left text-sm hover:bg-amber-500/10"
                             >
                               <ConfidentialThumb path={a.path} type={a.type} getUrl={fetchConfidentialUrl} />
@@ -398,13 +416,13 @@ function AdminProjects() {
                             From linked inquiry
                           </span>
                           <div className="space-y-1.5">
-                            {inquiryDocuments.map((doc) => {
+                            {inquiryDocuments.map((doc, i) => {
                               const type = attachmentTypeFor(doc.contentType);
                               return (
                                 <button
                                   key={doc.path}
                                   type="button"
-                                  onClick={() => openConfidentialFile(doc)}
+                                  onClick={() => openConfidentialAttachments(inquiryDocuments, i)}
                                   className="flex w-full items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 text-left text-sm hover:bg-amber-500/10"
                                 >
                                   <ConfidentialThumb path={doc.path} type={type} getUrl={fetchConfidentialUrl} />
@@ -466,11 +484,11 @@ function AdminProjects() {
                             ) : c.type === "document" ? (
                               c.documents && c.documents.length > 0 ? (
                                 <div className="flex flex-wrap gap-1.5">
-                                  {c.documents.map((doc) => (
+                                  {c.documents.map((doc, i) => (
                                     <button
                                       key={doc.path}
                                       type="button"
-                                      onClick={() => openConfidentialFile(doc)}
+                                      onClick={() => openConfidentialAttachments(c.documents!, i)}
                                       className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-primary hover:bg-muted"
                                     >
                                       <FileText className="h-3.5 w-3.5" /> {doc.name}
@@ -539,6 +557,10 @@ function AdminProjects() {
             refresh();
           }}
         />
+      )}
+
+      {lightbox && (
+        <AttachmentLightbox items={lightbox.items} startIndex={lightbox.index} onClose={() => setLightbox(null)} />
       )}
 
       {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}

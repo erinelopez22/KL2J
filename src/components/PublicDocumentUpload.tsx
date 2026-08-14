@@ -1,11 +1,13 @@
 import { useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Upload, FileText, X } from "lucide-react";
+import { Upload, FileText, X, LinkIcon } from "lucide-react";
 import { uploadInquiryDocument } from "@/lib/public-media.functions";
 import { fileToBase64 } from "@/lib/admin/fileToBase64";
+import { isOversizedFile } from "@/lib/uploadLimits";
+import { OversizeFileLinkPrompt } from "@/components/OversizeFileLinkPrompt";
 
-export type UploadedDocument = { path: string; name: string; contentType: string };
+export type UploadedDocument = { path: string; name: string; contentType: string; isExternalLink?: boolean };
 export type DocumentAnswer = { hasDocument: boolean; documents: UploadedDocument[] };
 
 function DocumentToggle({
@@ -49,14 +51,25 @@ export function PublicDocumentUpload({
   onChange: (next: DocumentAnswer) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [oversizeQueue, setOversizeQueue] = useState<File[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const upload = useServerFn(uploadInquiryDocument);
 
   async function handleFiles(files: FileList) {
+    const okFiles: File[] = [];
+    const oversized: File[] = [];
+    for (const file of Array.from(files)) {
+      (isOversizedFile(file) ? oversized : okFiles).push(file);
+    }
+    if (oversized.length > 0) setOversizeQueue((q) => [...q, ...oversized]);
+    if (okFiles.length === 0) {
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
     setBusy(true);
     try {
       const uploaded: UploadedDocument[] = [];
-      for (const file of Array.from(files)) {
+      for (const file of okFiles) {
         const base64 = await fileToBase64(file);
         const result = await upload({ data: { filename: file.name, contentType: file.type, base64 } });
         uploaded.push({ path: result.path, name: file.name, contentType: result.contentType });
@@ -68,6 +81,16 @@ export function PublicDocumentUpload({
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";
     }
+  }
+
+  function saveOversizeLink(link: string) {
+    const file = oversizeQueue[0];
+    if (!file) return;
+    onChange({
+      ...value,
+      documents: [...value.documents, { path: link, name: file.name, contentType: file.type, isExternalLink: true }],
+    });
+    setOversizeQueue((q) => q.slice(1));
   }
 
   function removeAt(index: number) {
@@ -83,7 +106,11 @@ export function PublicDocumentUpload({
             key={doc.path}
             className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm"
           >
-            <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+            {doc.isExternalLink ? (
+              <LinkIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+            ) : (
+              <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+            )}
             <span className="min-w-0 flex-1 truncate">{doc.name}</span>
             <button
               type="button"
@@ -95,6 +122,13 @@ export function PublicDocumentUpload({
             </button>
           </div>
         ))}
+        {oversizeQueue.length > 0 && (
+          <OversizeFileLinkPrompt
+            fileName={oversizeQueue[0].name}
+            onCancel={() => setOversizeQueue((q) => q.slice(1))}
+            onSave={saveOversizeLink}
+          />
+        )}
         <div
           onClick={() => !busy && inputRef.current?.click()}
           className={`flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-sm text-muted-foreground hover:border-primary/50 ${busy ? "pointer-events-none opacity-60" : ""}`}

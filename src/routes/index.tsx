@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { submitInquiry } from "@/lib/inquiries.functions";
@@ -40,11 +40,14 @@ import {
   usePublicPartnerCompanies,
   usePublicReviews,
   type PublicReview,
+  type PublicAttachment,
 } from "@/lib/public-content";
 import { LocationAutosuggest } from "@/components/LocationAutosuggest";
 import { PublicDocumentUpload, type UploadedDocument } from "@/components/PublicDocumentUpload";
 import { getServiceIcon } from "@/lib/admin/iconMap";
+import { splitAreaAnswer, joinAreaAnswer } from "@/lib/areaUnit";
 import { WriteReviewModal } from "@/components/WriteReviewModal";
+import { AttachmentLightbox, type LightboxItem } from "@/components/AttachmentLightbox";
 
 const FACEBOOK_PAGE_URL = "https://www.facebook.com/profile.php?id=61581147040190";
 const FACEBOOK_DOCS_URL =
@@ -57,6 +60,9 @@ const heroImage = bannerUrl;
 
 export const Route = createFileRoute("/")({
   ssr: false,
+  validateSearch: (search: Record<string, unknown>): { project?: string } => ({
+    project: typeof search.project === "string" ? search.project : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "KL2J Land Surveying and Engineering Services" },
@@ -419,7 +425,9 @@ function WhyUs() {
     <section id="why" className="max-w-6xl mx-auto px-4 py-14 md:py-16">
       <div className="grid lg:grid-cols-2 gap-12 items-center">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-wider text-primary">Why choose us</p>
+          <p className="text-sm font-semibold uppercase tracking-wider text-primary">
+            Why choose us
+          </p>
           <h2 className="mt-2 text-3xl md:text-4xl font-bold tracking-tight">
             Accuracy you can build on
           </h2>
@@ -457,12 +465,17 @@ function CTA() {
             </p>
             <div className="mt-8 space-y-3 text-sm">
               <a href="tel:+639296410776" className="flex items-center gap-3 hover:underline">
-                <Phone className="h-4 w-4" /> 0929 641 0776 <span className="text-primary-foreground/70">(Smart)</span>
+                <Phone className="h-4 w-4" /> 0929 641 0776{" "}
+                <span className="text-primary-foreground/70">(Smart)</span>
               </a>
               <a href="tel:+639954608248" className="flex items-center gap-3 hover:underline">
-                <Phone className="h-4 w-4" /> 0995 460 8248 <span className="text-primary-foreground/70">(Globe)</span>
+                <Phone className="h-4 w-4" /> 0995 460 8248{" "}
+                <span className="text-primary-foreground/70">(Globe)</span>
               </a>
-              <a href="mailto:kl2j.engineering@gmail.com" className="flex items-center gap-3 hover:underline">
+              <a
+                href="mailto:kl2j.engineering@gmail.com"
+                className="flex items-center gap-3 hover:underline"
+              >
                 <Mail className="h-4 w-4" /> kl2j.engineering@gmail.com
               </a>
               <div className="flex items-center gap-3">
@@ -493,7 +506,12 @@ function CTA() {
   );
 }
 
-type ChecklistAnswer = { checked?: boolean; answer?: string; hasDocument?: boolean; documents?: UploadedDocument[] };
+type ChecklistAnswer = {
+  checked?: boolean;
+  answer?: string;
+  hasDocument?: boolean;
+  documents?: UploadedDocument[];
+};
 
 function ContactForm() {
   const [sent, setSent] = useState(false);
@@ -564,7 +582,9 @@ function ContactForm() {
       setSent(true);
     } catch (err) {
       console.error(err);
-      toast.error("Something went wrong sending your request. Please try again or call us directly.");
+      toast.error(
+        "Something went wrong sending your request. Please try again or call us directly.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -584,7 +604,9 @@ function ContactForm() {
           </p>
           {inquiryCode && (
             <div className="mt-5 mx-auto max-w-xs rounded-lg bg-secondary/40 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Your inquiry code</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Your inquiry code
+              </p>
               <p className="mt-1 text-2xl font-bold tracking-wide text-primary">{inquiryCode}</p>
               <button
                 type="button"
@@ -651,7 +673,11 @@ function ContactForm() {
               </Field>
             </div>
             <Field label="Service needed">
-              <select className="input" value={service} onChange={(e) => chooseService(e.target.value)}>
+              <select
+                className="input"
+                value={service}
+                onChange={(e) => chooseService(e.target.value)}
+              >
                 <option value="" disabled>
                   Select a service
                 </option>
@@ -686,7 +712,10 @@ function ContactForm() {
                         <PublicDocumentUpload
                           key={item.id}
                           label={item.label}
-                          value={{ hasDocument: Boolean(a.hasDocument), documents: a.documents ?? [] }}
+                          value={{
+                            hasDocument: Boolean(a.hasDocument),
+                            documents: a.documents ?? [],
+                          }}
                           onChange={(next) => updateChecklistAnswer(item.id, next)}
                         />
                       );
@@ -694,7 +723,9 @@ function ContactForm() {
                     if (item.type === "location") {
                       return (
                         <div key={item.id}>
-                          <span className="mb-1 block text-xs text-muted-foreground">{item.label}</span>
+                          <span className="mb-1 block text-xs text-muted-foreground">
+                            {item.label}
+                          </span>
                           <LocationAutosuggest
                             value={a.answer ?? ""}
                             onChange={(v) => updateChecklistAnswer(item.id, { answer: v })}
@@ -702,17 +733,62 @@ function ContactForm() {
                         </div>
                       );
                     }
+                    if (item.type === "number" && item.unit === "sqm") {
+                      const { value: areaValue, unit: areaUnit } = splitAreaAnswer(a.answer);
+                      return (
+                        <div key={item.id}>
+                          <span className="mb-1 block text-xs text-muted-foreground">
+                            {item.label}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              className="input"
+                              value={areaValue}
+                              onChange={(e) =>
+                                updateChecklistAnswer(item.id, {
+                                  answer: joinAreaAnswer(e.target.value, areaUnit),
+                                })
+                              }
+                            />
+                            <select
+                              value={areaUnit}
+                              onChange={(e) =>
+                                updateChecklistAnswer(item.id, {
+                                  answer: joinAreaAnswer(
+                                    areaValue,
+                                    e.target.value as "sqm" | "hectares",
+                                  ),
+                                })
+                              }
+                              className="h-10 shrink-0 rounded-md border border-input px-2 text-sm"
+                            >
+                              <option value="sqm">sqm</option>
+                              <option value="hectares">hectares</option>
+                            </select>
+                          </div>
+                        </div>
+                      );
+                    }
                     return (
                       <div key={item.id}>
-                        <span className="mb-1 block text-xs text-muted-foreground">{item.label}</span>
+                        <span className="mb-1 block text-xs text-muted-foreground">
+                          {item.label}
+                        </span>
                         <div className="flex items-center gap-2">
                           <input
                             type={item.type === "number" ? "number" : "text"}
                             className="input"
                             value={a.answer ?? ""}
-                            onChange={(e) => updateChecklistAnswer(item.id, { answer: e.target.value })}
+                            onChange={(e) =>
+                              updateChecklistAnswer(item.id, { answer: e.target.value })
+                            }
                           />
-                          {item.unit && <span className="shrink-0 text-sm text-muted-foreground">{item.unit}</span>}
+                          {item.unit && (
+                            <span className="shrink-0 text-sm text-muted-foreground">
+                              {item.unit}
+                            </span>
+                          )}
                         </div>
                       </div>
                     );
@@ -768,10 +844,9 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-const galleryModules = import.meta.glob<{ default: string }>(
-  "@/assets/gallery/*.jpg",
-  { eager: true },
-);
+const galleryModules = import.meta.glob<{ default: string }>("@/assets/gallery/*.jpg", {
+  eager: true,
+});
 const FALLBACK_GALLERY_PHOTOS = Object.entries(galleryModules)
   .sort(([a], [b]) => a.localeCompare(b))
   .map(([path, mod]) => ({
@@ -830,7 +905,12 @@ function Credentials() {
           img: d.url,
           title: d.title,
           description: d.description ?? "",
-          badge: d.category === "license" ? "License" : d.category === "registration" ? "Registered" : "Document",
+          badge:
+            d.category === "license"
+              ? "License"
+              : d.category === "registration"
+                ? "Registered"
+                : "Document",
         }))
       : FALLBACK_CREDENTIALS;
   return (
@@ -893,17 +973,40 @@ function ProjectDateRange({ p }: { p: { start_date: string | null; end_date: str
 
 function Projects() {
   const { data } = usePublicProjects();
+  const search = Route.useSearch();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [lightbox, setLightbox] = useState<{ items: LightboxItem[]; index: number } | null>(null);
+  const deepLinkOpened = useRef(false);
+
+  useEffect(() => {
+    if (deepLinkOpened.current || !search.project || !data) return;
+    if (data.some((p) => p.id === search.project)) {
+      setSelectedId(search.project);
+      deepLinkOpened.current = true;
+    }
+  }, [search.project, data]);
+
   if (!data || data.length === 0) return null;
 
   const selected = data.find((p) => p.id === selectedId) ?? null;
+
+  function openAttachments(docs: PublicAttachment[], startIndex: number) {
+    const items: LightboxItem[] = docs.map((d) => ({
+      name: d.name,
+      kind: d.isExternalLink ? "external" : d.type,
+      resolveUrl: () => d.url,
+    }));
+    setLightbox({ items, index: startIndex });
+  }
 
   return (
     <section id="projects" className="max-w-6xl mx-auto px-4 py-14 md:py-16">
       <div className="max-w-2xl">
         <p className="text-sm font-semibold uppercase tracking-wider text-primary">Portfolio</p>
         <h2 className="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Completed projects</h2>
-        <p className="mt-3 text-muted-foreground">A sample of surveys and titling work we've delivered.</p>
+        <p className="mt-3 text-muted-foreground">
+          A sample of surveys and titling work we've delivered.
+        </p>
       </div>
       <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {data.map((p) => (
@@ -925,16 +1028,22 @@ function Projects() {
             )}
             <div className="p-5">
               <h3 className="font-semibold text-lg">{p.title}</h3>
-              {p.location && <div className="mt-0.5 text-sm text-muted-foreground">{p.location}</div>}
+              {p.location && (
+                <div className="mt-0.5 text-sm text-muted-foreground">{p.location}</div>
+              )}
               <div className="mt-1 text-xs font-medium uppercase tracking-wide text-primary">
                 {p.service}
                 <ProjectDateRange p={p} />
               </div>
               {p.personnel?.length > 0 && (
-                <div className="mt-1 text-xs text-muted-foreground">Team: {p.personnel.join(", ")}</div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  Team: {p.personnel.join(", ")}
+                </div>
               )}
               {p.description && (
-                <p className="mt-2 line-clamp-2 text-sm text-muted-foreground leading-relaxed">{p.description}</p>
+                <p className="mt-2 line-clamp-2 text-sm text-muted-foreground leading-relaxed">
+                  {p.description}
+                </p>
               )}
             </div>
           </button>
@@ -968,13 +1077,17 @@ function Projects() {
                   <X className="h-5 w-5" />
                 </button>
               </div>
-              {selected.location && <div className="text-sm text-muted-foreground">{selected.location}</div>}
+              {selected.location && (
+                <div className="text-sm text-muted-foreground">{selected.location}</div>
+              )}
               <div className="mt-1 text-xs font-medium uppercase tracking-wide text-primary">
                 {selected.service}
                 <ProjectDateRange p={selected} />
               </div>
               {selected.personnel?.length > 0 && (
-                <div className="mt-2 text-sm text-muted-foreground">Team: {selected.personnel.join(", ")}</div>
+                <div className="mt-2 text-sm text-muted-foreground">
+                  Team: {selected.personnel.join(", ")}
+                </div>
               )}
               {selected.description && (
                 <p className="mt-4 whitespace-pre-wrap text-sm text-muted-foreground leading-relaxed">
@@ -983,32 +1096,50 @@ function Projects() {
               )}
               {selected.attachments?.length > 0 && (
                 <div className="mt-5">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Files</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Files
+                  </p>
                   <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                    {selected.attachments.map((a) =>
+                    {selected.attachments.map((a, i) =>
                       a.type === "image" ? (
-                        <a
+                        <button
                           key={a.path}
-                          href={a.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                          type="button"
+                          onClick={() => openAttachments(selected.attachments, i)}
                           className="aspect-square overflow-hidden rounded-lg border border-border bg-muted"
                         >
                           <img src={a.url} alt={a.name} className="h-full w-full object-cover" />
-                        </a>
+                        </button>
                       ) : a.type === "video" ? (
-                        <video key={a.path} src={a.url} controls className="col-span-2 rounded-lg sm:col-span-3" />
-                      ) : (
-                        <a
+                        <button
                           key={a.path}
-                          href={a.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                          type="button"
+                          onClick={() => openAttachments(selected.attachments, i)}
+                          className="group relative col-span-2 aspect-video overflow-hidden rounded-lg border border-border bg-muted sm:col-span-3"
+                        >
+                          <video
+                            src={a.url}
+                            muted
+                            playsInline
+                            preload="metadata"
+                            className="h-full w-full object-cover"
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center bg-slate-950/25 transition group-hover:bg-slate-950/40">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90">
+                              <Play className="h-4 w-4 fill-slate-900 text-slate-900" />
+                            </div>
+                          </div>
+                        </button>
+                      ) : (
+                        <button
+                          key={a.path}
+                          type="button"
+                          onClick={() => openAttachments(selected.attachments, i)}
                           className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm hover:bg-muted"
                         >
                           <FileText className="h-4 w-4 shrink-0 text-primary" />
                           <span className="truncate">{a.name}</span>
-                        </a>
+                        </button>
                       ),
                     )}
                   </div>
@@ -1017,6 +1148,13 @@ function Projects() {
             </div>
           </div>
         </div>
+      )}
+      {lightbox && (
+        <AttachmentLightbox
+          items={lightbox.items}
+          startIndex={lightbox.index}
+          onClose={() => setLightbox(null)}
+        />
       )}
     </section>
   );
@@ -1045,13 +1183,17 @@ function ReviewCard({ review }: { review: PublicReview }) {
         </div>
         <div className="min-w-0">
           <div className="truncate font-medium">{review.name}</div>
-          <div className="text-xs text-muted-foreground">{new Date(review.created_at).toLocaleDateString()}</div>
+          <div className="text-xs text-muted-foreground">
+            {new Date(review.created_at).toLocaleDateString()}
+          </div>
         </div>
       </div>
       <div className="mt-3">
         <StarRatingDisplay rating={review.rating} />
       </div>
-      {review.review_text && <p className="mt-2 line-clamp-5 text-sm text-muted-foreground">{review.review_text}</p>}
+      {review.review_text && (
+        <p className="mt-2 line-clamp-5 text-sm text-muted-foreground">{review.review_text}</p>
+      )}
     </div>
   );
 }
@@ -1068,7 +1210,9 @@ function Reviews() {
       <div className="max-w-6xl mx-auto px-4 py-14 md:py-16">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div className="max-w-2xl">
-            <p className="text-sm font-semibold uppercase tracking-wider text-primary">Client Reviews</p>
+            <p className="text-sm font-semibold uppercase tracking-wider text-primary">
+              Client Reviews
+            </p>
             <h2 className="mt-2 text-3xl md:text-4xl font-bold tracking-tight">What clients say</h2>
             {count > 0 ? (
               <div className="mt-3 flex items-center gap-2">
@@ -1079,7 +1223,9 @@ function Reviews() {
                 </span>
               </div>
             ) : (
-              <p className="mt-3 text-muted-foreground">Be the first to share your experience with KL2J.</p>
+              <p className="mt-3 text-muted-foreground">
+                Be the first to share your experience with KL2J.
+              </p>
             )}
           </div>
           <button
@@ -1128,7 +1274,13 @@ function GalleryThumb({
     >
       {item.type === "video" ? (
         <>
-          <video src={item.url} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+          <video
+            src={item.url}
+            muted
+            playsInline
+            preload="metadata"
+            className="h-full w-full object-cover"
+          />
           <div className="absolute inset-0 flex items-center justify-center bg-slate-950/25 transition group-hover:bg-slate-950/40">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90">
               <Play className="h-4 w-4 fill-slate-900 text-slate-900" />
@@ -1158,25 +1310,30 @@ function Photos() {
     data && data.length > 0
       ? data.map((p) => ({ url: p.url, name: p.id, type: p.media_type }))
       : FALLBACK_GALLERY_PHOTOS.map((p) => ({ ...p, type: "photo" as const }));
-  const photoItems = galleryItems.map((item, i) => ({ item, i })).filter(({ item }) => item.type === "photo");
-  const videoItems = galleryItems.map((item, i) => ({ item, i })).filter(({ item }) => item.type === "video");
+  const photoItems = galleryItems
+    .map((item, i) => ({ item, i }))
+    .filter(({ item }) => item.type === "photo");
+  const videoItems = galleryItems
+    .map((item, i) => ({ item, i }))
+    .filter(({ item }) => item.type === "video");
   const close = () => setLightbox(null);
   const prev = () =>
     setLightbox((i) => (i === null ? null : (i - 1 + galleryItems.length) % galleryItems.length));
-  const next = () =>
-    setLightbox((i) => (i === null ? null : (i + 1) % galleryItems.length));
+  const next = () => setLightbox((i) => (i === null ? null : (i + 1) % galleryItems.length));
 
   return (
     <section id="photos" className="max-w-6xl mx-auto px-4 py-14 md:py-16">
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
         <div className="max-w-2xl">
-          <p className="text-sm font-semibold uppercase tracking-wider text-primary">Field gallery</p>
+          <p className="text-sm font-semibold uppercase tracking-wider text-primary">
+            Field gallery
+          </p>
           <h2 className="mt-2 text-3xl md:text-4xl font-bold tracking-tight">
             See our team on the ground
           </h2>
           <p className="mt-3 text-muted-foreground">
-            Project photos, equipment in action, and completed surveys from KL2J field
-            operations. Tap any photo or video to view it full-size.
+            Project photos, equipment in action, and completed surveys from KL2J field operations.
+            Tap any photo or video to view it full-size.
           </p>
         </div>
         <button
@@ -1190,7 +1347,9 @@ function Photos() {
 
       <div className="mt-8 space-y-6">
         <div>
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Photos</h3>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Photos
+          </h3>
           <div className="mt-3 -mx-4 px-4 overflow-x-auto">
             <div className="grid grid-flow-col grid-rows-2 auto-cols-[140px] sm:auto-cols-[170px] gap-3 pb-2">
               {photoItems.map(({ item, i }) => (
@@ -1208,7 +1367,9 @@ function Photos() {
 
         {videoItems.length > 0 && (
           <div className="border-t border-border pt-6">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Videos</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Videos
+            </h3>
             <div className="mt-3 -mx-4 px-4 overflow-x-auto">
               <div className="grid grid-flow-col grid-rows-2 auto-cols-[140px] sm:auto-cols-[170px] gap-3 pb-2">
                 {videoItems.map(({ item, i }) => (
@@ -1238,7 +1399,10 @@ function Photos() {
             <div className="mb-4 flex items-center justify-between gap-4">
               <h3 className="text-lg font-semibold">
                 Full gallery ({photoItems.length} photo{photoItems.length === 1 ? "" : "s"}
-                {videoItems.length > 0 ? `, ${videoItems.length} video${videoItems.length === 1 ? "" : "s"}` : ""})
+                {videoItems.length > 0
+                  ? `, ${videoItems.length} video${videoItems.length === 1 ? "" : "s"}`
+                  : ""}
+                )
               </h3>
               <button
                 onClick={() => setShowAll(false)}
@@ -1250,7 +1414,9 @@ function Photos() {
             </div>
             <div className="space-y-6">
               <div>
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Photos</h4>
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Photos
+                </h4>
                 <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                   {photoItems.map(({ item, i }) => (
                     <GalleryThumb
@@ -1265,7 +1431,9 @@ function Photos() {
               </div>
               {videoItems.length > 0 && (
                 <div className="border-t border-border pt-6">
-                  <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Videos</h4>
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Videos
+                  </h4>
                   <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                     {videoItems.map(({ item, i }) => (
                       <GalleryThumb
@@ -1353,7 +1521,9 @@ function Partners() {
       <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="flex items-center justify-center gap-2 text-center">
           <Handshake className="h-5 w-5 text-primary" />
-          <p className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Tied-up companies</p>
+          <p className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            Tied-up companies
+          </p>
         </div>
         <div className="mt-5 flex flex-wrap items-center justify-center gap-8">
           {data.map((c) =>
@@ -1366,11 +1536,23 @@ function Partners() {
                 title={c.name}
                 className="flex h-16 w-32 items-center justify-center grayscale transition hover:grayscale-0"
               >
-                <img src={c.logo_url} alt={c.name} className="max-h-full max-w-full object-contain" />
+                <img
+                  src={c.logo_url}
+                  alt={c.name}
+                  className="max-h-full max-w-full object-contain"
+                />
               </a>
             ) : (
-              <div key={c.id} title={c.name} className="flex h-16 w-32 items-center justify-center grayscale">
-                <img src={c.logo_url} alt={c.name} className="max-h-full max-w-full object-contain" />
+              <div
+                key={c.id}
+                title={c.name}
+                className="flex h-16 w-32 items-center justify-center grayscale"
+              >
+                <img
+                  src={c.logo_url}
+                  alt={c.name}
+                  className="max-h-full max-w-full object-contain"
+                />
               </div>
             ),
           )}
@@ -1408,7 +1590,10 @@ function Footer() {
             <FileText className="h-4 w-4" /> Documents <ExternalLink className="h-3 w-3" />
           </a>
         </div>
-        <div>© {new Date().getFullYear()} KL2J Land Surveying and Engineering Services. All rights reserved.</div>
+        <div>
+          © {new Date().getFullYear()} KL2J Land Surveying and Engineering Services. All rights
+          reserved.
+        </div>
       </div>
     </footer>
   );

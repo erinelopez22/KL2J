@@ -65,6 +65,8 @@ function AdminBranding() {
                 <FileDrop
                   folder="branding"
                   label="Replace image"
+                  allowExternalLink={false}
+                  multiple={false}
                   onUploaded={(result) => save(item.key, result.url)}
                 />
               </div>

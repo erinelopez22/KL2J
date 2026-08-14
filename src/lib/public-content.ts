@@ -27,7 +27,13 @@ export type PublicDocument = {
   url: string;
   sort_order: number;
 };
-export type PublicAttachment = { url: string; path: string; type: "image" | "video" | "document"; name: string };
+export type PublicAttachment = {
+  url: string;
+  path: string;
+  type: "image" | "video" | "document";
+  name: string;
+  isExternalLink?: boolean;
+};
 
 export type PublicProject = {
   id: string;
@@ -116,6 +122,13 @@ export function usePublicProjects() {
         .select(
           "id,title,location,description,service,start_date,end_date,personnel,cover_photo_url,attachments,sort_order",
         )
+        // Admins are also allowed to read every project via a separate RLS
+        // policy (so /admin/projects can show drafts) — that policy applies
+        // regardless of which query issues the request, so an admin viewing
+        // the public site in the same logged-in browser would otherwise see
+        // non-public projects too. Filter explicitly so this query always
+        // reflects what a real, logged-out visitor sees.
+        .eq("is_public", true)
         .order("sort_order", { ascending: false });
       if (error) throw error;
       return data as PublicProject[];

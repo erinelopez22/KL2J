@@ -5,6 +5,20 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const DOC_TYPES = ["application/pdf"];
 const VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
+// Broad-but-curated "any file a business post would realistically attach" —
+// deliberately excludes executable/script/html content types since these
+// land in a publicly-readable storage bucket.
+const OFFICE_TYPES = [
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "text/plain",
+  "text/csv",
+  "application/zip",
+];
 
 const FOLDER_RULES: Record<string, { types: string[]; maxBytes: number }> = {
   branding: { types: IMAGE_TYPES, maxBytes: 5 * 1024 * 1024 },
@@ -12,10 +26,14 @@ const FOLDER_RULES: Record<string, { types: string[]; maxBytes: number }> = {
   documents: { types: [...IMAGE_TYPES, ...DOC_TYPES], maxBytes: 10 * 1024 * 1024 },
   projects: { types: [...IMAGE_TYPES, ...DOC_TYPES, ...VIDEO_TYPES], maxBytes: 50 * 1024 * 1024 },
   companies: { types: IMAGE_TYPES, maxBytes: 5 * 1024 * 1024 },
+  posts: {
+    types: [...IMAGE_TYPES, ...VIDEO_TYPES, ...DOC_TYPES, ...OFFICE_TYPES],
+    maxBytes: 50 * 1024 * 1024,
+  },
 };
 
 const UploadSchema = z.object({
-  folder: z.enum(["branding", "gallery", "documents", "projects", "companies"]),
+  folder: z.enum(["branding", "gallery", "documents", "projects", "companies", "posts"]),
   filename: z.string().min(1).max(200),
   contentType: z.string().min(1),
   base64: z.string().min(1),

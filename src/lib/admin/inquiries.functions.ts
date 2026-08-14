@@ -60,7 +60,14 @@ const AddAdminCommentSchema = z
     inquiryId: z.string().uuid(),
     message: z.string().max(2000).optional(),
     attachments: z
-      .array(z.object({ path: z.string().min(1), name: z.string().min(1).max(200), contentType: z.string().min(1) }))
+      .array(
+        z.object({
+          path: z.string().min(1),
+          name: z.string().min(1).max(200),
+          contentType: z.string().min(1),
+          isExternalLink: z.boolean().optional(),
+        }),
+      )
       .optional()
       .default([]),
   })

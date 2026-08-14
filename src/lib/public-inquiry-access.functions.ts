@@ -7,6 +7,7 @@ const AttachmentSchema = z.object({
   path: z.string().min(1),
   name: z.string().min(1).max(200),
   contentType: z.string().min(1),
+  isExternalLink: z.boolean().optional(),
 });
 
 function normalizeCode(code: string) {

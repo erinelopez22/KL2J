@@ -152,7 +152,7 @@ export async function insertInquiryAndNotify(data: InquiryInput): Promise<{
     Your inquiry code<br/>
     <span style="font-size:22px;font-weight:700;letter-spacing:1px;color:#8b1e1e;">${esc(inserted.inquiry_code)}</span>
   </p>
-  <p>Use this code anytime at <a href="${SITE_URL}/my-inquiries">${SITE_URL}/my-inquiries</a> to check your inquiry's status or send us a message.</p>
+  <p>Track it anytime at <a href="${SITE_URL}/my-inquiries?code=${encodeURIComponent(inserted.inquiry_code)}">${SITE_URL}/my-inquiries</a> to check your inquiry's status or send us a message — the link above opens it directly.</p>
 </div>`.trim();
 
       await sendMail({

@@ -67,8 +67,7 @@ export async function notifyInquirerOfAdminComment(
   <h2 style="margin:0 0 12px;color:#8b1e1e;">You have a new message from KL2J</h2>
   ${preview}
   ${hasAttachments ? "<p>A file was also attached.</p>" : ""}
-  <p>Reply at <a href="${SITE_URL}/my-inquiries">${SITE_URL}/my-inquiries</a> using your inquiry code
-  <strong>${esc(inquiry.inquiry_code)}</strong>.</p>
+  <p>Reply at <a href="${SITE_URL}/my-inquiries?code=${encodeURIComponent(inquiry.inquiry_code)}">${SITE_URL}/my-inquiries</a> — the link above opens your inquiry directly.</p>
 </div>`.trim(),
     });
   } catch (e) {
