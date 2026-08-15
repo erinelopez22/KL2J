@@ -9,7 +9,10 @@ type Attachment = { path: string; name: string; contentType: string };
 // Every file exchanged in the comment thread also gets folded into the
 // inquiry's own consolidated attachments list, so it shows up in one place
 // without digging through individual messages.
-export async function appendInquiryAttachments(inquiryId: string, newAttachments: Attachment[]): Promise<void> {
+export async function appendInquiryAttachments(
+  inquiryId: string,
+  newAttachments: Attachment[],
+): Promise<void> {
   if (newAttachments.length === 0) return;
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
@@ -30,12 +33,17 @@ export async function appendInquiryAttachments(inquiryId: string, newAttachments
     .eq("id", inquiryId);
   if (updateErr) {
     console.error("appendInquiryAttachments update failed", updateErr);
+    return;
   }
+
+  const { syncInquiryToLinkedProject } = await import("@/lib/project-inquiry-sync.server");
+  await syncInquiryToLinkedProject(inquiryId);
 }
 
 function esc(s: string) {
-  return s.replace(/[&<>"']/g, (c) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string),
+  return s.replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string,
   );
 }
 

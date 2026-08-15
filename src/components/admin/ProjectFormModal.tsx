@@ -5,12 +5,20 @@ import { toast } from "sonner";
 import { X, Trash2, FileText, Video, Image as ImageIcon, Lock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { createProject, updateProject, deleteProject } from "@/lib/admin/projects.functions";
-import { deleteSiteMedia, deleteConfidentialMedia, getConfidentialFileUrl } from "@/lib/admin/media.functions";
+import {
+  deleteSiteMedia,
+  deleteConfidentialMedia,
+  getConfidentialFileUrl,
+} from "@/lib/admin/media.functions";
 import { FileDrop } from "@/components/admin/FileDrop";
 import { ConfidentialFileDrop } from "@/components/admin/ConfidentialFileDrop";
 import { LocationAutosuggest } from "@/components/LocationAutosuggest";
 import { useConfirm } from "@/components/ConfirmDialogProvider";
-import { AttachmentLightbox, kindFromContentType, type LightboxItem } from "@/components/AttachmentLightbox";
+import {
+  AttachmentLightbox,
+  kindFromContentType,
+  type LightboxItem,
+} from "@/components/AttachmentLightbox";
 
 export type ProjectAttachment = {
   url: string;
@@ -46,14 +54,18 @@ function defaultTitleFromInquiry(name: string, service: string | null | undefine
   return service ? `${service} - ${name}` : name;
 }
 
-function defaultLocationFromInquiry(checklistResponses: InquiryChecklistItem[] | undefined): string {
+function defaultLocationFromInquiry(
+  checklistResponses: InquiryChecklistItem[] | undefined,
+): string {
   return checklistResponses?.find((c) => c.type === "location")?.answer?.trim() ?? "";
 }
 
 export function inquiryDocumentsFrom(
   checklistResponses: InquiryChecklistItem[] | undefined,
 ): { path: string; name: string; contentType: string; isExternalLink?: boolean }[] {
-  return checklistResponses?.filter((c) => c.type === "document").flatMap((c) => c.documents ?? []) ?? [];
+  return (
+    checklistResponses?.filter((c) => c.type === "document").flatMap((c) => c.documents ?? []) ?? []
+  );
 }
 
 export type ProjectRecord = {
@@ -110,7 +122,9 @@ function AttachmentRow({
   return (
     <div
       className={`flex items-center gap-2 rounded-lg border p-2 ${
-        variant === "confidential" ? "border-amber-500/30 bg-amber-500/5" : "border-border bg-background"
+        variant === "confidential"
+          ? "border-amber-500/30 bg-amber-500/5"
+          : "border-border bg-background"
       }`}
     >
       <AttachmentIcon type={attachment.type} />
@@ -204,6 +218,7 @@ export function ProjectFormModal({
       base.title = defaultTitleFromInquiry(defaultInquiry.name, defaultInquiry.service);
       base.location = defaultLocationFromInquiry(defaultInquiry.checklist_responses);
       base.inquiry_id = defaultInquiry.id;
+      base.service = defaultInquiry.service ?? "";
     }
     return base;
   });
@@ -230,7 +245,9 @@ export function ProjectFormModal({
       if (inquiriesRes.error) throw inquiriesRes.error;
       if (linkedRes.error) throw linkedRes.error;
       const linkedIds = new Set(
-        linkedRes.data.map((p) => p.inquiry_id).filter((id) => id !== null && id !== project?.inquiry_id),
+        linkedRes.data
+          .map((p) => p.inquiry_id)
+          .filter((id) => id !== null && id !== project?.inquiry_id),
       );
       return inquiriesRes.data.filter((i) => !linkedIds.has(i.id)) as {
         id: string;
@@ -244,21 +261,35 @@ export function ProjectFormModal({
     enabled: !defaultInquiry,
   });
 
+  const { data: services } = useQuery({
+    queryKey: ["admin-services-picker"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("services").select("title").order("sort_order");
+      if (error) throw error;
+      return data as { title: string }[];
+    },
+  });
+
   function selectInquiry(id: string) {
     const inquiry = inquiries?.find((i) => i.id === id);
     setForm((f) => ({
       ...f,
       inquiry_id: id,
-      title: (!project || !f.title.trim()) && inquiry ? defaultTitleFromInquiry(inquiry.name, inquiry.service) : f.title,
+      title:
+        (!project || !f.title.trim()) && inquiry
+          ? defaultTitleFromInquiry(inquiry.name, inquiry.service)
+          : f.title,
       location:
         (!project || !f.location.trim()) && inquiry
           ? defaultLocationFromInquiry(inquiry.checklist_responses)
           : f.location,
+      service: (!project || !f.service.trim()) && inquiry ? (inquiry.service ?? "") : f.service,
     }));
   }
 
   const selectedInquiryChecklist =
-    defaultInquiry?.checklist_responses ?? inquiries?.find((i) => i.id === form.inquiry_id)?.checklist_responses;
+    defaultInquiry?.checklist_responses ??
+    inquiries?.find((i) => i.id === form.inquiry_id)?.checklist_responses;
   const inquiryDocuments = inquiryDocumentsFrom(selectedInquiryChecklist);
   const doGetConfidentialUrl = useServerFn(getConfidentialFileUrl);
   const [lightbox, setLightbox] = useState<{ items: LightboxItem[]; index: number } | null>(null);
@@ -273,14 +304,24 @@ export function ProjectFormModal({
   }
 
   function openConfidentialAttachmentsLightbox(
-    docs: { path: string; name: string; type?: ProjectAttachment["type"]; contentType?: string; isExternalLink?: boolean }[],
+    docs: {
+      path: string;
+      name: string;
+      type?: ProjectAttachment["type"];
+      contentType?: string;
+      isExternalLink?: boolean;
+    }[],
     startIndex: number,
   ) {
     const items: LightboxItem[] = docs.map((d) => ({
       name: d.name,
-      kind: d.isExternalLink ? "external" : d.type ?? kindFromContentType(d.contentType ?? "", d.isExternalLink),
+      kind: d.isExternalLink
+        ? "external"
+        : (d.type ?? kindFromContentType(d.contentType ?? "", d.isExternalLink)),
       resolveUrl: () =>
-        d.isExternalLink ? d.path : doGetConfidentialUrl({ data: { path: d.path } }).then((r) => r.url),
+        d.isExternalLink
+          ? d.path
+          : doGetConfidentialUrl({ data: { path: d.path } }).then((r) => r.url),
     }));
     setLightbox({ items, index: startIndex });
   }
@@ -311,7 +352,10 @@ export function ProjectFormModal({
 
   async function removeAttachment(attachment: ProjectAttachment) {
     if (!(await confirm("Remove this file? This cannot be undone.", { destructive: true }))) return;
-    setForm((f) => ({ ...f, attachments: f.attachments.filter((a) => a.path !== attachment.path) }));
+    setForm((f) => ({
+      ...f,
+      attachments: f.attachments.filter((a) => a.path !== attachment.path),
+    }));
     if (attachment.isExternalLink) return;
     try {
       await doDeleteMedia({ data: { path: attachment.path } });
@@ -344,7 +388,9 @@ export function ProjectFormModal({
     if (!(await confirm("Remove this file? This cannot be undone.", { destructive: true }))) return;
     setForm((f) => ({
       ...f,
-      confidential_attachments: f.confidential_attachments.filter((a) => a.path !== attachment.path),
+      confidential_attachments: f.confidential_attachments.filter(
+        (a) => a.path !== attachment.path,
+      ),
     }));
     if (attachment.isExternalLink) return;
     try {
@@ -428,7 +474,8 @@ export function ProjectFormModal({
 
   async function handleDelete() {
     if (!project) return;
-    if (!(await confirm("Delete this project? This cannot be undone.", { destructive: true }))) return;
+    if (!(await confirm("Delete this project? This cannot be undone.", { destructive: true })))
+      return;
     try {
       await doDelete({ data: { id: project.id } });
       toast.success("Project deleted");
@@ -440,283 +487,377 @@ export function ProjectFormModal({
 
   return (
     <>
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4" onClick={onClose}>
       <div
-        className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-2xl sm:p-6"
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"
+        onClick={onClose}
       >
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{project ? "Edit project" : "New project"}</h2>
-          <button onClick={onClose} className="rounded-md p-1 text-muted-foreground hover:bg-muted" aria-label="Close">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+        <div
+          className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-2xl sm:p-6"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold">{project ? "Edit project" : "New project"}</h2>
+            <button
+              onClick={onClose}
+              className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+              aria-label="Close"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
 
-        <div className="space-y-10">
-          {defaultInquiry ? (
-            <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
-              <span className="text-xs font-semibold uppercase text-muted-foreground">Linked inquiry</span>
-              <p className="mt-0.5 font-medium">{defaultInquiry.label}</p>
-            </div>
-          ) : (
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
-                Linked inquiry {!project && <span className="text-destructive">(required)</span>}
-              </span>
-              <select
-                value={form.inquiry_id}
-                onChange={(e) => selectInquiry(e.target.value)}
-                className={`h-10 w-full rounded-md border bg-background px-3 text-sm ${
-                  requiredInquiryMissing ? "border-destructive" : "border-border"
-                }`}
-              >
-                <option value="">— Select an inquiry —</option>
-                {inquiries?.map((i) => (
-                  <option key={i.id} value={i.id}>
-                    {i.name} · {i.contact}
-                    {i.service ? ` · ${i.service}` : ""}
-                  </option>
-                ))}
-              </select>
-              {requiredInquiryMissing && (
-                <p className="mt-1 text-xs text-destructive">
-                  Projects are always created from an inquiry — pick which one this belongs to.
-                </p>
-              )}
-            </label>
-          )}
-
-          <section>
-            <h3 className="mb-5 border-b-2 border-primary/30 pb-2.5 text-sm font-bold uppercase tracking-wide text-foreground">
-              Project details
-            </h3>
-            <div className="grid gap-3 pl-4 sm:grid-cols-2">
-              <label className="block text-sm sm:col-span-2">
-                <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Title</span>
-                <input
-                  value={form.title}
-                  onChange={(e) => setForm({ ...form, title: e.target.value })}
-                  className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-                />
-              </label>
-              <label className="block text-sm sm:col-span-2">
-                <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
-                  Location <span className="text-destructive">(required)</span>
-                </span>
-                <LocationAutosuggest value={form.location} onChange={(v) => setForm({ ...form, location: v })} />
-              </label>
-              <label className="flex items-center gap-2 text-sm sm:col-span-2">
-                <input
-                  type="checkbox"
-                  checked={form.is_public}
-                  onChange={(e) => setForm({ ...form, is_public: e.target.checked })}
-                  className="h-4 w-4 rounded border-border"
-                />
-                <span className="text-xs font-semibold uppercase text-muted-foreground">Show on public site</span>
-              </label>
-              <div className="text-sm sm:col-span-2">
-                <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Date range</span>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="date"
-                    aria-label="Start date"
-                    value={form.start_date}
-                    onChange={(e) => setForm({ ...form, start_date: e.target.value })}
-                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+          <div className="space-y-10">
+            <section>
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Cover photo
+              </h3>
+              {form.cover_photo_url ? (
+                <div className="relative w-full max-w-sm overflow-hidden rounded-lg border border-border">
+                  <img
+                    src={form.cover_photo_url}
+                    alt="Cover"
+                    className="aspect-video w-full object-cover"
                   />
-                  <span className="shrink-0 text-muted-foreground">–</span>
-                  <input
-                    type="date"
-                    aria-label="End date"
-                    value={form.end_date}
-                    onChange={(e) => setForm({ ...form, end_date: e.target.value })}
-                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-                  />
-                </div>
-              </div>
-              <label className="block text-sm sm:col-span-2">
-                <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Description</span>
-                <textarea
-                  rows={3}
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm"
-                />
-              </label>
-            </div>
-          </section>
-
-          <section>
-            <h3 className="mb-5 border-b-2 border-primary/30 pb-2.5 text-sm font-bold uppercase tracking-wide text-foreground">
-              People involved
-            </h3>
-            <div className="pl-4">
-              <div className="flex gap-2">
-                <input
-                  value={personName}
-                  onChange={(e) => setPersonName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      addPerson();
-                    }
-                  }}
-                  placeholder="Name"
-                  className="h-10 flex-1 rounded-md border border-border bg-background px-3 text-sm"
-                />
-                <button
-                  type="button"
-                  onClick={addPerson}
-                  className="rounded-md border border-border px-3 text-sm hover:bg-muted"
-                >
-                  Add
-                </button>
-              </div>
-              {form.personnel.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {form.personnel.map((name) => (
-                    <span
-                      key={name}
-                      className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs"
-                    >
-                      {name}
-                      <button type="button" onClick={() => removePerson(name)} aria-label={`Remove ${name}`}>
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
-
-          <section>
-            <h3 className="mb-5 border-b-2 border-primary/30 pb-2.5 text-sm font-bold uppercase tracking-wide text-foreground">
-              Media & attachments
-            </h3>
-            <div className="pl-4">
-              <div className="flex gap-1 border-b border-border">
-                <button
-                  type="button"
-                  onClick={() => setMediaTab("public")}
-                  className={`border-b-2 px-3 py-2 text-sm font-medium ${
-                    mediaTab === "public"
-                      ? "border-primary text-primary"
-                      : "border-transparent text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Public files
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMediaTab("confidential")}
-                  className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium ${
-                    mediaTab === "confidential"
-                      ? "border-primary text-primary"
-                      : "border-transparent text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <Lock className="h-3.5 w-3.5" /> Confidential files
-                </button>
-              </div>
-
-              {mediaTab === "public" ? (
-                <div className="pt-3">
-                  <p className="mb-1.5 text-[11px] text-muted-foreground/70">Visible to visitors on the public site.</p>
-                  <FileDrop
-                    folder="projects"
-                    accept="image/jpeg,image/png,image/webp,application/pdf,video/mp4,video/webm,video/quicktime"
-                    label="Upload a photo, document, or video"
-                    onUploaded={addAttachment}
-                  />
-                  {form.attachments.length > 0 && (
-                    <div className="mt-2 space-y-1.5">
-                      {form.attachments.map((a, i) => (
-                        <AttachmentRow
-                          key={a.path}
-                          attachment={a}
-                          onOpen={() => openPublicAttachmentsLightbox(form.attachments, i)}
-                          variant="public"
-                          onDescriptionChange={(description) => updateAttachmentDescription(a.path, description)}
-                          onRemove={() => removeAttachment(a)}
-                        />
-                      ))}
-                    </div>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, cover_photo_url: "" }))}
+                    className="absolute right-2 top-2 rounded-md bg-black/60 p-1.5 text-white hover:bg-black/80"
+                    aria-label="Remove cover photo"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
               ) : (
-                <div className="pt-3">
-                  <p className="mb-1.5 text-[11px] text-muted-foreground/70">
-                    Only visible to admins here — never shown on the public site.
-                  </p>
-                  <ConfidentialFileDrop onUploaded={addConfidentialAttachment} />
-                  {form.confidential_attachments.length > 0 && (
-                    <div className="mt-2 space-y-1.5">
-                      {form.confidential_attachments.map((a, i) => (
-                        <AttachmentRow
-                          key={a.path}
-                          attachment={a}
-                          onOpen={() => openConfidentialAttachmentsLightbox(form.confidential_attachments, i)}
-                          variant="confidential"
-                          onDescriptionChange={(description) =>
-                            updateConfidentialAttachmentDescription(a.path, description)
-                          }
-                          onRemove={() => removeConfidentialAttachment(a)}
-                        />
-                      ))}
-                    </div>
-                  )}
-                  {inquiryDocuments.length > 0 && (
-                    <div className="mt-4">
-                      <span className="mb-1.5 block text-xs font-semibold uppercase text-muted-foreground">
-                        From linked inquiry
-                      </span>
-                      <div className="space-y-1.5">
-                        {inquiryDocuments.map((doc, i) => (
-                          <button
-                            key={doc.path}
-                            type="button"
-                            onClick={() => openConfidentialAttachmentsLightbox(inquiryDocuments, i)}
-                            className="flex w-full items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 text-left text-sm hover:bg-amber-500/10"
-                          >
-                            <AttachmentIcon type={attachmentTypeFor(doc.contentType)} />
-                            <span className="min-w-0 flex-1 truncate font-medium">{doc.name}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                <div className="max-w-sm">
+                  <FileDrop
+                    folder="projects"
+                    accept="image/jpeg,image/png,image/webp"
+                    label="Upload a cover photo"
+                    allowExternalLink={false}
+                    multiple={false}
+                    onUploaded={(result) => setForm((f) => ({ ...f, cover_photo_url: result.url }))}
+                  />
                 </div>
               )}
-            </div>
-          </section>
-        </div>
+            </section>
 
-        <div className="mt-4 flex items-center gap-2">
-          <button
-            onClick={submit}
-            disabled={saving || requiredInquiryMissing}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-          >
-            {saving ? "Saving…" : "Save"}
-          </button>
-          <button onClick={onClose} className="rounded-md border border-border px-4 py-2 text-sm hover:bg-muted">
-            Cancel
-          </button>
-          {project && (
+            {defaultInquiry ? (
+              <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+                <span className="text-xs font-semibold uppercase text-muted-foreground">
+                  Linked inquiry
+                </span>
+                <p className="mt-0.5 font-medium">{defaultInquiry.label}</p>
+              </div>
+            ) : (
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
+                  Linked inquiry {!project && <span className="text-destructive">(required)</span>}
+                </span>
+                <select
+                  value={form.inquiry_id}
+                  onChange={(e) => selectInquiry(e.target.value)}
+                  className={`h-10 w-full rounded-md border bg-background px-3 text-sm ${
+                    requiredInquiryMissing ? "border-destructive" : "border-border"
+                  }`}
+                >
+                  <option value="">— Select an inquiry —</option>
+                  {inquiries?.map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {i.name} · {i.contact}
+                      {i.service ? ` · ${i.service}` : ""}
+                    </option>
+                  ))}
+                </select>
+                {requiredInquiryMissing && (
+                  <p className="mt-1 text-xs text-destructive">
+                    Projects are always created from an inquiry — pick which one this belongs to.
+                  </p>
+                )}
+              </label>
+            )}
+
+            <section>
+              <h3 className="mb-5 border-b-2 border-primary/30 pb-2.5 text-sm font-bold uppercase tracking-wide text-foreground">
+                Project details
+              </h3>
+              <div className="grid gap-3 pl-4 sm:grid-cols-2">
+                <label className="block text-sm sm:col-span-2">
+                  <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
+                    Title
+                  </span>
+                  <input
+                    value={form.title}
+                    onChange={(e) => setForm({ ...form, title: e.target.value })}
+                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                  />
+                </label>
+                <label className="block text-sm sm:col-span-2">
+                  <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
+                    Service
+                  </span>
+                  <select
+                    value={form.service}
+                    onChange={(e) => setForm({ ...form, service: e.target.value })}
+                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                  >
+                    <option value="">No specific service</option>
+                    {(services ?? []).map((s) => (
+                      <option key={s.title} value={s.title}>
+                        {s.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm sm:col-span-2">
+                  <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
+                    Location <span className="text-destructive">(required)</span>
+                  </span>
+                  <LocationAutosuggest
+                    value={form.location}
+                    onChange={(v) => setForm({ ...form, location: v })}
+                  />
+                </label>
+                <label className="flex items-center gap-2 text-sm sm:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={form.is_public}
+                    onChange={(e) => setForm({ ...form, is_public: e.target.checked })}
+                    className="h-4 w-4 rounded border-border"
+                  />
+                  <span className="text-xs font-semibold uppercase text-muted-foreground">
+                    Show on public site
+                  </span>
+                </label>
+                <div className="text-sm sm:col-span-2">
+                  <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
+                    Date range
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      aria-label="Start date"
+                      value={form.start_date}
+                      onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+                      className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                    />
+                    <span className="shrink-0 text-muted-foreground">–</span>
+                    <input
+                      type="date"
+                      aria-label="End date"
+                      value={form.end_date}
+                      onChange={(e) => setForm({ ...form, end_date: e.target.value })}
+                      className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                    />
+                  </div>
+                </div>
+                <label className="block text-sm sm:col-span-2">
+                  <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
+                    Description
+                  </span>
+                  <textarea
+                    rows={3}
+                    value={form.description}
+                    onChange={(e) => setForm({ ...form, description: e.target.value })}
+                    className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm"
+                  />
+                </label>
+              </div>
+            </section>
+
+            <section>
+              <h3 className="mb-5 border-b-2 border-primary/30 pb-2.5 text-sm font-bold uppercase tracking-wide text-foreground">
+                People involved
+              </h3>
+              <div className="pl-4">
+                <div className="flex gap-2">
+                  <input
+                    value={personName}
+                    onChange={(e) => setPersonName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addPerson();
+                      }
+                    }}
+                    placeholder="Name"
+                    className="h-10 flex-1 rounded-md border border-border bg-background px-3 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={addPerson}
+                    className="rounded-md border border-border px-3 text-sm hover:bg-muted"
+                  >
+                    Add
+                  </button>
+                </div>
+                {form.personnel.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {form.personnel.map((name) => (
+                      <span
+                        key={name}
+                        className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs"
+                      >
+                        {name}
+                        <button
+                          type="button"
+                          onClick={() => removePerson(name)}
+                          aria-label={`Remove ${name}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section>
+              <h3 className="mb-5 border-b-2 border-primary/30 pb-2.5 text-sm font-bold uppercase tracking-wide text-foreground">
+                Media & attachments
+              </h3>
+              <div className="pl-4">
+                <div className="flex gap-1 border-b border-border">
+                  <button
+                    type="button"
+                    onClick={() => setMediaTab("public")}
+                    className={`border-b-2 px-3 py-2 text-sm font-medium ${
+                      mediaTab === "public"
+                        ? "border-primary text-primary"
+                        : "border-transparent text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Public files
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMediaTab("confidential")}
+                    className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium ${
+                      mediaTab === "confidential"
+                        ? "border-primary text-primary"
+                        : "border-transparent text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Lock className="h-3.5 w-3.5" /> Confidential files
+                  </button>
+                </div>
+
+                {mediaTab === "public" ? (
+                  <div className="pt-3">
+                    <p className="mb-1.5 text-[11px] text-muted-foreground/70">
+                      Visible to visitors on the public site. Photos and videos here also appear in
+                      this project's gallery folder automatically.
+                    </p>
+                    <FileDrop
+                      folder="projects"
+                      accept="image/jpeg,image/png,image/webp,application/pdf,video/mp4,video/webm,video/quicktime"
+                      label="Upload a photo, document, or video"
+                      onUploaded={addAttachment}
+                    />
+                    {form.attachments.length > 0 && (
+                      <div className="mt-2 space-y-1.5">
+                        {form.attachments.map((a, i) => (
+                          <AttachmentRow
+                            key={a.path}
+                            attachment={a}
+                            onOpen={() => openPublicAttachmentsLightbox(form.attachments, i)}
+                            variant="public"
+                            onDescriptionChange={(description) =>
+                              updateAttachmentDescription(a.path, description)
+                            }
+                            onRemove={() => removeAttachment(a)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="pt-3">
+                    <p className="mb-1.5 text-[11px] text-muted-foreground/70">
+                      Only visible to admins here — never shown on the public site. Files from the
+                      linked inquiry sync here automatically as they come in.
+                    </p>
+                    <ConfidentialFileDrop onUploaded={addConfidentialAttachment} />
+                    {form.confidential_attachments.length > 0 && (
+                      <div className="mt-2 space-y-1.5">
+                        {form.confidential_attachments.map((a, i) => (
+                          <AttachmentRow
+                            key={a.path}
+                            attachment={a}
+                            onOpen={() =>
+                              openConfidentialAttachmentsLightbox(form.confidential_attachments, i)
+                            }
+                            variant="confidential"
+                            onDescriptionChange={(description) =>
+                              updateConfidentialAttachmentDescription(a.path, description)
+                            }
+                            onRemove={() => removeConfidentialAttachment(a)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    {inquiryDocuments.length > 0 && (
+                      <div className="mt-4">
+                        <span className="mb-1.5 block text-xs font-semibold uppercase text-muted-foreground">
+                          From linked inquiry
+                        </span>
+                        <div className="space-y-1.5">
+                          {inquiryDocuments.map((doc, i) => (
+                            <button
+                              key={doc.path}
+                              type="button"
+                              onClick={() =>
+                                openConfidentialAttachmentsLightbox(inquiryDocuments, i)
+                              }
+                              className="flex w-full items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 text-left text-sm hover:bg-amber-500/10"
+                            >
+                              <AttachmentIcon type={attachmentTypeFor(doc.contentType)} />
+                              <span className="min-w-0 flex-1 truncate font-medium">
+                                {doc.name}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+
+          <div className="mt-4 flex items-center gap-2">
             <button
-              onClick={handleDelete}
-              className="ml-auto flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-destructive hover:bg-destructive/10"
+              onClick={submit}
+              disabled={saving || requiredInquiryMissing}
+              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
-              <Trash2 className="h-4 w-4" /> Delete project
+              {saving ? "Saving…" : "Save"}
             </button>
-          )}
+            <button
+              onClick={onClose}
+              className="rounded-md border border-border px-4 py-2 text-sm hover:bg-muted"
+            >
+              Cancel
+            </button>
+            {project && (
+              <button
+                onClick={handleDelete}
+                className="ml-auto flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-destructive hover:bg-destructive/10"
+              >
+                <Trash2 className="h-4 w-4" /> Delete project
+              </button>
+            )}
+          </div>
         </div>
       </div>
-    </div>
-    {lightbox && (
-      <AttachmentLightbox items={lightbox.items} startIndex={lightbox.index} onClose={() => setLightbox(null)} />
-    )}
+      {lightbox && (
+        <AttachmentLightbox
+          items={lightbox.items}
+          startIndex={lightbox.index}
+          onClose={() => setLightbox(null)}
+        />
+      )}
     </>
   );
 }

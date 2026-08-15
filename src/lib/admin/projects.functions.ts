@@ -44,17 +44,32 @@ export const createProject = createServerFn({ method: "POST" })
     const { assertRole } = await import("@/lib/admin/roles.server");
     await assertRole(context.userId, "admin");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin.from("projects").insert(data);
+    const { data: created, error } = await supabaseAdmin
+      .from("projects")
+      .insert(data)
+      .select("id")
+      .single();
     if (error) {
       console.error("createProject failed", error);
       throw new Error(`Failed to create project: ${error.message}`);
     }
-    return { ok: true };
+    const { syncProjectGallery } = await import("@/lib/project-gallery-sync.server");
+    await syncProjectGallery(
+      created.id,
+      data.title,
+      data.attachments,
+      data.cover_photo_url ?? null,
+    );
+    const { syncInquiryAttachmentsToProject } = await import("@/lib/project-inquiry-sync.server");
+    await syncInquiryAttachmentsToProject(created.id, data.inquiry_id);
+    return { ok: true, id: created.id };
   });
 
 export const updateProject = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => ProjectSchema.partial().extend({ id: z.string().uuid() }).parse(data))
+  .inputValidator((data: unknown) =>
+    ProjectSchema.partial().extend({ id: z.string().uuid() }).parse(data),
+  )
   .handler(async ({ data, context }) => {
     const { assertRole } = await import("@/lib/admin/roles.server");
     await assertRole(context.userId, "admin");
@@ -64,6 +79,33 @@ export const updateProject = createServerFn({ method: "POST" })
     if (error) {
       console.error("updateProject failed", error);
       throw new Error(`Failed to update project: ${error.message}`);
+    }
+
+    // Re-select the full row rather than trusting `rest` — callers like
+    // togglePublic only send {id, is_public}, so this is the only reliable
+    // way to keep the gallery/inquiry sync current after every save.
+    const { data: row, error: fetchErr } = await supabaseAdmin
+      .from("projects")
+      .select("title, attachments, cover_photo_url, inquiry_id")
+      .eq("id", id)
+      .single();
+    if (!fetchErr && row) {
+      const { syncProjectGallery } = await import("@/lib/project-gallery-sync.server");
+      await syncProjectGallery(
+        id,
+        row.title,
+        row.attachments as unknown as {
+          url: string;
+          path: string;
+          type: "image" | "video" | "document";
+        }[],
+        row.cover_photo_url,
+      );
+      if (row.inquiry_id) {
+        const { syncInquiryAttachmentsToProject } =
+          await import("@/lib/project-inquiry-sync.server");
+        await syncInquiryAttachmentsToProject(id, row.inquiry_id);
+      }
     }
     return { ok: true };
   });

@@ -47,8 +47,13 @@ export type PublicProject = {
   cover_photo_url: string | null;
   attachments: PublicAttachment[];
   sort_order: number;
+  inquiry_status: string | null;
 };
-export type PublicSiteSettings = { logo_url: string | null; favicon_url: string | null; hero_banner_url: string | null };
+export type PublicSiteSettings = {
+  logo_url: string | null;
+  favicon_url: string | null;
+  hero_banner_url: string | null;
+};
 
 export function usePublicServices() {
   return useQuery({
@@ -81,7 +86,82 @@ export function usePublicGalleryPhotos() {
   });
 }
 
-export type PublicPartnerCompany = { id: string; name: string; logo_url: string; website_url: string | null };
+export type PublicGalleryFolder = {
+  id: string;
+  name: string;
+  description: string | null;
+  location: string | null;
+  date_start: string | null;
+  date_end: string | null;
+  sort_order: number;
+  items: PublicPhoto[];
+};
+
+const UNSORTED_FOLDER_ID = "__unsorted__";
+
+export function usePublicGalleryFolders() {
+  return useQuery({
+    queryKey: ["public-gallery-folders"],
+    queryFn: async () => {
+      const [foldersRes, photosRes] = await Promise.all([
+        supabase
+          .from("gallery_folders")
+          .select("id,name,description,location,date_start,date_end,sort_order")
+          .order("sort_order"),
+        supabase
+          .from("gallery_photos")
+          .select("id,url,caption,sort_order,media_type,folder_id")
+          .order("sort_order"),
+      ]);
+      if (foldersRes.error) throw foldersRes.error;
+      if (photosRes.error) throw photosRes.error;
+
+      const byFolder = new Map<string, PublicPhoto[]>();
+      const unsorted: PublicPhoto[] = [];
+      for (const p of photosRes.data) {
+        const item: PublicPhoto = {
+          id: p.id,
+          url: p.url,
+          caption: p.caption,
+          sort_order: p.sort_order,
+          media_type: p.media_type as "photo" | "video",
+        };
+        if (p.folder_id) {
+          if (!byFolder.has(p.folder_id)) byFolder.set(p.folder_id, []);
+          byFolder.get(p.folder_id)!.push(item);
+        } else {
+          unsorted.push(item);
+        }
+      }
+
+      const folders: PublicGalleryFolder[] = foldersRes.data.map((f) => ({
+        ...f,
+        items: byFolder.get(f.id) ?? [],
+      }));
+      if (unsorted.length > 0) {
+        folders.push({
+          id: UNSORTED_FOLDER_ID,
+          name: "Unsorted",
+          description: null,
+          location: null,
+          date_start: null,
+          date_end: null,
+          sort_order: Number.MAX_SAFE_INTEGER,
+          items: unsorted,
+        });
+      }
+      return folders;
+    },
+    staleTime: 60_000,
+  });
+}
+
+export type PublicPartnerCompany = {
+  id: string;
+  name: string;
+  logo_url: string;
+  website_url: string | null;
+};
 
 export function usePublicPartnerCompanies() {
   return useQuery({
@@ -120,7 +200,7 @@ export function usePublicProjects() {
       const { data, error } = await supabase
         .from("projects")
         .select(
-          "id,title,location,description,service,start_date,end_date,personnel,cover_photo_url,attachments,sort_order",
+          "id,title,location,description,service,start_date,end_date,personnel,cover_photo_url,attachments,sort_order,inquiry_status",
         )
         // Admins are also allowed to read every project via a separate RLS
         // policy (so /admin/projects can show drafts) — that policy applies

@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Star, Check, X, Trash2, Mail, Loader2 } from "lucide-react";
+import { Star, Check, X, Trash2, Mail, Loader2, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { updateReviewStatus, deleteReview } from "@/lib/admin/reviews.functions";
 import { useConfirm } from "@/components/ConfirmDialogProvider";
@@ -170,12 +170,28 @@ function ReviewViewer({
   );
 }
 
+const REVIEW_SORT_OPTIONS = {
+  newest: {
+    label: "Newest first",
+    cmp: (a: Review, b: Review) => b.created_at.localeCompare(a.created_at),
+  },
+  oldest: {
+    label: "Oldest first",
+    cmp: (a: Review, b: Review) => a.created_at.localeCompare(b.created_at),
+  },
+  highest: { label: "Highest rating", cmp: (a: Review, b: Review) => b.rating - a.rating },
+  lowest: { label: "Lowest rating", cmp: (a: Review, b: Review) => a.rating - b.rating },
+} as const;
+type ReviewSortKey = keyof typeof REVIEW_SORT_OPTIONS;
+
 function AdminReviews() {
   const queryClient = useQueryClient();
   const confirm = useConfirm();
   const doDelete = useServerFn(deleteReview);
   const [filter, setFilter] = useState<"all" | Review["status"]>("all");
   const [viewing, setViewing] = useState<Review | null>(null);
+  const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState<ReviewSortKey>("newest");
 
   const { data: reviews, isLoading } = useQuery({
     queryKey: ["admin-reviews"],
@@ -212,7 +228,15 @@ function AdminReviews() {
     approved: all.filter((r) => r.status === "approved").length,
     rejected: all.filter((r) => r.status === "rejected").length,
   };
-  const filtered = filter === "all" ? all : all.filter((r) => r.status === filter);
+  const searchLower = search.trim().toLowerCase();
+  const filtered = (filter === "all" ? all : all.filter((r) => r.status === filter))
+    .filter((r) => {
+      if (!searchLower) return true;
+      return [r.name, r.email, r.review_text]
+        .filter(Boolean)
+        .some((field) => field!.toLowerCase().includes(searchLower));
+    })
+    .sort(REVIEW_SORT_OPTIONS[sortKey].cmp);
 
   return (
     <div>
@@ -241,14 +265,46 @@ function AdminReviews() {
         ))}
       </div>
 
+      <div className="mt-3 flex flex-wrap gap-2">
+        <div className="relative min-w-[220px] flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search name, email, review text…"
+            className="h-10 w-full rounded-md border border-border bg-card pl-9 pr-3 text-sm"
+          />
+        </div>
+        <select
+          value={sortKey}
+          onChange={(e) => setSortKey(e.target.value as ReviewSortKey)}
+          className="h-10 rounded-md border border-border bg-card px-3 text-sm"
+        >
+          {Object.entries(REVIEW_SORT_OPTIONS).map(([key, opt]) => (
+            <option key={key} value={key}>
+              Sort: {opt.label}
+            </option>
+          ))}
+        </select>
+        {search && (
+          <button
+            type="button"
+            onClick={() => setSearch("")}
+            className="rounded-md border border-border px-3 text-sm hover:bg-muted"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
       {isLoading && <p className="mt-6 text-sm text-muted-foreground">Loading…</p>}
       {!isLoading && filtered.length === 0 && (
         <div className="mt-6 rounded-lg border border-dashed border-border p-10 text-center text-muted-foreground">
-          No {filter === "all" ? "" : filter} reviews.
+          No reviews match your search or filter.
         </div>
       )}
 
-      <div className="mt-6 space-y-2">
+      <div className="mt-6 max-h-[calc(100vh-380px)] space-y-2 overflow-y-auto pr-1">
         {filtered.map((r) => (
           <div
             key={r.id}

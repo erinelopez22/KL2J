@@ -3,10 +3,42 @@ import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Trash2, Play } from "lucide-react";
+import {
+  Trash2,
+  Play,
+  Folder,
+  FolderOpen,
+  X,
+  Pencil,
+  Link2,
+  Search,
+  Copy,
+  FolderInput,
+  Check,
+} from "lucide-react";
+import {
+  DndContext,
+  useDraggable,
+  useDroppable,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
 import { supabase } from "@/integrations/supabase/client";
-import { addGalleryPhoto, deleteGalleryPhoto } from "@/lib/admin/gallery.functions";
+import {
+  addGalleryPhoto,
+  deleteGalleryPhoto,
+  updateGalleryPhoto,
+  createGalleryFolder,
+  updateGalleryFolder,
+  deleteGalleryFolder,
+  moveGalleryPhotos,
+  copyGalleryPhotos,
+  deleteGalleryPhotosBulk,
+} from "@/lib/admin/gallery.functions";
 import { FileDrop } from "@/components/admin/FileDrop";
+import { LocationAutosuggest } from "@/components/LocationAutosuggest";
 import { useConfirm } from "@/components/ConfirmDialogProvider";
 import { AttachmentLightbox, type LightboxItem } from "@/components/AttachmentLightbox";
 
@@ -21,31 +53,234 @@ type Photo = {
   caption: string | null;
   sort_order: number;
   media_type: "photo" | "video";
+  folder_id: string | null;
   created_at: string;
 };
 
+type GalleryFolder = {
+  id: string;
+  name: string;
+  description: string | null;
+  location: string | null;
+  date_start: string | null;
+  date_end: string | null;
+  sort_order: number;
+  project_id: string | null;
+};
+
+const UNSORTED_DROP_ID = "folder:unsorted";
+const FOLDER_DROP_PREFIX = "folder:";
+
 const SORT_OPTIONS = {
-  upload_asc: { label: "Upload order", cmp: (a: Photo, b: Photo) => a.sort_order - b.sort_order },
-  newest: { label: "Newest first", cmp: (a: Photo, b: Photo) => b.created_at.localeCompare(a.created_at) },
-  oldest: { label: "Oldest first", cmp: (a: Photo, b: Photo) => a.created_at.localeCompare(b.created_at) },
-  caption_asc: {
-    label: "Caption A-Z",
-    cmp: (a: Photo, b: Photo) => (a.caption ?? "").localeCompare(b.caption ?? ""),
+  newest: {
+    label: "Newest first",
+    cmp: (a: Photo, b: Photo) => b.created_at.localeCompare(a.created_at),
   },
-  caption_desc: {
-    label: "Caption Z-A",
-    cmp: (a: Photo, b: Photo) => (b.caption ?? "").localeCompare(a.caption ?? ""),
+  oldest: {
+    label: "Oldest first",
+    cmp: (a: Photo, b: Photo) => a.created_at.localeCompare(b.created_at),
+  },
+  name_asc: {
+    label: "Name A-Z",
+    cmp: (a: Photo, b: Photo) => filenameFor(a).localeCompare(filenameFor(b)),
   },
 } as const;
 type SortKey = keyof typeof SORT_OPTIONS;
+
+function filenameFor(p: Photo): string {
+  if (p.caption) return p.caption;
+  const path = p.storage_path ?? p.url;
+  const last = path.split("/").pop() ?? path;
+  return decodeURIComponent(last);
+}
+
+function emptyFolderForm() {
+  return { name: "", description: "", location: "", date_start: "", date_end: "" };
+}
+
+function DraggablePhoto({
+  photo,
+  selected,
+  onOpen,
+  onDelete,
+  onToggleSelect,
+}: {
+  photo: Photo;
+  selected: boolean;
+  onOpen: () => void;
+  onDelete: () => void;
+  onToggleSelect: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `photo:${photo.id}`,
+    data: { photo },
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      onClick={onOpen}
+      className={`group relative aspect-square cursor-grab overflow-hidden rounded-lg border ${
+        selected ? "border-primary ring-2 ring-primary" : "border-border"
+      } ${isDragging ? "opacity-30" : ""}`}
+    >
+      {photo.media_type === "video" ? (
+        <>
+          <video
+            src={photo.url}
+            muted
+            playsInline
+            preload="metadata"
+            className="h-full w-full object-cover"
+          />
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-950/20">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90">
+              <Play className="h-4 w-4 fill-slate-900 text-slate-900" />
+            </div>
+          </div>
+        </>
+      ) : (
+        <img
+          src={photo.url}
+          alt={photo.caption ?? "Gallery photo"}
+          className="h-full w-full object-cover"
+        />
+      )}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleSelect();
+        }}
+        aria-label={selected ? "Deselect" : "Select"}
+        className={`absolute left-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-md border transition ${
+          selected
+            ? "border-primary bg-primary text-primary-foreground"
+            : "border-white/70 bg-black/40 text-transparent opacity-0 hover:border-white group-hover:opacity-100"
+        }`}
+      >
+        <Check className="h-3.5 w-3.5" />
+      </button>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete();
+        }}
+        className="absolute right-1.5 top-1.5 rounded-md bg-black/60 p-1.5 text-white opacity-0 transition group-hover:opacity-100"
+        aria-label="Delete photo"
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
+function FolderDropZone({
+  id,
+  active,
+  count,
+  linked,
+  onClick,
+  onEdit,
+  onDelete,
+  children,
+}: {
+  id: string;
+  active: boolean;
+  count: number;
+  linked?: boolean;
+  onClick: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
+  children: string;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      onClick={onClick}
+      role="button"
+      tabIndex={0}
+      title={children}
+      className={`group flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm cursor-pointer transition ${
+        isOver
+          ? "bg-primary/15 ring-2 ring-primary"
+          : active
+            ? "bg-primary/10 text-primary font-medium"
+            : "hover:bg-muted"
+      }`}
+    >
+      <span className="flex min-w-0 items-center gap-2">
+        {active ? (
+          <FolderOpen className="h-4 w-4 shrink-0" />
+        ) : (
+          <Folder className="h-4 w-4 shrink-0" />
+        )}
+        <span className="truncate">{children}</span>
+        {linked && (
+          <Link2
+            className="h-3 w-3 shrink-0 text-muted-foreground"
+            aria-label="Linked to a project"
+          />
+        )}
+      </span>
+      <span className="flex shrink-0 items-center gap-1">
+        <span className="text-xs text-muted-foreground">{count}</span>
+        {onEdit && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit();
+            }}
+            className="rounded p-1 opacity-0 hover:bg-muted group-hover:opacity-100"
+            aria-label="Edit folder"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        )}
+        {onDelete && !linked && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="rounded p-1 text-destructive opacity-0 hover:bg-destructive/10 group-hover:opacity-100"
+            aria-label="Delete folder"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </span>
+    </div>
+  );
+}
 
 function AdminGallery() {
   const queryClient = useQueryClient();
   const doAdd = useServerFn(addGalleryPhoto);
   const doDelete = useServerFn(deleteGalleryPhoto);
+  const doUpdatePhoto = useServerFn(updateGalleryPhoto);
+  const doCreateFolder = useServerFn(createGalleryFolder);
+  const doUpdateFolder = useServerFn(updateGalleryFolder);
+  const doDeleteFolder = useServerFn(deleteGalleryFolder);
+  const doMovePhotos = useServerFn(moveGalleryPhotos);
+  const doCopyPhotos = useServerFn(copyGalleryPhotos);
+  const doDeletePhotosBulk = useServerFn(deleteGalleryPhotosBulk);
   const confirm = useConfirm();
-  const [sortKey, setSortKey] = useState<SortKey>("upload_asc");
   const [lightbox, setLightbox] = useState<{ items: LightboxItem[]; index: number } | null>(null);
+  const [selected, setSelected] = useState<"all" | "unsorted" | string>("all");
+  const [folderModal, setFolderModal] = useState<{
+    editing: GalleryFolder | null;
+    form: ReturnType<typeof emptyFolderForm>;
+  } | null>(null);
+
+  const [search, setSearch] = useState("");
+  const [mediaFilter, setMediaFilter] = useState<"all" | "photo" | "video">("all");
+  const [sortKey, setSortKey] = useState<SortKey>("newest");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [moveTarget, setMoveTarget] = useState<string>(UNSORTED_DROP_ID);
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const { data: photos, isLoading } = useQuery({
     queryKey: ["admin-gallery"],
@@ -56,9 +291,25 @@ function AdminGallery() {
     },
   });
 
+  const { data: folders } = useQuery({
+    queryKey: ["admin-gallery-folders"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("gallery_folders")
+        .select("*")
+        .order("sort_order");
+      if (error) throw error;
+      return data as GalleryFolder[];
+    },
+  });
+
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ["admin-gallery"] });
     queryClient.invalidateQueries({ queryKey: ["public-gallery"] });
+  }
+  function refreshFolders() {
+    queryClient.invalidateQueries({ queryKey: ["admin-gallery-folders"] });
+    queryClient.invalidateQueries({ queryKey: ["public-gallery-folders"] });
   }
 
   async function onUploaded(result: { url: string; path?: string; contentType: string }) {
@@ -69,6 +320,7 @@ function AdminGallery() {
           storage_path: result.path,
           sort_order: (photos?.length ?? 0) + 1,
           media_type: result.contentType.startsWith("video/") ? "video" : "photo",
+          folder_id: selected !== "all" && selected !== "unsorted" ? selected : null,
         },
       });
       refresh();
@@ -78,106 +330,539 @@ function AdminGallery() {
   }
 
   async function remove(photo: Photo) {
-    if (!(await confirm("Delete this photo/video? This cannot be undone.", { destructive: true }))) return;
+    if (!(await confirm("Delete this photo/video? This cannot be undone.", { destructive: true })))
+      return;
     try {
       await doDelete({ data: { id: photo.id, storage_path: photo.storage_path ?? undefined } });
       toast.success("Photo deleted");
+      setSelectedIds((s) => {
+        const next = new Set(s);
+        next.delete(photo.id);
+        return next;
+      });
       refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete");
     }
   }
 
-  const sorted = useMemo(() => (photos ? [...photos].sort(SORT_OPTIONS[sortKey].cmp) : []), [photos, sortKey]);
+  async function onDragEnd(e: DragEndEvent) {
+    const { active, over } = e;
+    if (!over) return;
+    const overId = String(over.id);
+    if (!overId.startsWith(FOLDER_DROP_PREFIX)) return;
+    const photo = active.data.current?.photo as Photo | undefined;
+    if (!photo) return;
+    const targetFolderId =
+      overId === UNSORTED_DROP_ID ? null : overId.slice(FOLDER_DROP_PREFIX.length);
+    if (targetFolderId === photo.folder_id) return;
+    try {
+      await doUpdatePhoto({ data: { id: photo.id, folder_id: targetFolderId } });
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to move photo");
+    }
+  }
+
+  function openNewFolder() {
+    setFolderModal({ editing: null, form: emptyFolderForm() });
+  }
+  function openEditFolder(f: GalleryFolder) {
+    setFolderModal({
+      editing: f,
+      form: {
+        name: f.name,
+        description: f.description ?? "",
+        location: f.location ?? "",
+        date_start: f.date_start ?? "",
+        date_end: f.date_end ?? "",
+      },
+    });
+  }
+
+  async function saveFolder() {
+    if (!folderModal) return;
+    const { editing, form } = folderModal;
+    if (!form.name.trim()) {
+      toast.error("Folder name is required");
+      return;
+    }
+    const payload = {
+      name: form.name.trim(),
+      description: form.description.trim() || null,
+      location: form.location.trim() || null,
+      date_start: form.date_start || null,
+      date_end: form.date_end || null,
+    };
+    try {
+      if (editing) {
+        // Project-linked folders keep their name in sync with the project
+        // title (see syncProjectGallery) — never send an edited name for them.
+        const { name: _name, ...rest } = payload;
+        await doUpdateFolder({
+          data: { id: editing.id, ...(editing.project_id ? rest : payload) },
+        });
+      } else {
+        await doCreateFolder({ data: { ...payload, sort_order: (folders?.length ?? 0) + 1 } });
+      }
+      refreshFolders();
+      setFolderModal(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save folder");
+    }
+  }
+
+  async function deleteFolderWithConfirm(folder: GalleryFolder) {
+    const count = (photos ?? []).filter((p) => p.folder_id === folder.id).length;
+    if (
+      !(await confirm(
+        count > 0
+          ? `Delete "${folder.name}"? This permanently deletes it and its ${count} photo${count === 1 ? "" : "s"}/video${count === 1 ? "" : "s"} — this cannot be undone.`
+          : `Delete "${folder.name}"? This cannot be undone.`,
+        { destructive: true },
+      ))
+    )
+      return;
+    try {
+      await doDeleteFolder({ data: { id: folder.id } });
+      toast.success("Folder deleted");
+      refreshFolders();
+      refresh();
+      if (selected === folder.id) setSelected("all");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete folder");
+    }
+  }
+
+  async function removeFolder() {
+    if (!folderModal?.editing) return;
+    await deleteFolderWithConfirm(folderModal.editing);
+    setFolderModal(null);
+  }
+
+  const inFolder = useMemo(() => {
+    if (!photos) return [];
+    if (selected === "all") return photos;
+    if (selected === "unsorted") return photos.filter((p) => !p.folder_id);
+    return photos.filter((p) => p.folder_id === selected);
+  }, [photos, selected]);
+
+  const searchLower = search.trim().toLowerCase();
+  const visible = useMemo(() => {
+    return inFolder
+      .filter((p) => {
+        if (mediaFilter !== "all" && p.media_type !== mediaFilter) return false;
+        if (!searchLower) return true;
+        return filenameFor(p).toLowerCase().includes(searchLower);
+      })
+      .sort(SORT_OPTIONS[sortKey].cmp);
+  }, [inFolder, mediaFilter, searchLower, sortKey]);
+
+  const unsortedCount = (photos ?? []).filter((p) => !p.folder_id).length;
+
+  function toggleSelect(id: string) {
+    setSelectedIds((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds((s) => {
+      const allVisible = visible.every((p) => s.has(p.id));
+      if (allVisible) return new Set();
+      return new Set(visible.map((p) => p.id));
+    });
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
+
+  function targetFolderId(): string | null {
+    return moveTarget === UNSORTED_DROP_ID ? null : moveTarget;
+  }
+
+  async function handleMoveSelected() {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    try {
+      await doMovePhotos({ data: { ids, folderId: targetFolderId() } });
+      toast.success(`Moved ${ids.length} item${ids.length === 1 ? "" : "s"}`);
+      clearSelection();
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to move");
+    }
+  }
+
+  async function handleCopySelected() {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    try {
+      await doCopyPhotos({ data: { ids, folderId: targetFolderId() } });
+      toast.success(`Copied ${ids.length} item${ids.length === 1 ? "" : "s"}`);
+      clearSelection();
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to copy");
+    }
+  }
+
+  async function handleDeleteSelected() {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    if (
+      !(await confirm(
+        `Delete ${ids.length} photo${ids.length === 1 ? "" : "s"}/video${ids.length === 1 ? "" : "s"}? This cannot be undone.`,
+        { destructive: true },
+      ))
+    )
+      return;
+    try {
+      await doDeletePhotosBulk({ data: { ids } });
+      toast.success(`Deleted ${ids.length} item${ids.length === 1 ? "" : "s"}`);
+      clearSelection();
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete");
+    }
+  }
+
+  const allVisibleSelected = visible.length > 0 && visible.every((p) => selectedIds.has(p.id));
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold tracking-tight">Gallery</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Field photos and videos shown in the public gallery section.
-      </p>
+    <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Gallery</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Field photos and videos shown in the public gallery section. Organize them into folders
+          and drag tiles onto a folder to move them.
+        </p>
 
-      <div className="mt-6 max-w-sm">
-        <FileDrop
-          folder="gallery"
-          accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime"
-          label="Upload a photo or video"
-          allowExternalLink={false}
-          onUploaded={onUploaded}
-        />
-      </div>
-
-      {isLoading && <p className="mt-6 text-sm text-muted-foreground">Loading…</p>}
-
-      {!isLoading && (
-        <div className="mt-6 flex items-center gap-2">
-          <label className="text-sm text-muted-foreground" htmlFor="gallery-sort">
-            Sort by
-          </label>
-          <select
-            id="gallery-sort"
-            value={sortKey}
-            onChange={(e) => setSortKey(e.target.value as SortKey)}
-            className="h-9 rounded-md border border-border bg-card px-2 text-sm"
-          >
-            {Object.entries(SORT_OPTIONS).map(([key, opt]) => (
-              <option key={key} value={key}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      <div className="mt-3 grid max-h-[calc(100vh-260px)] grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3 md:grid-cols-4">
-        {sorted.map((p, i) => (
-          <div
-            key={p.id}
-            role="button"
-            tabIndex={0}
-            onClick={() =>
-              setLightbox({
-                items: sorted.map((s) => ({
-                  name: s.caption ?? "Gallery item",
-                  kind: s.media_type === "video" ? "video" : "image",
-                  resolveUrl: () => s.url,
-                })),
-                index: i,
-              })
-            }
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") e.currentTarget.click();
-            }}
-            className="group relative aspect-square cursor-pointer overflow-hidden rounded-lg border border-border"
-          >
-            {p.media_type === "video" ? (
-              <>
-                <video src={p.url} muted playsInline preload="metadata" className="h-full w-full object-cover" />
-                <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-950/20">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90">
-                    <Play className="h-4 w-4 fill-slate-900 text-slate-900" />
-                  </div>
-                </div>
-              </>
-            ) : (
-              <img src={p.url} alt={p.caption ?? "Gallery photo"} className="h-full w-full object-cover" />
-            )}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                remove(p);
-              }}
-              className="absolute right-1.5 top-1.5 rounded-md bg-black/60 p-1.5 text-white opacity-0 transition group-hover:opacity-100"
-              aria-label="Delete photo"
+        <div className="mt-6 grid gap-6 lg:grid-cols-[240px_1fr]">
+          <div className="space-y-1">
+            <FolderDropZone
+              id="folder:__all__"
+              active={selected === "all"}
+              count={photos?.length ?? 0}
+              onClick={() => setSelected("all")}
             >
-              <Trash2 className="h-4 w-4" />
+              All
+            </FolderDropZone>
+            <FolderDropZone
+              id={UNSORTED_DROP_ID}
+              active={selected === "unsorted"}
+              count={unsortedCount}
+              onClick={() => setSelected("unsorted")}
+            >
+              Unsorted
+            </FolderDropZone>
+            <div className="my-2 border-t border-border" />
+            {(folders ?? []).map((f) => (
+              <FolderDropZone
+                key={f.id}
+                id={`${FOLDER_DROP_PREFIX}${f.id}`}
+                active={selected === f.id}
+                count={(photos ?? []).filter((p) => p.folder_id === f.id).length}
+                linked={!!f.project_id}
+                onClick={() => setSelected(f.id)}
+                onEdit={() => openEditFolder(f)}
+                onDelete={() => deleteFolderWithConfirm(f)}
+              >
+                {f.name}
+              </FolderDropZone>
+            ))}
+            <button
+              onClick={openNewFolder}
+              className="mt-2 w-full rounded-md border border-dashed border-border px-3 py-2 text-sm text-muted-foreground hover:border-primary hover:text-primary"
+            >
+              + New Folder
             </button>
           </div>
-        ))}
+
+          <div>
+            <div className="max-w-sm">
+              <FileDrop
+                folder="gallery"
+                accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime"
+                label="Upload a photo or video"
+                allowExternalLink={false}
+                onUploaded={onUploaded}
+              />
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <div className="relative min-w-[200px] flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search filename or caption…"
+                  className="h-10 w-full rounded-md border border-border bg-card pl-9 pr-3 text-sm"
+                />
+              </div>
+              <select
+                value={mediaFilter}
+                onChange={(e) => setMediaFilter(e.target.value as "all" | "photo" | "video")}
+                className="h-10 rounded-md border border-border bg-card px-3 text-sm"
+              >
+                <option value="all">Photos + videos</option>
+                <option value="photo">Photos only</option>
+                <option value="video">Videos only</option>
+              </select>
+              <select
+                value={sortKey}
+                onChange={(e) => setSortKey(e.target.value as SortKey)}
+                className="h-10 rounded-md border border-border bg-card px-3 text-sm"
+              >
+                {Object.entries(SORT_OPTIONS).map(([key, opt]) => (
+                  <option key={key} value={key}>
+                    Sort: {opt.label}
+                  </option>
+                ))}
+              </select>
+              {(search || mediaFilter !== "all") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearch("");
+                    setMediaFilter("all");
+                  }}
+                  className="rounded-md border border-border px-3 h-10 text-sm hover:bg-muted"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            {visible.length > 0 && (
+              <label className="mt-3 flex w-fit items-center gap-2 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  onChange={toggleSelectAll}
+                  className="h-4 w-4 rounded border-border"
+                />
+                Select all ({visible.length})
+              </label>
+            )}
+
+            {selectedIds.size > 0 && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2">
+                <span className="text-sm font-medium">{selectedIds.size} selected</span>
+                <select
+                  value={moveTarget}
+                  onChange={(e) => setMoveTarget(e.target.value)}
+                  className="h-9 rounded-md border border-border bg-card px-2 text-sm"
+                >
+                  <option value={UNSORTED_DROP_ID}>Unsorted</option>
+                  {(folders ?? []).map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={handleCopySelected}
+                  className="flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted"
+                >
+                  <Copy className="h-3.5 w-3.5" /> Copy
+                </button>
+                <button
+                  type="button"
+                  onClick={handleMoveSelected}
+                  className="flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted"
+                >
+                  <FolderInput className="h-3.5 w-3.5" /> Move
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteSelected}
+                  className="flex items-center gap-1.5 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-1.5 text-sm text-destructive hover:bg-destructive/10"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Delete
+                </button>
+                <button
+                  type="button"
+                  onClick={clearSelection}
+                  className="ml-auto rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
+
+            {isLoading && <p className="mt-6 text-sm text-muted-foreground">Loading…</p>}
+
+            {!isLoading && visible.length === 0 && (
+              <p className="mt-6 text-sm text-muted-foreground">
+                {inFolder.length === 0
+                  ? "Nothing here yet."
+                  : "No items match your search or filter."}
+              </p>
+            )}
+
+            <div className="mt-3 grid max-h-[calc(100vh-400px)] grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3 md:grid-cols-4">
+              {visible.map((p, i) => (
+                <DraggablePhoto
+                  key={p.id}
+                  photo={p}
+                  selected={selectedIds.has(p.id)}
+                  onToggleSelect={() => toggleSelect(p.id)}
+                  onOpen={() =>
+                    setLightbox({
+                      items: visible.map((s) => ({
+                        name: s.caption ?? "Gallery item",
+                        kind: s.media_type === "video" ? "video" : "image",
+                        resolveUrl: () => s.url,
+                      })),
+                      index: i,
+                    })
+                  }
+                  onDelete={() => remove(p)}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {lightbox && (
+          <AttachmentLightbox
+            items={lightbox.items}
+            startIndex={lightbox.index}
+            onClose={() => setLightbox(null)}
+          />
+        )}
+
+        {folderModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
+            <div className="w-full max-w-md rounded-2xl bg-card p-6 shadow-2xl">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">
+                  {folderModal.editing ? "Edit folder" : "New folder"}
+                </h2>
+                <button onClick={() => setFolderModal(null)} className="rounded p-1 hover:bg-muted">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              {folderModal.editing?.project_id && (
+                <div className="mt-3 flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+                  <Link2 className="h-3.5 w-3.5 shrink-0 text-primary" />
+                  Linked to a project — its name follows the project title, and it's removed when
+                  the project is deleted. Edit the project to rename it.
+                </div>
+              )}
+              <div className="mt-4 space-y-3">
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
+                    Name
+                  </span>
+                  <input
+                    value={folderModal.form.name}
+                    disabled={!!folderModal.editing?.project_id}
+                    onChange={(e) =>
+                      setFolderModal({
+                        ...folderModal,
+                        form: { ...folderModal.form, name: e.target.value },
+                      })
+                    }
+                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
+                    Description
+                  </span>
+                  <textarea
+                    rows={3}
+                    value={folderModal.form.description}
+                    onChange={(e) =>
+                      setFolderModal({
+                        ...folderModal,
+                        form: { ...folderModal.form, description: e.target.value },
+                      })
+                    }
+                    className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm"
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
+                    Location
+                  </span>
+                  <LocationAutosuggest
+                    value={folderModal.form.location}
+                    onChange={(v) =>
+                      setFolderModal({ ...folderModal, form: { ...folderModal.form, location: v } })
+                    }
+                  />
+                </label>
+                <div className="text-sm">
+                  <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
+                    Date range
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      aria-label="Start date"
+                      value={folderModal.form.date_start}
+                      onChange={(e) =>
+                        setFolderModal({
+                          ...folderModal,
+                          form: { ...folderModal.form, date_start: e.target.value },
+                        })
+                      }
+                      className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                    />
+                    <span className="shrink-0 text-muted-foreground">–</span>
+                    <input
+                      type="date"
+                      aria-label="End date"
+                      value={folderModal.form.date_end}
+                      onChange={(e) =>
+                        setFolderModal({
+                          ...folderModal,
+                          form: { ...folderModal.form, date_end: e.target.value },
+                        })
+                      }
+                      className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="mt-6 flex items-center justify-between gap-2">
+                {folderModal.editing && !folderModal.editing.project_id ? (
+                  <button
+                    onClick={removeFolder}
+                    className="text-xs font-medium text-destructive hover:underline"
+                  >
+                    Delete folder
+                  </button>
+                ) : (
+                  <span />
+                )}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setFolderModal(null)}
+                    className="h-9 rounded-md border border-border px-4 text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveFolder}
+                    className="h-9 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-      {lightbox && (
-        <AttachmentLightbox items={lightbox.items} startIndex={lightbox.index} onClose={() => setLightbox(null)} />
-      )}
-    </div>
+    </DndContext>
   );
 }

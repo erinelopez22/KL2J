@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -29,11 +29,16 @@ import {
   Handshake,
   Play,
   Star,
+  Folder,
+  ArrowLeft,
+  Search,
 } from "lucide-react";
 import { ChatWidget } from "@/components/ChatWidget";
 import {
   usePublicServices,
   usePublicGalleryPhotos,
+  usePublicGalleryFolders,
+  type PublicGalleryFolder,
   usePublicDocuments,
   usePublicProjects,
   usePublicSiteSettings,
@@ -41,6 +46,7 @@ import {
   usePublicReviews,
   type PublicReview,
   type PublicAttachment,
+  type PublicProject,
 } from "@/lib/public-content";
 import { LocationAutosuggest } from "@/components/LocationAutosuggest";
 import { PublicDocumentUpload, type UploadedDocument } from "@/components/PublicDocumentUpload";
@@ -205,7 +211,7 @@ function NavBar() {
     { href: "#credentials", label: "Credentials" },
     { href: "#projects", label: "Projects" },
     { href: "#reviews", label: "Reviews" },
-    { href: "#photos", label: "Photos" },
+    { href: "#photos", label: "Gallery" },
     { href: "#why", label: "Why us" },
     { href: "#contact", label: "Contact" },
   ];
@@ -512,12 +518,31 @@ function CTA({
   selectedService: string;
   onSelectedServiceChange: (title: string) => void;
 }) {
+  const formWrapperRef = useRef<HTMLDivElement>(null);
+  const [formHeight, setFormHeight] = useState<number | null>(null);
+
+  useEffect(() => {
+    const el = formWrapperRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      const height = entries[0]?.contentRect.height;
+      if (height) setFormHeight(height);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <section id="contact" className="relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-br from-primary to-slate-900" />
       <div className="relative max-w-6xl mx-auto px-4 py-14 md:py-16 text-primary-foreground">
-        <div className="grid lg:grid-cols-2 gap-10 items-start">
-          <div>
+        <div className="grid lg:grid-cols-2 gap-10">
+          <div
+            className="flex flex-col lg:h-[var(--form-h)]"
+            style={
+              formHeight ? ({ "--form-h": `${formHeight}px` } as React.CSSProperties) : undefined
+            }
+          >
             <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
               Ready to survey your land?
             </h2>
@@ -525,46 +550,87 @@ function CTA({
               Tell us about your parcel or project. We'll get back within one business day with a
               scoped quote and estimated timeline.
             </p>
-            <div className="mt-8 space-y-3 text-sm">
-              <a href="tel:+639296410776" className="flex items-center gap-3 hover:underline">
-                <Phone className="h-4 w-4" /> 0929 641 0776{" "}
-                <span className="text-primary-foreground/70">(Smart)</span>
+            <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-primary-foreground/85">
+              <a
+                href="tel:+639296410776"
+                className="inline-flex items-center gap-1.5 hover:underline"
+              >
+                <Phone className="h-3.5 w-3.5" /> 0929 641 0776
               </a>
-              <a href="tel:+639954608248" className="flex items-center gap-3 hover:underline">
-                <Phone className="h-4 w-4" /> 0995 460 8248{" "}
-                <span className="text-primary-foreground/70">(Globe)</span>
+              <a
+                href="tel:+639954608248"
+                className="inline-flex items-center gap-1.5 hover:underline"
+              >
+                <Phone className="h-3.5 w-3.5" /> 0995 460 8248
               </a>
               <a
                 href="mailto:kl2j.engineering@gmail.com"
-                className="flex items-center gap-3 hover:underline"
+                className="inline-flex items-center gap-1.5 hover:underline"
               >
-                <Mail className="h-4 w-4" /> kl2j.engineering@gmail.com
+                <Mail className="h-3.5 w-3.5" /> kl2j.engineering@gmail.com
               </a>
-              <div className="flex items-center gap-3">
-                <MapPin className="h-4 w-4" /> Serving clients nationwide
-              </div>
-              <a
-                href={FACEBOOK_PAGE_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-3 hover:underline"
-              >
-                <Facebook className="h-4 w-4" /> Follow us on Facebook
-              </a>
-              <a
-                href={FACEBOOK_DOCS_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-3 hover:underline"
-              >
-                <FileText className="h-4 w-4" /> View credentials & documents
-              </a>
+              <span className="inline-flex items-center gap-1.5">
+                <MapPin className="h-3.5 w-3.5" /> Serving clients nationwide
+              </span>
             </div>
+            <RelatedProjects service={selectedService} />
           </div>
-          <ContactForm service={selectedService} onServiceChange={onSelectedServiceChange} />
+          <div ref={formWrapperRef} className="self-start">
+            <ContactForm service={selectedService} onServiceChange={onSelectedServiceChange} />
+          </div>
         </div>
       </div>
     </section>
+  );
+}
+
+function RelatedProjects({ service }: { service: string }) {
+  const { data } = usePublicProjects();
+  const navigate = useNavigate();
+  if (!data || data.length === 0) return null;
+
+  const projects = service ? data.filter((p) => p.service === service) : data;
+  if (projects.length === 0) return null;
+
+  function openProject(id: string) {
+    navigate({ to: "/", search: (prev) => ({ ...prev, project: id }) });
+  }
+
+  return (
+    <div className="mt-8 flex min-h-0 flex-1 flex-col">
+      <p className="text-xs font-semibold uppercase tracking-wide text-primary-foreground/70">
+        {service ? `Projects we've completed for ${service}` : "Projects we've completed"}
+      </p>
+      <div className="scrollbar-on-dark mt-3 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+        {projects.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => openProject(p.id)}
+            className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-card p-3 text-left text-card-foreground shadow-sm transition hover:shadow-md"
+          >
+            {p.cover_photo_url ? (
+              <img
+                src={p.cover_photo_url}
+                alt={p.title}
+                className="h-14 w-14 shrink-0 rounded-lg object-cover"
+              />
+            ) : (
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-muted">
+                <Compass className="h-6 w-6 text-muted-foreground" />
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold">{p.title}</p>
+              <p className="truncate text-xs text-muted-foreground">{p.location}</p>
+              {p.description && (
+                <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{p.description}</p>
+              )}
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -1108,24 +1174,152 @@ function ProjectDateRange({ p }: { p: { start_date: string | null; end_date: str
   );
 }
 
+const PROJECT_STATUS_BADGE_STYLES: Record<string, string> = {
+  New: "bg-blue-100 text-blue-700",
+  Ongoing: "bg-indigo-100 text-indigo-700",
+  Onhold: "bg-amber-100 text-amber-700",
+  Completed: "bg-emerald-100 text-emerald-700",
+  Rejected: "bg-destructive/10 text-destructive",
+  Cancelled: "bg-muted text-muted-foreground",
+};
+
+function ProjectStatusBadge({
+  status,
+  className = "",
+}: {
+  status: string | null;
+  className?: string;
+}) {
+  if (!status) return null;
+  const style = PROJECT_STATUS_BADGE_STYLES[status] ?? "bg-muted text-muted-foreground";
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${style} ${className}`}
+    >
+      {status}
+    </span>
+  );
+}
+
+function ProjectCard({
+  project,
+  onClick,
+  className = "",
+}: {
+  project: PublicProject;
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`group overflow-hidden rounded-xl border border-border bg-card text-left shadow-sm transition-shadow hover:shadow-md ${className}`}
+    >
+      {project.cover_photo_url && (
+        <div className="relative aspect-video overflow-hidden bg-muted">
+          <img
+            src={project.cover_photo_url}
+            alt={project.title}
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.05]"
+            loading="lazy"
+          />
+          <ProjectStatusBadge
+            status={project.inquiry_status}
+            className="absolute right-2 top-2 shadow"
+          />
+        </div>
+      )}
+      <div className="p-5">
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="font-semibold text-lg">{project.title}</h3>
+          {!project.cover_photo_url && <ProjectStatusBadge status={project.inquiry_status} />}
+        </div>
+        {project.location && (
+          <div className="mt-0.5 text-sm text-muted-foreground">{project.location}</div>
+        )}
+        <div className="mt-1 text-xs font-medium uppercase tracking-wide text-primary">
+          {project.service}
+          <ProjectDateRange p={project} />
+        </div>
+        {project.personnel?.length > 0 && (
+          <div className="mt-1 text-xs text-muted-foreground">
+            Team: {project.personnel.join(", ")}
+          </div>
+        )}
+        {project.description && (
+          <p className="mt-2 line-clamp-2 text-sm text-muted-foreground leading-relaxed">
+            {project.description}
+          </p>
+        )}
+      </div>
+    </button>
+  );
+}
+
+const PROJECT_VIEW_ALL_SORT_OPTIONS = {
+  newest: {
+    label: "Newest first",
+    cmp: (a: PublicProject, b: PublicProject) =>
+      (b.start_date ?? "").localeCompare(a.start_date ?? ""),
+  },
+  oldest: {
+    label: "Oldest first",
+    cmp: (a: PublicProject, b: PublicProject) =>
+      (a.start_date ?? "").localeCompare(b.start_date ?? ""),
+  },
+  title_asc: {
+    label: "Title A-Z",
+    cmp: (a: PublicProject, b: PublicProject) => a.title.localeCompare(b.title),
+  },
+} as const;
+type ProjectViewAllSortKey = keyof typeof PROJECT_VIEW_ALL_SORT_OPTIONS;
+
 function Projects() {
   const { data } = usePublicProjects();
   const search = Route.useSearch();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
   const [lightbox, setLightbox] = useState<{ items: LightboxItem[]; index: number } | null>(null);
-  const deepLinkOpened = useRef(false);
+  const lastDeepLinkId = useRef<string | null>(null);
+  const [allSearch, setAllSearch] = useState("");
+  const [allServiceFilter, setAllServiceFilter] = useState("");
+  const [allStatusFilter, setAllStatusFilter] = useState("");
+  const [allSortKey, setAllSortKey] = useState<ProjectViewAllSortKey>("newest");
 
   useEffect(() => {
-    if (deepLinkOpened.current || !search.project || !data) return;
+    if (!search.project || !data || search.project === lastDeepLinkId.current) return;
     if (data.some((p) => p.id === search.project)) {
       setSelectedId(search.project);
-      deepLinkOpened.current = true;
+      lastDeepLinkId.current = search.project;
     }
   }, [search.project, data]);
 
   if (!data || data.length === 0) return null;
 
   const selected = data.find((p) => p.id === selectedId) ?? null;
+  const allServiceOptions = Array.from(
+    new Set(data.map((p) => p.service).filter((s): s is string => Boolean(s))),
+  ).sort();
+  const allStatusOptions = Array.from(
+    new Set(data.map((p) => p.inquiry_status).filter((s): s is string => Boolean(s))),
+  ).sort();
+  const allSearchLower = allSearch.trim().toLowerCase();
+  const filteredAllProjects = data
+    .filter((p) => {
+      if (allServiceFilter && p.service !== allServiceFilter) return false;
+      if (allStatusFilter && p.inquiry_status !== allStatusFilter) return false;
+      if (!allSearchLower) return true;
+      return [p.title, p.location, p.service, ...(p.personnel ?? [])]
+        .filter(Boolean)
+        .some((field) => field!.toLowerCase().includes(allSearchLower));
+    })
+    .sort(PROJECT_VIEW_ALL_SORT_OPTIONS[allSortKey].cmp);
+
+  function openProject(id: string) {
+    setSelectedId(id);
+    setShowAll(false);
+  }
 
   function openAttachments(docs: PublicAttachment[], startIndex: number) {
     const items: LightboxItem[] = docs.map((d) => ({
@@ -1138,54 +1332,122 @@ function Projects() {
 
   return (
     <section id="projects" className="max-w-6xl mx-auto px-4 py-14 md:py-16">
-      <div className="max-w-2xl">
-        <p className="text-sm font-semibold uppercase tracking-wider text-primary">Portfolio</p>
-        <h2 className="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Completed projects</h2>
-        <p className="mt-3 text-muted-foreground">
-          A sample of surveys and titling work we've delivered.
-        </p>
+      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+        <div className="max-w-2xl">
+          <p className="text-sm font-semibold uppercase tracking-wider text-primary">Portfolio</p>
+          <h2 className="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Completed projects</h2>
+          <p className="mt-3 text-muted-foreground">
+            A sample of surveys and titling work we've delivered.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowAll(true)}
+          className="inline-flex shrink-0 items-center gap-2 h-11 px-5 rounded-md bg-primary text-primary-foreground font-semibold hover:bg-primary/90 self-start"
+        >
+          <Maximize2 className="h-4 w-4" /> View all
+        </button>
       </div>
-      <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {data.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            onClick={() => setSelectedId(p.id)}
-            className="group overflow-hidden rounded-xl border border-border bg-card text-left shadow-sm transition-shadow hover:shadow-md"
+
+      <div className="-mx-4 mt-8 overflow-x-auto px-4">
+        <div className="flex gap-5 pb-2">
+          {data.map((p) => (
+            <ProjectCard
+              key={p.id}
+              project={p}
+              onClick={() => openProject(p.id)}
+              className="w-[300px] shrink-0"
+            />
+          ))}
+        </div>
+      </div>
+
+      {showAll && (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/80 p-4"
+          onClick={() => setShowAll(false)}
+        >
+          <div
+            className="max-h-[85vh] w-full max-w-5xl overflow-y-auto rounded-xl bg-card p-4 shadow-2xl sm:p-6"
+            onClick={(e) => e.stopPropagation()}
           >
-            {p.cover_photo_url && (
-              <div className="aspect-video overflow-hidden bg-muted">
-                <img
-                  src={p.cover_photo_url}
-                  alt={p.title}
-                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.05]"
-                  loading="lazy"
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <h3 className="text-lg font-semibold">
+                All projects ({filteredAllProjects.length}
+                {filteredAllProjects.length !== data.length ? ` of ${data.length}` : ""})
+              </h3>
+              <button
+                onClick={() => setShowAll(false)}
+                className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="mb-4 flex flex-wrap gap-2">
+              <div className="relative min-w-[200px] flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  value={allSearch}
+                  onChange={(e) => setAllSearch(e.target.value)}
+                  placeholder="Search title, location, service…"
+                  className="h-10 w-full rounded-md border border-border bg-background pl-9 pr-3 text-sm"
                 />
               </div>
-            )}
-            <div className="p-5">
-              <h3 className="font-semibold text-lg">{p.title}</h3>
-              {p.location && (
-                <div className="mt-0.5 text-sm text-muted-foreground">{p.location}</div>
+              {allServiceOptions.length > 0 && (
+                <select
+                  value={allServiceFilter}
+                  onChange={(e) => setAllServiceFilter(e.target.value)}
+                  className="h-10 rounded-md border border-border bg-background px-3 text-sm"
+                >
+                  <option value="">All services</option>
+                  {allServiceOptions.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
               )}
-              <div className="mt-1 text-xs font-medium uppercase tracking-wide text-primary">
-                {p.service}
-                <ProjectDateRange p={p} />
-              </div>
-              {p.personnel?.length > 0 && (
-                <div className="mt-1 text-xs text-muted-foreground">
-                  Team: {p.personnel.join(", ")}
-                </div>
+              {allStatusOptions.length > 0 && (
+                <select
+                  value={allStatusFilter}
+                  onChange={(e) => setAllStatusFilter(e.target.value)}
+                  className="h-10 rounded-md border border-border bg-background px-3 text-sm"
+                >
+                  <option value="">All statuses</option>
+                  {allStatusOptions.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
               )}
-              {p.description && (
-                <p className="mt-2 line-clamp-2 text-sm text-muted-foreground leading-relaxed">
-                  {p.description}
-                </p>
-              )}
+              <select
+                value={allSortKey}
+                onChange={(e) => setAllSortKey(e.target.value as ProjectViewAllSortKey)}
+                className="h-10 rounded-md border border-border bg-background px-3 text-sm"
+              >
+                {Object.entries(PROJECT_VIEW_ALL_SORT_OPTIONS).map(([key, opt]) => (
+                  <option key={key} value={key}>
+                    Sort: {opt.label}
+                  </option>
+                ))}
+              </select>
             </div>
-          </button>
-        ))}
-      </div>
+            {filteredAllProjects.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No projects match your search or filter.
+              </p>
+            ) : (
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                {filteredAllProjects.map((p) => (
+                  <ProjectCard key={p.id} project={p} onClick={() => openProject(p.id)} />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {selected && (
         <div
@@ -1205,7 +1467,10 @@ function Projects() {
             )}
             <div className="p-6">
               <div className="flex items-start justify-between gap-4">
-                <h3 className="text-xl font-bold">{selected.title}</h3>
+                <div className="flex min-w-0 items-center gap-2">
+                  <h3 className="text-xl font-bold">{selected.title}</h3>
+                  <ProjectStatusBadge status={selected.inquiry_status} />
+                </div>
                 <button
                   onClick={() => setSelectedId(null)}
                   className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted"
@@ -1439,10 +1704,176 @@ function GalleryThumb({
   );
 }
 
+function FlatLightbox({
+  items,
+  index,
+  onClose,
+  onPrev,
+  onNext,
+}: {
+  items: GalleryItem[];
+  index: number;
+  onClose: () => void;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-slate-950/90 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <button
+        className="absolute top-4 right-4 h-10 w-10 rounded-full bg-white/10 text-white hover:bg-white/20 flex items-center justify-center text-xl"
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+        aria-label="Close"
+      >
+        ×
+      </button>
+      <button
+        className="absolute left-4 top-1/2 -translate-y-1/2 h-12 w-12 rounded-full bg-white/10 text-white hover:bg-white/20 flex items-center justify-center text-2xl"
+        onClick={(e) => {
+          e.stopPropagation();
+          onPrev();
+        }}
+        aria-label="Previous"
+      >
+        ‹
+      </button>
+      {items[index].type === "video" ? (
+        <video
+          src={items[index].url}
+          controls
+          autoPlay
+          className="max-h-[85vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        />
+      ) : (
+        <img
+          src={items[index].url}
+          alt={`Gallery item ${index + 1}`}
+          className="max-h-[85vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        />
+      )}
+      <button
+        className="absolute right-4 top-1/2 -translate-y-1/2 h-12 w-12 rounded-full bg-white/10 text-white hover:bg-white/20 flex items-center justify-center text-2xl"
+        onClick={(e) => {
+          e.stopPropagation();
+          onNext();
+        }}
+        aria-label="Next"
+      >
+        ›
+      </button>
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/70 text-sm">
+        {index + 1} / {items.length}
+      </div>
+    </div>
+  );
+}
+
+function GalleryFolderCard({
+  folder,
+  onOpen,
+}: {
+  folder: PublicGalleryFolder;
+  onOpen: () => void;
+}) {
+  const cover = folder.items.find((it) => it.media_type === "photo") ?? folder.items[0];
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="group overflow-hidden rounded-xl border border-border bg-card text-left shadow-sm transition-shadow hover:shadow-md"
+    >
+      <div className="aspect-video overflow-hidden bg-muted flex items-center justify-center">
+        {cover ? (
+          cover.media_type === "video" ? (
+            <div className="relative h-full w-full">
+              <video
+                src={cover.url}
+                muted
+                playsInline
+                preload="metadata"
+                className="h-full w-full object-cover"
+              />
+              <div className="absolute inset-0 flex items-center justify-center bg-slate-950/25">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90">
+                  <Play className="h-4 w-4 fill-slate-900 text-slate-900" />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <img
+              src={cover.url}
+              alt={folder.name}
+              loading="lazy"
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.05]"
+            />
+          )
+        ) : (
+          <Folder className="h-10 w-10 text-muted-foreground" />
+        )}
+      </div>
+      <div className="p-4">
+        <div className="flex items-center justify-between gap-2">
+          <h4 className="font-semibold">{folder.name}</h4>
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {folder.items.length} item{folder.items.length === 1 ? "" : "s"}
+          </span>
+        </div>
+        {(folder.location || folder.date_start) && (
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {folder.location}
+            <ProjectDateRange p={{ start_date: folder.date_start, end_date: folder.date_end }} />
+          </p>
+        )}
+        {folder.description && (
+          <p className="mt-2 line-clamp-2 text-sm text-muted-foreground leading-relaxed">
+            {folder.description}
+          </p>
+        )}
+      </div>
+    </button>
+  );
+}
+
 function Photos() {
   const [lightbox, setLightbox] = useState<number | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [openFolder, setOpenFolder] = useState<PublicGalleryFolder | null>(null);
+  const [folderLightbox, setFolderLightbox] = useState<number | null>(null);
+  const [folderSearch, setFolderSearch] = useState("");
+  const [folderLocationFilter, setFolderLocationFilter] = useState("");
+  const [folderSortKey, setFolderSortKey] = useState<"newest" | "oldest" | "name">("newest");
+  const [openFolderSearch, setOpenFolderSearch] = useState("");
+  const [openFolderTypeFilter, setOpenFolderTypeFilter] = useState<"all" | "photo" | "video">(
+    "all",
+  );
   const { data } = usePublicGalleryPhotos();
+  const { data: folderData } = usePublicGalleryFolders();
+  const folders = folderData ?? [];
+  const folderLocationOptions = Array.from(
+    new Set(folders.map((f) => f.location).filter((l): l is string => Boolean(l))),
+  ).sort();
+  const folderSearchLower = folderSearch.trim().toLowerCase();
+  const filteredFolders = folders
+    .filter((f) => {
+      if (folderLocationFilter && f.location !== folderLocationFilter) return false;
+      if (!folderSearchLower) return true;
+      return [f.name, f.location, f.description]
+        .filter(Boolean)
+        .some((field) => field!.toLowerCase().includes(folderSearchLower));
+    })
+    .sort((a, b) => {
+      if (folderSortKey === "name") return a.name.localeCompare(b.name);
+      const da = a.date_start ?? "";
+      const db = b.date_start ?? "";
+      return folderSortKey === "oldest" ? da.localeCompare(db) : db.localeCompare(da);
+    });
   const galleryItems: GalleryItem[] =
     data && data.length > 0
       ? data.map((p) => ({ url: p.url, name: p.id, type: p.media_type }))
@@ -1457,6 +1888,41 @@ function Photos() {
   const prev = () =>
     setLightbox((i) => (i === null ? null : (i - 1 + galleryItems.length) % galleryItems.length));
   const next = () => setLightbox((i) => (i === null ? null : (i + 1) % galleryItems.length));
+
+  function closeAll() {
+    setShowAll(false);
+    setOpenFolder(null);
+    setFolderSearch("");
+    setFolderLocationFilter("");
+    setFolderSortKey("newest");
+  }
+
+  function openFolderView(f: PublicGalleryFolder) {
+    setOpenFolder(f);
+    setOpenFolderSearch("");
+    setOpenFolderTypeFilter("all");
+  }
+
+  const openFolderSearchLower = openFolderSearch.trim().toLowerCase();
+  const filteredFolderPhotos = openFolder
+    ? openFolder.items.filter((p) => {
+        if (openFolderTypeFilter !== "all" && p.media_type !== openFolderTypeFilter) return false;
+        if (!openFolderSearchLower) return true;
+        return (p.caption ?? "").toLowerCase().includes(openFolderSearchLower);
+      })
+    : [];
+  const folderItems: GalleryItem[] = filteredFolderPhotos.map((p) => ({
+    url: p.url,
+    name: p.id,
+    type: p.media_type,
+  }));
+  const closeFolderLightbox = () => setFolderLightbox(null);
+  const prevFolder = () =>
+    setFolderLightbox((i) =>
+      i === null ? null : (i - 1 + folderItems.length) % folderItems.length,
+    );
+  const nextFolder = () =>
+    setFolderLightbox((i) => (i === null ? null : (i + 1) % folderItems.length));
 
   return (
     <section id="photos" className="max-w-6xl mx-auto px-4 py-14 md:py-16">
@@ -1527,123 +1993,173 @@ function Photos() {
       {showAll && (
         <div
           className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/80 p-4"
-          onClick={() => setShowAll(false)}
+          onClick={closeAll}
         >
           <div
             className="max-h-[85vh] w-full max-w-5xl overflow-y-auto rounded-xl bg-card p-4 shadow-2xl sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mb-4 flex items-center justify-between gap-4">
-              <h3 className="text-lg font-semibold">
-                Full gallery ({photoItems.length} photo{photoItems.length === 1 ? "" : "s"}
-                {videoItems.length > 0
-                  ? `, ${videoItems.length} video${videoItems.length === 1 ? "" : "s"}`
-                  : ""}
-                )
-              </h3>
-              <button
-                onClick={() => setShowAll(false)}
-                className="rounded-md p-1 text-muted-foreground hover:bg-muted"
-                aria-label="Close"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="space-y-6">
-              <div>
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Photos
-                </h4>
-                <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                  {photoItems.map(({ item, i }) => (
-                    <GalleryThumb
-                      key={item.name}
-                      item={item}
-                      index={i}
-                      onOpen={setLightbox}
-                      alt={`KL2J field survey photo ${i + 1}`}
-                    />
-                  ))}
+            {openFolder ? (
+              <>
+                <div className="mb-4 flex items-center gap-3">
+                  <button
+                    onClick={() => setOpenFolder(null)}
+                    className="rounded-md p-1.5 text-muted-foreground hover:bg-muted"
+                    aria-label="Back to folders"
+                  >
+                    <ArrowLeft className="h-5 w-5" />
+                  </button>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate text-lg font-semibold">{openFolder.name}</h3>
+                    {(openFolder.location || openFolder.date_start) && (
+                      <p className="text-xs text-muted-foreground">
+                        {openFolder.location}
+                        <ProjectDateRange
+                          p={{ start_date: openFolder.date_start, end_date: openFolder.date_end }}
+                        />
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={closeAll}
+                    className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+                    aria-label="Close"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
                 </div>
-              </div>
-              {videoItems.length > 0 && (
-                <div className="border-t border-border pt-6">
-                  <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Videos
-                  </h4>
-                  <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                    {videoItems.map(({ item, i }) => (
+                {openFolder.description && (
+                  <p className="mb-4 text-sm text-muted-foreground">{openFolder.description}</p>
+                )}
+                <div className="mb-4 flex flex-wrap gap-2">
+                  <div className="relative min-w-[200px] flex-1">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      value={openFolderSearch}
+                      onChange={(e) => setOpenFolderSearch(e.target.value)}
+                      placeholder="Search caption…"
+                      className="h-10 w-full rounded-md border border-border bg-background pl-9 pr-3 text-sm"
+                    />
+                  </div>
+                  <select
+                    value={openFolderTypeFilter}
+                    onChange={(e) =>
+                      setOpenFolderTypeFilter(e.target.value as "all" | "photo" | "video")
+                    }
+                    className="h-10 rounded-md border border-border bg-background px-3 text-sm"
+                  >
+                    <option value="all">Photos + videos</option>
+                    <option value="photo">Photos only</option>
+                    <option value="video">Videos only</option>
+                  </select>
+                </div>
+                {folderItems.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    {openFolder.items.length === 0
+                      ? "No photos or videos in this folder yet."
+                      : "No items match your search or filter."}
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {folderItems.map((item, i) => (
                       <GalleryThumb
                         key={item.name}
                         item={item}
                         index={i}
-                        onOpen={setLightbox}
-                        alt={`KL2J field survey video ${i + 1}`}
+                        onOpen={setFolderLightbox}
+                        alt={`${openFolder.name} item ${i + 1}`}
                       />
                     ))}
                   </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="mb-4 flex items-center justify-between gap-4">
+                  <h3 className="text-lg font-semibold">
+                    Gallery folders ({filteredFolders.length}
+                    {filteredFolders.length !== folders.length ? ` of ${folders.length}` : ""})
+                  </h3>
+                  <button
+                    onClick={closeAll}
+                    className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+                    aria-label="Close"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
                 </div>
-              )}
-            </div>
+                {folders.length > 0 && (
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    <div className="relative min-w-[200px] flex-1">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <input
+                        value={folderSearch}
+                        onChange={(e) => setFolderSearch(e.target.value)}
+                        placeholder="Search name, location, description…"
+                        className="h-10 w-full rounded-md border border-border bg-background pl-9 pr-3 text-sm"
+                      />
+                    </div>
+                    {folderLocationOptions.length > 0 && (
+                      <select
+                        value={folderLocationFilter}
+                        onChange={(e) => setFolderLocationFilter(e.target.value)}
+                        className="h-10 rounded-md border border-border bg-background px-3 text-sm"
+                      >
+                        <option value="">All locations</option>
+                        {folderLocationOptions.map((l) => (
+                          <option key={l} value={l}>
+                            {l}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <select
+                      value={folderSortKey}
+                      onChange={(e) =>
+                        setFolderSortKey(e.target.value as "newest" | "oldest" | "name")
+                      }
+                      className="h-10 rounded-md border border-border bg-background px-3 text-sm"
+                    >
+                      <option value="newest">Sort: Newest first</option>
+                      <option value="oldest">Sort: Oldest first</option>
+                      <option value="name">Sort: Name A-Z</option>
+                    </select>
+                  </div>
+                )}
+                {folders.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No folders yet.</p>
+                ) : filteredFolders.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No folders match your search.</p>
+                ) : (
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {filteredFolders.map((f) => (
+                      <GalleryFolderCard key={f.id} folder={f} onOpen={() => openFolderView(f)} />
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
       )}
 
       {lightbox !== null && (
-        <div
-          className="fixed inset-0 z-50 bg-slate-950/90 flex items-center justify-center p-4"
-          onClick={close}
-        >
-          <button
-            className="absolute top-4 right-4 h-10 w-10 rounded-full bg-white/10 text-white hover:bg-white/20 flex items-center justify-center text-xl"
-            onClick={(e) => {
-              e.stopPropagation();
-              close();
-            }}
-            aria-label="Close"
-          >
-            ×
-          </button>
-          <button
-            className="absolute left-4 top-1/2 -translate-y-1/2 h-12 w-12 rounded-full bg-white/10 text-white hover:bg-white/20 flex items-center justify-center text-2xl"
-            onClick={(e) => {
-              e.stopPropagation();
-              prev();
-            }}
-            aria-label="Previous"
-          >
-            ‹
-          </button>
-          {galleryItems[lightbox].type === "video" ? (
-            <video
-              src={galleryItems[lightbox].url}
-              controls
-              autoPlay
-              className="max-h-[85vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            />
-          ) : (
-            <img
-              src={galleryItems[lightbox].url}
-              alt={`KL2J field survey photo ${lightbox + 1}`}
-              className="max-h-[85vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            />
-          )}
-          <button
-            className="absolute right-4 top-1/2 -translate-y-1/2 h-12 w-12 rounded-full bg-white/10 text-white hover:bg-white/20 flex items-center justify-center text-2xl"
-            onClick={(e) => {
-              e.stopPropagation();
-              next();
-            }}
-            aria-label="Next"
-          >
-            ›
-          </button>
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/70 text-sm">
-            {lightbox + 1} / {galleryItems.length}
-          </div>
-        </div>
+        <FlatLightbox
+          items={galleryItems}
+          index={lightbox}
+          onClose={close}
+          onPrev={prev}
+          onNext={next}
+        />
+      )}
+      {folderLightbox !== null && (
+        <FlatLightbox
+          items={folderItems}
+          index={folderLightbox}
+          onClose={closeFolderLightbox}
+          onPrev={prevFolder}
+          onNext={nextFolder}
+        />
       )}
     </section>
   );
@@ -1704,30 +2220,32 @@ function Footer() {
   const logo = settings?.logo_url || logoUrl;
   return (
     <footer className="border-t border-border bg-background">
-      <div className="max-w-6xl mx-auto px-4 py-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-sm text-muted-foreground">
-        <div className="flex items-center gap-2 font-semibold text-foreground">
-          <img src={logo} alt="KL2J logo" className="h-6 w-6 rounded-full object-cover" />
-          KL2J Land Surveying and Engineering Services
+      <div className="max-w-6xl mx-auto px-4 py-10">
+        <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+          <div className="flex items-center gap-2 font-semibold text-foreground">
+            <img src={logo} alt="KL2J logo" className="h-6 w-6 rounded-full object-cover" />
+            KL2J Land Surveying and Engineering Services
+          </div>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
+            <a
+              href={FACEBOOK_PAGE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 hover:text-foreground"
+            >
+              <Facebook className="h-4 w-4" /> Facebook
+            </a>
+            <a
+              href={FACEBOOK_DOCS_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 hover:text-foreground"
+            >
+              <FileText className="h-4 w-4" /> Documents <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
         </div>
-        <div className="flex items-center gap-4">
-          <a
-            href={FACEBOOK_PAGE_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 hover:text-foreground"
-          >
-            <Facebook className="h-4 w-4" /> Facebook
-          </a>
-          <a
-            href={FACEBOOK_DOCS_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 hover:text-foreground"
-          >
-            <FileText className="h-4 w-4" /> Documents <ExternalLink className="h-3 w-3" />
-          </a>
-        </div>
-        <div>
+        <div className="mt-6 border-t border-border pt-4 text-sm text-muted-foreground">
           © {new Date().getFullYear()} KL2J Land Surveying and Engineering Services. All rights
           reserved.
         </div>

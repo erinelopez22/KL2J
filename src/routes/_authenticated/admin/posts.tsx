@@ -13,6 +13,7 @@ import {
   Loader2,
   X,
   ExternalLink,
+  Search,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { deletePost, sendPostBatch } from "@/lib/admin/posts.functions";
@@ -325,6 +326,22 @@ function PostViewer({
   );
 }
 
+const POST_SORT_OPTIONS = {
+  newest: {
+    label: "Newest first",
+    cmp: (a: PostRow, b: PostRow) => b.created_at.localeCompare(a.created_at),
+  },
+  oldest: {
+    label: "Oldest first",
+    cmp: (a: PostRow, b: PostRow) => a.created_at.localeCompare(b.created_at),
+  },
+  title_asc: {
+    label: "Title A-Z",
+    cmp: (a: PostRow, b: PostRow) => a.title.localeCompare(b.title),
+  },
+} as const;
+type PostSortKey = keyof typeof POST_SORT_OPTIONS;
+
 function AdminPosts() {
   const queryClient = useQueryClient();
   const confirm = useConfirm();
@@ -332,6 +349,8 @@ function AdminPosts() {
   const [filter, setFilter] = useState<"all" | PostRow["status"]>("all");
   const [editing, setEditing] = useState<PostRow | "new" | null>(null);
   const [viewing, setViewing] = useState<PostRow | null>(null);
+  const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState<PostSortKey>("newest");
 
   const { data: posts, isLoading } = useQuery({
     queryKey: ["admin-posts"],
@@ -371,7 +390,10 @@ function AdminPosts() {
     sending: all.filter((p) => p.status === "sending").length,
     sent: all.filter((p) => p.status === "sent").length,
   };
-  const filtered = filter === "all" ? all : all.filter((p) => p.status === filter);
+  const searchLower = search.trim().toLowerCase();
+  const filtered = (filter === "all" ? all : all.filter((p) => p.status === filter))
+    .filter((p) => !searchLower || p.title.toLowerCase().includes(searchLower))
+    .sort(POST_SORT_OPTIONS[sortKey].cmp);
 
   return (
     <div>
@@ -410,14 +432,46 @@ function AdminPosts() {
         ))}
       </div>
 
+      <div className="mt-3 flex flex-wrap gap-2">
+        <div className="relative min-w-[220px] flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search title…"
+            className="h-10 w-full rounded-md border border-border bg-card pl-9 pr-3 text-sm"
+          />
+        </div>
+        <select
+          value={sortKey}
+          onChange={(e) => setSortKey(e.target.value as PostSortKey)}
+          className="h-10 rounded-md border border-border bg-card px-3 text-sm"
+        >
+          {Object.entries(POST_SORT_OPTIONS).map(([key, opt]) => (
+            <option key={key} value={key}>
+              Sort: {opt.label}
+            </option>
+          ))}
+        </select>
+        {search && (
+          <button
+            type="button"
+            onClick={() => setSearch("")}
+            className="rounded-md border border-border px-3 text-sm hover:bg-muted"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
       {isLoading && <p className="mt-6 text-sm text-muted-foreground">Loading…</p>}
       {!isLoading && filtered.length === 0 && (
         <div className="mt-6 rounded-lg border border-dashed border-border p-10 text-center text-muted-foreground">
-          No {filter === "all" ? "" : filter} posts.
+          No posts match your search or filter.
         </div>
       )}
 
-      <div className="mt-6 space-y-2">
+      <div className="mt-6 max-h-[calc(100vh-380px)] space-y-2 overflow-y-auto pr-1">
         {filtered.map((p) => (
           <div
             key={p.id}
