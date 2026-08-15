@@ -31,7 +31,7 @@ import { createPostDraft, updatePostDraft } from "@/lib/admin/posts.functions";
 import { uploadSiteMedia } from "@/lib/admin/media.functions";
 import { fileToBase64 } from "@/lib/admin/fileToBase64";
 import { dedupeContactsByEmail } from "@/lib/admin/dedupeEmailContacts";
-import { ctaForPost } from "@/lib/postCta";
+import { ctaForPost, type PostType } from "@/lib/postCta";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import {
   Command,
@@ -42,7 +42,7 @@ import {
 } from "@/components/ui/command";
 import logoUrl from "@/assets/kl2j-logo.jpg";
 
-export type PostType = "project" | "service" | "profile" | "update";
+export type { PostType };
 export type PostAttachment = {
   url: string;
   name: string;
@@ -68,6 +68,18 @@ const TYPE_OPTIONS: { value: PostType; label: string; emoji: string; color: stri
   { value: "service", label: "New / updated service", emoji: "🛠️", color: "#1e5f8b" },
   { value: "profile", label: "Company update", emoji: "🏢", color: "#8b6f1e" },
   { value: "update", label: "General update", emoji: "📢", color: "#3a3a3a" },
+  { value: "promotion", label: "Promotion / special offer", emoji: "🏷️", color: "#c2410c" },
+  { value: "testimonial", label: "Client testimonial highlight", emoji: "⭐", color: "#b45309" },
+  {
+    value: "credentials",
+    label: "Credentials / certification update",
+    emoji: "🎓",
+    color: "#0f766e",
+  },
+  { value: "team", label: "Team / personnel announcement", emoji: "👥", color: "#4338ca" },
+  { value: "event", label: "Event / seminar", emoji: "📅", color: "#7c3aed" },
+  { value: "deadline", label: "Deadline / compliance reminder", emoji: "⏰", color: "#b91c1c" },
+  { value: "partnership", label: "Partnership announcement", emoji: "🤝", color: "#0e7490" },
 ];
 
 type InquiryContact = { id: string; name: string; email: string | null; created_at: string };
@@ -537,9 +549,9 @@ function RecipientPicker({
   );
 }
 
-function AttachmentTile({ a, onRemove }: { a: PostAttachment; onRemove: () => void }) {
-  return (
-    <div className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-muted">
+export function AttachmentTile({ a, onRemove }: { a: PostAttachment; onRemove?: () => void }) {
+  const inner = (
+    <>
       {a.kind === "image" ? (
         <img src={a.url} alt={a.name} className="h-full w-full object-cover" />
       ) : (
@@ -552,14 +564,34 @@ function AttachmentTile({ a, onRemove }: { a: PostAttachment; onRemove: () => vo
           <span className="line-clamp-2 text-[10px] text-muted-foreground">{a.name}</span>
         </div>
       )}
-      <button
-        type="button"
-        onClick={onRemove}
-        aria-label={`Remove ${a.name}`}
-        className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition group-hover:opacity-100"
-      >
-        <X className="h-3 w-3" />
-      </button>
+    </>
+  );
+
+  return (
+    <div className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-muted">
+      {onRemove ? (
+        inner
+      ) : (
+        <a
+          href={a.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block h-full w-full"
+          title={`Open ${a.name}`}
+        >
+          {inner}
+        </a>
+      )}
+      {onRemove && (
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label={`Remove ${a.name}`}
+          className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition group-hover:opacity-100"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
     </div>
   );
 }

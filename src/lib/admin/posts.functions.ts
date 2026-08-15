@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { dedupeContactsByEmail } from "@/lib/admin/dedupeEmailContacts";
+import type { PostType } from "@/lib/postCta";
 
 const BATCH_SIZE_DEFAULT = 40;
 const SEND_DELAY_MS = 250;
@@ -20,7 +21,19 @@ const PostAttachmentSchema = z.object({
 });
 
 const PostInputSchema = z.object({
-  type: z.enum(["project", "service", "profile", "update"]),
+  type: z.enum([
+    "project",
+    "service",
+    "profile",
+    "update",
+    "promotion",
+    "testimonial",
+    "credentials",
+    "team",
+    "event",
+    "deadline",
+    "partnership",
+  ]),
   title: z.string().min(1).max(200),
   subject: z.string().min(1).max(200),
   bodyHtml: z.string().min(1),
@@ -272,7 +285,7 @@ export const sendPostBatch = createServerFn({ method: "POST" })
     let sentThisBatch = 0;
     let failedThisBatch = 0;
     const postForEmail = {
-      type: post.type as "project" | "service" | "profile" | "update",
+      type: post.type as PostType,
       title: post.title,
       subject: post.subject,
       body_html: post.body_html,

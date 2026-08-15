@@ -3,9 +3,14 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Trash2, Building2, ExternalLink } from "lucide-react";
+import { Trash2, Building2, ExternalLink, X, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { addPartnerCompany, deletePartnerCompany } from "@/lib/admin/companies.functions";
+import {
+  addPartnerCompany,
+  updatePartnerCompany,
+  deletePartnerCompany,
+} from "@/lib/admin/companies.functions";
+import { deleteSiteMedia } from "@/lib/admin/media.functions";
 import { FileDrop } from "@/components/admin/FileDrop";
 import { useConfirm } from "@/components/ConfirmDialogProvider";
 
@@ -22,6 +27,124 @@ type Company = {
   sort_order: number;
 };
 
+function CompanyEditModal({
+  company,
+  onClose,
+  onSaved,
+}: {
+  company: Company;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const doUpdate = useServerFn(updatePartnerCompany);
+  const doDeleteMedia = useServerFn(deleteSiteMedia);
+  const [name, setName] = useState(company.name);
+  const [websiteUrl, setWebsiteUrl] = useState(company.website_url ?? "");
+  const [logo, setLogo] = useState<{ url: string; path?: string }>({
+    url: company.logo_url,
+    path: company.storage_path ?? undefined,
+  });
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (!name.trim()) {
+      toast.error("Enter a company name");
+      return;
+    }
+    setSaving(true);
+    try {
+      await doUpdate({
+        data: {
+          id: company.id,
+          name: name.trim(),
+          logo_url: logo.url,
+          storage_path: logo.path,
+          website_url: websiteUrl.trim() || undefined,
+        },
+      });
+      if (company.storage_path && logo.path && logo.path !== company.storage_path) {
+        await doDeleteMedia({ data: { path: company.storage_path } }).catch(() => {});
+      }
+      toast.success("Company updated");
+      onSaved();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update company");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-xl border border-border bg-card p-4 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Edit company</h2>
+          <button
+            onClick={onClose}
+            className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border border-border bg-white p-1.5">
+            <img src={logo.url} alt={name} className="h-full w-full object-contain" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <FileDrop
+              folder="companies"
+              label="Replace logo"
+              allowExternalLink={false}
+              multiple={false}
+              onUploaded={setLogo}
+            />
+          </div>
+        </div>
+
+        <div className="mt-3 grid gap-3">
+          <input
+            placeholder="Company name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="h-10 rounded-md border border-border bg-background px-3 text-sm"
+          />
+          <input
+            placeholder="Website URL (optional)"
+            value={websiteUrl}
+            onChange={(e) => setWebsiteUrl(e.target.value)}
+            className="h-10 rounded-md border border-border bg-background px-3 text-sm"
+          />
+        </div>
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={save}
+            disabled={saving}
+            className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+          >
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+            Save changes
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AdminCompanies() {
   const queryClient = useQueryClient();
   const doAdd = useServerFn(addPartnerCompany);
@@ -30,11 +153,15 @@ function AdminCompanies() {
   const [pending, setPending] = useState<{ url: string; path?: string } | null>(null);
   const [name, setName] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
+  const [editing, setEditing] = useState<Company | null>(null);
 
   const { data: companies, isLoading } = useQuery({
     queryKey: ["admin-companies"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("partner_companies").select("*").order("sort_order");
+      const { data, error } = await supabase
+        .from("partner_companies")
+        .select("*")
+        .order("sort_order");
       if (error) throw error;
       return data as Company[];
     },
@@ -71,7 +198,8 @@ function AdminCompanies() {
   }
 
   async function remove(company: Company) {
-    if (!(await confirm("Remove this company? This cannot be undone.", { destructive: true }))) return;
+    if (!(await confirm("Remove this company? This cannot be undone.", { destructive: true })))
+      return;
     try {
       await doDelete({ data: { id: company.id, storage_path: company.storage_path ?? undefined } });
       toast.success("Company removed");
@@ -123,7 +251,16 @@ function AdminCompanies() {
 
       <div className="mt-6 max-h-[calc(100vh-260px)] space-y-2 overflow-y-auto pr-1">
         {companies?.map((c) => (
-          <div key={c.id} className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
+          <div
+            key={c.id}
+            role="button"
+            tabIndex={0}
+            onClick={() => setEditing(c)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") setEditing(c);
+            }}
+            className="flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-card p-3 text-left hover:border-primary/40 hover:shadow-sm"
+          >
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border border-border bg-white p-1.5">
               {c.logo_url ? (
                 <img src={c.logo_url} alt={c.name} className="h-full w-full object-contain" />
@@ -138,6 +275,7 @@ function AdminCompanies() {
                   href={c.website_url}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
                   className="flex min-w-0 items-center gap-1 text-xs text-primary hover:underline"
                 >
                   <span className="min-w-0 break-all">{c.website_url}</span>
@@ -146,7 +284,10 @@ function AdminCompanies() {
               )}
             </div>
             <button
-              onClick={() => remove(c)}
+              onClick={(e) => {
+                e.stopPropagation();
+                remove(c);
+              }}
               className="rounded-md p-2 text-destructive hover:bg-destructive/10"
               aria-label="Delete"
             >
@@ -154,8 +295,21 @@ function AdminCompanies() {
             </button>
           </div>
         ))}
-        {companies?.length === 0 && <p className="text-sm text-muted-foreground">No companies added yet.</p>}
+        {companies?.length === 0 && (
+          <p className="text-sm text-muted-foreground">No companies added yet.</p>
+        )}
       </div>
+
+      {editing && (
+        <CompanyEditModal
+          company={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            refresh();
+          }}
+        />
+      )}
     </div>
   );
 }

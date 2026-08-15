@@ -48,6 +48,7 @@ import { getServiceIcon } from "@/lib/admin/iconMap";
 import { splitAreaAnswer, joinAreaAnswer } from "@/lib/areaUnit";
 import { WriteReviewModal } from "@/components/WriteReviewModal";
 import { AttachmentLightbox, type LightboxItem } from "@/components/AttachmentLightbox";
+import { useConfirm } from "@/components/ConfirmDialogProvider";
 
 const FACEBOOK_PAGE_URL = "https://www.facebook.com/profile.php?id=61581147040190";
 const FACEBOOK_DOCS_URL =
@@ -129,12 +130,55 @@ const FALLBACK_SERVICES = [
 ];
 
 function LandingPage() {
+  const confirm = useConfirm();
+  const [selectedService, setSelectedService] = useState("");
+
+  async function goToServiceForm(title: string) {
+    if (!(await confirm(`Get inquiry for "${title}"?`, { confirmLabel: "Yes, continue" }))) return;
+    setSelectedService(title);
+    document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
+  }
+
+  // This route is ssr:false, so a fresh load at e.g. "/#services" arrives
+  // with an empty HTML shell — the browser's one-shot native hash-scroll
+  // fires before React has mounted anything, finds no #services element,
+  // and gives up for good (it never retries once the element exists).
+  // Some sections (Projects/Reviews/Photos) also render null until their
+  // data query resolves, so even a mount-time check can be too early.
+  // Poll every frame for a few seconds instead, so the scroll actually
+  // happens once the target shows up.
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (!hash) return;
+    let cancelled = false;
+    let frame: number;
+    const deadline = Date.now() + 5000;
+
+    function tryScroll() {
+      if (cancelled) return;
+      const el = document.querySelector(hash);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth" });
+        return;
+      }
+      if (Date.now() < deadline) {
+        frame = requestAnimationFrame(tryScroll);
+      }
+    }
+    tryScroll();
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <NavBar />
       <Hero />
       <TrustStrip />
-      <Services />
+      <Services onServiceClick={goToServiceForm} />
       <Process />
       <WhyUs />
       <Credentials />
@@ -142,7 +186,7 @@ function LandingPage() {
       <Reviews />
       <FacebookCTA />
       <Photos />
-      <CTA />
+      <CTA selectedService={selectedService} onSelectedServiceChange={setSelectedService} />
       <Partners />
       <Footer />
       <ChatWidget />
@@ -311,7 +355,7 @@ function TrustStrip() {
   );
 }
 
-function Services() {
+function Services({ onServiceClick }: { onServiceClick: (title: string) => void }) {
   const { data } = usePublicServices();
   const items =
     data && data.length > 0
@@ -335,16 +379,21 @@ function Services() {
         {items.map((s) => {
           const Icon = getServiceIcon(s.icon);
           return (
-            <div
+            <button
               key={s.title}
-              className="group rounded-xl border border-border bg-card p-6 hover:border-primary/40 hover:shadow-lg transition"
+              type="button"
+              onClick={() => onServiceClick(s.title)}
+              className="group rounded-xl border border-border bg-card p-6 text-left hover:border-primary/40 hover:shadow-lg transition"
             >
               <div className="h-11 w-11 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
                 <Icon className="h-5 w-5" />
               </div>
               <h3 className="mt-4 font-semibold text-lg">{s.title}</h3>
               <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{s.desc}</p>
-            </div>
+              <span className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary opacity-0 transition group-hover:opacity-100">
+                Get a quote <ArrowRight className="h-3.5 w-3.5" />
+              </span>
+            </button>
           );
         })}
       </div>
@@ -449,7 +498,13 @@ function WhyUs() {
   );
 }
 
-function CTA() {
+function CTA({
+  selectedService,
+  onSelectedServiceChange,
+}: {
+  selectedService: string;
+  onSelectedServiceChange: (title: string) => void;
+}) {
   return (
     <section id="contact" className="relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-br from-primary to-slate-900" />
@@ -499,7 +554,7 @@ function CTA() {
               </a>
             </div>
           </div>
-          <ContactForm />
+          <ContactForm service={selectedService} onServiceChange={onSelectedServiceChange} />
         </div>
       </div>
     </section>
@@ -513,14 +568,19 @@ type ChecklistAnswer = {
   documents?: UploadedDocument[];
 };
 
-function ContactForm() {
+function ContactForm({
+  service,
+  onServiceChange,
+}: {
+  service: string;
+  onServiceChange: (title: string) => void;
+}) {
   const [sent, setSent] = useState(false);
   const [inquiryCode, setInquiryCode] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [service, setService] = useState("");
   const [message, setMessage] = useState("");
   const [checklistAnswers, setChecklistAnswers] = useState<Record<string, ChecklistAnswer>>({});
   const sendInquiry = useServerFn(submitInquiry);
@@ -529,7 +589,7 @@ function ContactForm() {
   const selectedServiceChecklist = serviceOptions.find((s) => s.title === service)?.checklist ?? [];
 
   function chooseService(title: string) {
-    setService(title);
+    onServiceChange(title);
     setChecklistAnswers({});
   }
 
@@ -549,7 +609,7 @@ function ContactForm() {
     setFullName("");
     setEmail("");
     setPhone("");
-    setService("");
+    onServiceChange("");
     setMessage("");
     setChecklistAnswers({});
   }
