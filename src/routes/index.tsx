@@ -49,6 +49,7 @@ import { splitAreaAnswer, joinAreaAnswer } from "@/lib/areaUnit";
 import { WriteReviewModal } from "@/components/WriteReviewModal";
 import { AttachmentLightbox, type LightboxItem } from "@/components/AttachmentLightbox";
 import { useConfirm } from "@/components/ConfirmDialogProvider";
+import { YesNoToggle } from "@/components/YesNoToggle";
 
 const FACEBOOK_PAGE_URL = "https://www.facebook.com/profile.php?id=61581147040190";
 const FACEBOOK_DOCS_URL =
@@ -234,6 +235,12 @@ function NavBar() {
               {l.label}
             </a>
           ))}
+          <Link
+            to="/my-inquiries"
+            className="whitespace-nowrap text-muted-foreground hover:text-foreground transition"
+          >
+            My Inquiries
+          </Link>
         </nav>
         <button
           className="md:hidden p-2 rounded hover:bg-accent"
@@ -257,7 +264,7 @@ function NavBar() {
             onClick={() => setOpen(false)}
             className="inline-flex items-center justify-center h-10 rounded-md border border-border font-semibold"
           >
-            My Inquirie(s)
+            My Inquiries
           </Link>
           <a
             href="#contact"
@@ -320,7 +327,7 @@ function Hero() {
             to="/my-inquiries"
             className="inline-flex items-center h-12 px-5 rounded-md bg-primary text-primary-foreground font-semibold whitespace-nowrap hover:bg-primary/90"
           >
-            My Inquirie(s)
+            My Inquiries
           </Link>
           <a
             href="#contact"
@@ -614,8 +621,31 @@ function ContactForm({
     setChecklistAnswers({});
   }
 
+  function validate(): string | null {
+    if (!fullName.trim()) return "Enter your full name";
+    if (!email.trim()) return "Enter your email";
+    if (!phone.trim()) return "Enter your phone number";
+    if (!service) return "Select a service";
+    if (!message.trim()) return "Tell us about your property";
+    for (const item of selectedServiceChecklist) {
+      if (item.type === "document") continue;
+      const a = checklistAnswers[item.id];
+      if (item.type === "checkbox") {
+        if (a?.checked === undefined) return `Please answer "${item.label}"`;
+        continue;
+      }
+      if (!a?.answer?.trim()) return `Please fill in "${item.label}"`;
+    }
+    return null;
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const error = validate();
+    if (error) {
+      toast.error(error);
+      return;
+    }
     setSubmitting(true);
     try {
       const result = await sendInquiry({
@@ -678,13 +708,24 @@ function ContactForm({
               >
                 Copy code
               </button>
-              <p className="mt-2 text-xs text-muted-foreground">
-                We've also emailed it to you. Use it at{" "}
-                <Link to="/my-inquiries" className="text-primary hover:underline">
-                  My Inquiries
-                </Link>{" "}
-                to check your status or message us.
-              </p>
+              <p className="mt-2 text-xs text-muted-foreground">We've also emailed it to you.</p>
+              <div className="mt-3 rounded-md bg-background/60 p-3 text-left text-xs text-muted-foreground">
+                <p className="font-semibold uppercase tracking-wide text-foreground">
+                  How to use this code
+                </p>
+                <ol className="mt-1.5 list-decimal space-y-1 pl-4">
+                  <li>Open the My Inquiries page (link below).</li>
+                  <li>Your inquiry loads automatically using this code.</li>
+                  <li>Check your status or message our team anytime.</li>
+                </ol>
+              </div>
+              <Link
+                to="/my-inquiries"
+                search={{ code: inquiryCode }}
+                className="mt-3 inline-flex items-center justify-center gap-1.5 rounded-md bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
+              >
+                Go to My Inquiries
+              </Link>
             </div>
           )}
         </div>
@@ -703,7 +744,13 @@ function ContactForm({
             )}
           </div>
           <div className="mt-5 grid gap-4">
-            <Field label="Full name">
+            <Field
+              label={
+                <>
+                  Full name <RequiredMark />
+                </>
+              }
+            >
               <input
                 required
                 className="input"
@@ -713,7 +760,13 @@ function ContactForm({
               />
             </Field>
             <div className="grid sm:grid-cols-2 gap-4">
-              <Field label="Email">
+              <Field
+                label={
+                  <>
+                    Email <RequiredMark />
+                  </>
+                }
+              >
                 <input
                   required
                   type="email"
@@ -723,8 +776,15 @@ function ContactForm({
                   onChange={(e) => setEmail(e.target.value)}
                 />
               </Field>
-              <Field label="Phone">
+              <Field
+                label={
+                  <>
+                    Phone <RequiredMark />
+                  </>
+                }
+              >
                 <input
+                  required
                   className="input"
                   placeholder="0929 641 0776 / 0995 460 8248"
                   value={phone}
@@ -732,7 +792,13 @@ function ContactForm({
                 />
               </Field>
             </div>
-            <Field label="Service needed">
+            <Field
+              label={
+                <>
+                  Service needed <RequiredMark />
+                </>
+              }
+            >
               <select
                 className="input"
                 value={service}
@@ -757,14 +823,15 @@ function ContactForm({
                     const a = checklistAnswers[item.id] ?? {};
                     if (item.type === "checkbox") {
                       return (
-                        <label key={item.id} className="flex items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(a.checked)}
-                            onChange={() => updateChecklistAnswer(item.id, { checked: !a.checked })}
+                        <div key={item.id}>
+                          <span className="mb-1 block text-xs text-muted-foreground">
+                            {item.label} <RequiredMark />
+                          </span>
+                          <YesNoToggle
+                            value={a.checked}
+                            onChange={(checked) => updateChecklistAnswer(item.id, { checked })}
                           />
-                          {item.label}
-                        </label>
+                        </div>
                       );
                     }
                     if (item.type === "document") {
@@ -784,7 +851,7 @@ function ContactForm({
                       return (
                         <div key={item.id}>
                           <span className="mb-1 block text-xs text-muted-foreground">
-                            {item.label}
+                            {item.label} <RequiredMark />
                           </span>
                           <LocationAutosuggest
                             value={a.answer ?? ""}
@@ -798,7 +865,7 @@ function ContactForm({
                       return (
                         <div key={item.id}>
                           <span className="mb-1 block text-xs text-muted-foreground">
-                            {item.label}
+                            {item.label} <RequiredMark />
                           </span>
                           <div className="flex items-center gap-2">
                             <input
@@ -833,7 +900,7 @@ function ContactForm({
                     return (
                       <div key={item.id}>
                         <span className="mb-1 block text-xs text-muted-foreground">
-                          {item.label}
+                          {item.label} <RequiredMark />
                         </span>
                         <div className="flex items-center gap-2">
                           <input
@@ -856,7 +923,13 @@ function ContactForm({
                 </div>
               </div>
             )}
-            <Field label="Tell us about your property">
+            <Field
+              label={
+                <>
+                  Tell us about your property <RequiredMark />
+                </>
+              }
+            >
               <textarea
                 rows={4}
                 className="input resize-none"
@@ -893,7 +966,11 @@ function ContactForm({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function RequiredMark() {
+  return <span className="text-destructive"> (required)</span>;
+}
+
+function Field({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
   return (
     <label className="block">
       <span className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">

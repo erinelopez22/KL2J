@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { MessageCircle, X, Send, ArrowLeft, Facebook, Phone, Mail } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { submitInquiry } from "@/lib/inquiries.functions";
@@ -6,9 +7,15 @@ import { usePublicServices, usePublicSiteSettings } from "@/lib/public-content";
 import { LocationAutosuggest } from "@/components/LocationAutosuggest";
 import { PublicDocumentUpload, type UploadedDocument } from "@/components/PublicDocumentUpload";
 import { splitAreaAnswer, joinAreaAnswer } from "@/lib/areaUnit";
+import { YesNoToggle } from "@/components/YesNoToggle";
 import logoUrl from "@/assets/kl2j-logo.jpg";
 
-type ChecklistAnswer = { checked?: boolean; answer?: string; hasDocument?: boolean; documents?: UploadedDocument[] };
+type ChecklistAnswer = {
+  checked?: boolean;
+  answer?: string;
+  hasDocument?: boolean;
+  documents?: UploadedDocument[];
+};
 
 const FB_PAGE_ID = "61581147040190";
 const MESSENGER_URL = `https://m.me/${FB_PAGE_ID}`;
@@ -52,6 +59,7 @@ export function ChatWidget() {
   const [phone, setPhone] = useState("");
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [submittedCode, setSubmittedCode] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const sendInquiry = useServerFn(submitInquiry);
   const { data: servicesData } = usePublicServices();
@@ -114,7 +122,8 @@ export function ChatWidget() {
     }
     const lines = serviceChecklist.map((item) => {
       if (item.type === "number" && item.unit) return `• ${item.label} (${item.unit})`;
-      if (item.type === "document") return `• ${item.label} (you can confirm you have it without uploading, if you prefer)`;
+      if (item.type === "document")
+        return `• ${item.label} (you can confirm you have it without uploading, if you prefer)`;
       return `• ${item.label}`;
     });
     return `Here's what we'll typically need for ${service}:\n${lines.join("\n")}`;
@@ -148,8 +157,18 @@ export function ChatWidget() {
     }));
   }
 
+  function detailsValid(): boolean {
+    if (!name.trim() || !email.trim() || !phone.trim() || !note.trim()) return false;
+    return serviceChecklist.every((item) => {
+      if (item.type === "document") return true;
+      const a = checklistAnswers[item.id];
+      if (item.type === "checkbox") return a?.checked !== undefined;
+      return Boolean(a?.answer?.trim());
+    });
+  }
+
   async function submitDetails() {
-    if (!name.trim() || (!email.trim() && !phone.trim())) return;
+    if (!detailsValid()) return;
     setSubmitting(true);
     const contactSummary = [email.trim(), phone.trim()].filter(Boolean).join(" · ");
     pushUser(`${name} · ${contactSummary}${note ? " · " + note : ""}`);
@@ -172,11 +191,19 @@ export function ChatWidget() {
       console.error(e);
     }
     setSubmitting(false);
-    pushBot(
-      inquiryCode
-        ? `Thank you! Your inquiry has been sent to our team. Your inquiry code is ${inquiryCode} — save this (we've also emailed it to you) to check your status anytime on the "My Inquirie(s)" page. For a faster reply, you can also reach us directly on any of these channels:`
-        : "Thank you! Your inquiry has been sent to our team. For a faster reply, you can also reach us directly on any of these channels:",
-    );
+    setSubmittedCode(inquiryCode);
+    if (inquiryCode) {
+      pushBot(
+        `Thank you! Your inquiry has been sent to our team. Your inquiry code is ${inquiryCode} — we've also emailed it to you.`,
+      );
+      pushBot(
+        `Here's how to use your code:\n1. Tap "View My Inquiries" below.\n2. Your inquiry loads automatically using this code.\n3. Check your status or message us anytime from there.\n\nFor a faster reply, you can also reach us directly on any of these channels:`,
+      );
+    } else {
+      pushBot(
+        "Thank you! Your inquiry has been sent to our team. For a faster reply, you can also reach us directly on any of these channels:",
+      );
+    }
     goToStep("channel");
   }
 
@@ -226,6 +253,7 @@ export function ChatWidget() {
     setEmail("");
     setPhone("");
     setNote("");
+    setSubmittedCode(null);
   }
 
   return (
@@ -278,9 +306,12 @@ export function ChatWidget() {
           {/* Messages */}
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto bg-muted/30 p-3">
             {messages.map((m, i) => (
-              <div key={i} className={`flex ${m.from === "user" ? "justify-end" : "justify-start"}`}>
+              <div
+                key={i}
+                className={`flex ${m.from === "user" ? "justify-end" : "justify-start"}`}
+              >
                 <div
-                  className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-sm ${
+                  className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm shadow-sm ${
                     m.from === "user"
                       ? "bg-primary text-primary-foreground"
                       : "bg-card text-card-foreground border border-border"
@@ -322,6 +353,15 @@ export function ChatWidget() {
 
             {step === "channel" && (
               <div className="grid grid-cols-2 gap-2 pt-2">
+                {submittedCode && (
+                  <Link
+                    to="/my-inquiries"
+                    search={{ code: submittedCode }}
+                    className="col-span-2 flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+                  >
+                    View My Inquiries
+                  </Link>
+                )}
                 <button
                   onClick={() => handoff("messenger")}
                   className="flex items-center justify-center gap-2 rounded-lg bg-[#0084ff] px-3 py-2 text-sm font-medium text-white hover:opacity-90"
@@ -377,10 +417,13 @@ export function ChatWidget() {
           {step === "details" && (
             <div className="border-t border-border bg-card p-3">
               <div className="max-h-[45vh] space-y-2 overflow-y-auto pr-1">
+                <p className="text-[11px] text-muted-foreground">
+                  <span className="text-destructive">*</span> required (file uploads excepted)
+                </p>
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Your name"
+                  placeholder="Your name *"
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
                 />
                 <div className="grid grid-cols-2 gap-2">
@@ -388,13 +431,13 @@ export function ChatWidget() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Email"
+                    placeholder="Email *"
                     className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
                   />
                   <input
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    placeholder="Phone"
+                    placeholder="Phone *"
                     className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
                   />
                 </div>
@@ -408,14 +451,15 @@ export function ChatWidget() {
                       const a = checklistAnswers[item.id] ?? {};
                       if (item.type === "checkbox") {
                         return (
-                          <label key={item.id} className="flex items-center gap-2 text-sm">
-                            <input
-                              type="checkbox"
-                              checked={Boolean(a.checked)}
-                              onChange={() => updateChecklistAnswer(item.id, { checked: !a.checked })}
+                          <div key={item.id}>
+                            <span className="mb-1 block text-xs text-muted-foreground">
+                              {item.label} *
+                            </span>
+                            <YesNoToggle
+                              value={a.checked}
+                              onChange={(checked) => updateChecklistAnswer(item.id, { checked })}
                             />
-                            {item.label}
-                          </label>
+                          </div>
                         );
                       }
                       if (item.type === "document") {
@@ -423,7 +467,10 @@ export function ChatWidget() {
                           <PublicDocumentUpload
                             key={item.id}
                             label={item.label}
-                            value={{ hasDocument: Boolean(a.hasDocument), documents: a.documents ?? [] }}
+                            value={{
+                              hasDocument: Boolean(a.hasDocument),
+                              documents: a.documents ?? [],
+                            }}
                             onChange={(next) => updateChecklistAnswer(item.id, next)}
                           />
                         );
@@ -431,7 +478,9 @@ export function ChatWidget() {
                       if (item.type === "location") {
                         return (
                           <div key={item.id}>
-                            <span className="mb-1 block text-xs text-muted-foreground">{item.label}</span>
+                            <span className="mb-1 block text-xs text-muted-foreground">
+                              {item.label} *
+                            </span>
                             <LocationAutosuggest
                               value={a.answer ?? ""}
                               onChange={(v) => updateChecklistAnswer(item.id, { answer: v })}
@@ -443,13 +492,17 @@ export function ChatWidget() {
                         const { value: areaValue, unit: areaUnit } = splitAreaAnswer(a.answer);
                         return (
                           <div key={item.id}>
-                            <span className="mb-1 block text-xs text-muted-foreground">{item.label}</span>
+                            <span className="mb-1 block text-xs text-muted-foreground">
+                              {item.label} *
+                            </span>
                             <div className="flex items-center gap-2">
                               <input
                                 type="number"
                                 value={areaValue}
                                 onChange={(e) =>
-                                  updateChecklistAnswer(item.id, { answer: joinAreaAnswer(e.target.value, areaUnit) })
+                                  updateChecklistAnswer(item.id, {
+                                    answer: joinAreaAnswer(e.target.value, areaUnit),
+                                  })
                                 }
                                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
                               />
@@ -457,7 +510,10 @@ export function ChatWidget() {
                                 value={areaUnit}
                                 onChange={(e) =>
                                   updateChecklistAnswer(item.id, {
-                                    answer: joinAreaAnswer(areaValue, e.target.value as "sqm" | "hectares"),
+                                    answer: joinAreaAnswer(
+                                      areaValue,
+                                      e.target.value as "sqm" | "hectares",
+                                    ),
                                   })
                                 }
                                 className="h-9 shrink-0 rounded-md border border-border bg-background px-2 text-xs"
@@ -471,16 +527,22 @@ export function ChatWidget() {
                       }
                       return (
                         <div key={item.id}>
-                          <span className="mb-1 block text-xs text-muted-foreground">{item.label}</span>
+                          <span className="mb-1 block text-xs text-muted-foreground">
+                            {item.label} *
+                          </span>
                           <div className="flex items-center gap-2">
                             <input
                               type={item.type === "number" ? "number" : "text"}
                               value={a.answer ?? ""}
-                              onChange={(e) => updateChecklistAnswer(item.id, { answer: e.target.value })}
+                              onChange={(e) =>
+                                updateChecklistAnswer(item.id, { answer: e.target.value })
+                              }
                               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
                             />
                             {item.unit && (
-                              <span className="shrink-0 text-xs text-muted-foreground">{item.unit}</span>
+                              <span className="shrink-0 text-xs text-muted-foreground">
+                                {item.unit}
+                              </span>
                             )}
                           </div>
                         </div>
@@ -492,13 +554,13 @@ export function ChatWidget() {
                 <textarea
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  placeholder="Property location, lot size, or any details (optional)"
+                  placeholder="Property location, lot size, or any details *"
                   rows={2}
                   className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
                 />
               </div>
               <button
-                disabled={!name.trim() || (!email.trim() && !phone.trim()) || submitting}
+                disabled={!detailsValid() || submitting}
                 onClick={submitDetails}
                 className="mt-2 flex w-full items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
               >
