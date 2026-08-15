@@ -319,6 +319,11 @@ function AdminGallery() {
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ["admin-gallery"] });
     queryClient.invalidateQueries({ queryKey: ["public-gallery"] });
+    // Gallery edits to a project-linked folder now sync back onto that
+    // project's attachments (syncFolderPhotosToProject) — keep both admin
+    // and public project views fresh too.
+    queryClient.invalidateQueries({ queryKey: ["admin-projects"] });
+    queryClient.invalidateQueries({ queryKey: ["public-projects"] });
   }
   function refreshFolders() {
     queryClient.invalidateQueries({ queryKey: ["admin-gallery-folders"] });
@@ -441,7 +446,7 @@ function AdminGallery() {
         ? ` This permanently deletes it and its ${count} photo${count === 1 ? "" : "s"}/video${count === 1 ? "" : "s"}.`
         : "";
     const linkedPart = folder.project_id
-      ? ` It's linked to a project — deleting it only unlinks the folder (the project keeps its photos/videos, and a new folder is created automatically next time you save that project with one attached).`
+      ? ` It's linked to a project — its photos/videos will also be removed from that project's attachments (a new folder is created automatically next time you save that project with a photo or video attached).`
       : "";
     if (
       !(await confirm(`Delete "${folder.name}"?${countPart}${linkedPart} This cannot be undone.`, {
@@ -779,8 +784,8 @@ function AdminGallery() {
                 <div className="mt-3 flex items-start gap-1.5 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
                   <Link2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
                   Linked to a project — its name follows the project title. Edit the project to
-                  rename it, or use "Delete folder" below to unlink (the project's own photos and
-                  videos aren't affected).
+                  rename it, or use "Delete folder" below to remove it and its photos/videos
+                  everywhere, including from that project's attachments.
                 </div>
               )}
               <div className="mt-4 space-y-3">
