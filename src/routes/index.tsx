@@ -1335,10 +1335,8 @@ function Projects() {
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
         <div className="max-w-2xl">
           <p className="text-sm font-semibold uppercase tracking-wider text-primary">Portfolio</p>
-          <h2 className="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Completed projects</h2>
-          <p className="mt-3 text-muted-foreground">
-            A sample of surveys and titling work we've delivered.
-          </p>
+          <h2 className="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Projects</h2>
+          <p className="mt-3 text-muted-foreground">Here are some of our handled projects.</p>
         </div>
         <button
           type="button"

@@ -68,6 +68,8 @@ type GalleryFolder = {
   project_id: string | null;
 };
 
+type ProjectOption = { id: string; title: string };
+
 const UNSORTED_DROP_ID = "folder:unsorted";
 const FOLDER_DROP_PREFIX = "folder:";
 
@@ -95,7 +97,7 @@ function filenameFor(p: Photo): string {
 }
 
 function emptyFolderForm() {
-  return { name: "", description: "", location: "", date_start: "", date_end: "" };
+  return { name: "", description: "", location: "", date_start: "", date_end: "", project_id: "" };
 }
 
 function DraggablePhoto({
@@ -238,7 +240,7 @@ function FolderDropZone({
             <Pencil className="h-3.5 w-3.5" />
           </button>
         )}
-        {onDelete && !linked && (
+        {onDelete && (
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -302,6 +304,17 @@ function AdminGallery() {
       return data as GalleryFolder[];
     },
   });
+
+  const { data: projects } = useQuery({
+    queryKey: ["admin-gallery-projects-picker"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("projects").select("id, title").order("title");
+      if (error) throw error;
+      return data as ProjectOption[];
+    },
+  });
+  const linkedProjectIds = new Set((folders ?? []).map((f) => f.project_id).filter(Boolean));
+  const linkableProjects = (projects ?? []).filter((p) => !linkedProjectIds.has(p.id));
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ["admin-gallery"] });
@@ -376,6 +389,7 @@ function AdminGallery() {
         location: f.location ?? "",
         date_start: f.date_start ?? "",
         date_end: f.date_end ?? "",
+        project_id: f.project_id ?? "",
       },
     });
   }
@@ -383,16 +397,24 @@ function AdminGallery() {
   async function saveFolder() {
     if (!folderModal) return;
     const { editing, form } = folderModal;
-    if (!form.name.trim()) {
+    if (!form.name.trim() && !form.project_id) {
       toast.error("Folder name is required");
       return;
     }
+    // The server overwrites the name to match the project's title whenever
+    // project_id is set, but the schema still requires a non-empty name up
+    // front — fall back to the picked project's title so that validation
+    // passes even if the admin left the name field blank.
+    const linkedProjectTitle = form.project_id
+      ? (linkableProjects.find((p) => p.id === form.project_id)?.title ?? "Untitled")
+      : "";
     const payload = {
-      name: form.name.trim(),
+      name: form.name.trim() || linkedProjectTitle,
       description: form.description.trim() || null,
       location: form.location.trim() || null,
       date_start: form.date_start || null,
       date_end: form.date_end || null,
+      project_id: form.project_id || null,
     };
     try {
       if (editing) {
@@ -414,13 +436,17 @@ function AdminGallery() {
 
   async function deleteFolderWithConfirm(folder: GalleryFolder) {
     const count = (photos ?? []).filter((p) => p.folder_id === folder.id).length;
+    const countPart =
+      count > 0
+        ? ` This permanently deletes it and its ${count} photo${count === 1 ? "" : "s"}/video${count === 1 ? "" : "s"}.`
+        : "";
+    const linkedPart = folder.project_id
+      ? ` It's linked to a project — deleting it only unlinks the folder (the project keeps its photos/videos, and a new folder is created automatically next time you save that project with one attached).`
+      : "";
     if (
-      !(await confirm(
-        count > 0
-          ? `Delete "${folder.name}"? This permanently deletes it and its ${count} photo${count === 1 ? "" : "s"}/video${count === 1 ? "" : "s"} — this cannot be undone.`
-          : `Delete "${folder.name}"? This cannot be undone.`,
-        { destructive: true },
-      ))
+      !(await confirm(`Delete "${folder.name}"?${countPart}${linkedPart} This cannot be undone.`, {
+        destructive: true,
+      }))
     )
       return;
     try {
@@ -750,10 +776,11 @@ function AdminGallery() {
                 </button>
               </div>
               {folderModal.editing?.project_id && (
-                <div className="mt-3 flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
-                  <Link2 className="h-3.5 w-3.5 shrink-0 text-primary" />
-                  Linked to a project — its name follows the project title, and it's removed when
-                  the project is deleted. Edit the project to rename it.
+                <div className="mt-3 flex items-start gap-1.5 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+                  <Link2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                  Linked to a project — its name follows the project title. Edit the project to
+                  rename it, or use "Delete folder" below to unlink (the project's own photos and
+                  videos aren't affected).
                 </div>
               )}
               <div className="mt-4 space-y-3">
@@ -762,8 +789,13 @@ function AdminGallery() {
                     Name
                   </span>
                   <input
-                    value={folderModal.form.name}
-                    disabled={!!folderModal.editing?.project_id}
+                    value={
+                      folderModal.form.project_id
+                        ? (linkableProjects.find((p) => p.id === folderModal.form.project_id)
+                            ?.title ?? folderModal.form.name)
+                        : folderModal.form.name
+                    }
+                    disabled={!!folderModal.editing?.project_id || !!folderModal.form.project_id}
                     onChange={(e) =>
                       setFolderModal({
                         ...folderModal,
@@ -800,6 +832,35 @@ function AdminGallery() {
                     }
                   />
                 </label>
+                {!folderModal.editing?.project_id && linkableProjects.length > 0 && (
+                  <label className="block text-sm">
+                    <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
+                      Link to project (optional)
+                    </span>
+                    <select
+                      value={folderModal.form.project_id}
+                      onChange={(e) =>
+                        setFolderModal({
+                          ...folderModal,
+                          form: { ...folderModal.form, project_id: e.target.value },
+                        })
+                      }
+                      className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                    >
+                      <option value="">— None —</option>
+                      {linkableProjects.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.title}
+                        </option>
+                      ))}
+                    </select>
+                    {folderModal.form.project_id && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        The folder name will be set to match the project's title.
+                      </p>
+                    )}
+                  </label>
+                )}
                 <div className="text-sm">
                   <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
                     Date range
@@ -834,7 +895,7 @@ function AdminGallery() {
                 </div>
               </div>
               <div className="mt-6 flex items-center justify-between gap-2">
-                {folderModal.editing && !folderModal.editing.project_id ? (
+                {folderModal.editing ? (
                   <button
                     onClick={removeFolder}
                     className="text-xs font-medium text-destructive hover:underline"
