@@ -319,9 +319,9 @@ function AdminGallery() {
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ["admin-gallery"] });
     queryClient.invalidateQueries({ queryKey: ["public-gallery"] });
-    // Gallery edits to a project-linked folder now sync back onto that
-    // project's attachments (syncFolderPhotosToProject) — keep both admin
-    // and public project views fresh too.
+    // gallery_photos is a project's only copy of its photos/videos now — a
+    // project-linked folder's data IS that project's media, so project
+    // views (which embed gallery_photos directly) must refetch too.
     queryClient.invalidateQueries({ queryKey: ["admin-projects"] });
     queryClient.invalidateQueries({ queryKey: ["public-projects"] });
   }
@@ -574,7 +574,7 @@ function AdminGallery() {
         </p>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[240px_1fr]">
-          <div className="space-y-1">
+          <div className="min-w-0 space-y-1">
             <FolderDropZone
               id="folder:__all__"
               active={selected === "all"}
@@ -614,7 +614,7 @@ function AdminGallery() {
             </button>
           </div>
 
-          <div>
+          <div className="min-w-0">
             <div className="max-w-sm">
               <FileDrop
                 folder="gallery"

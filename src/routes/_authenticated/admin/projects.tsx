@@ -22,6 +22,7 @@ import {
   AttachmentIcon,
   attachmentTypeFor,
   inquiryDocumentsFrom,
+  type AttachmentKind,
   type ProjectAttachment,
   type ProjectRecord,
 } from "@/components/admin/ProjectFormModal";
@@ -103,7 +104,7 @@ function DetailRow({ label, children }: { label: string; children: ReactNode }) 
   );
 }
 
-function MediaThumb({ type, url }: { type: ProjectAttachment["type"]; url?: string }) {
+function MediaThumb({ type, url }: { type: AttachmentKind; url?: string }) {
   if (type === "image" && url) {
     return (
       <img
@@ -137,7 +138,7 @@ function ConfidentialThumb({
   getUrl,
 }: {
   path: string;
-  type: ProjectAttachment["type"];
+  type: AttachmentKind;
   getUrl: (path: string) => Promise<string>;
 }) {
   const { data: url } = useQuery({
@@ -147,6 +148,59 @@ function ConfidentialThumb({
     staleTime: 4 * 60 * 1000,
   });
   return <MediaThumb type={type} url={url} />;
+}
+
+// Read-only summary of a project's photos/videos (gallery_photos, joined via
+// its linked folder) — editing happens in ProjectFormModal's Photos &
+// videos tab, or in /admin/gallery directly.
+function ProjectMediaGrid({ projectId }: { projectId: string }) {
+  const { data: folder } = useQuery({
+    queryKey: ["project-gallery-folder", projectId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("gallery_folders")
+        .select("id")
+        .eq("project_id", projectId)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+  const folderId = folder?.id ?? null;
+
+  const { data: photos } = useQuery({
+    queryKey: ["project-gallery-photos", folderId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("gallery_photos")
+        .select("id, url, caption, media_type")
+        .eq("folder_id", folderId as string)
+        .order("sort_order");
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!folderId,
+  });
+
+  if (!photos || photos.length === 0) {
+    return <p className="text-sm text-muted-foreground/70">No photos or videos.</p>;
+  }
+  return (
+    <div className="grid grid-cols-4 gap-2">
+      {photos.map((p) => (
+        <div
+          key={p.id}
+          className="aspect-square overflow-hidden rounded-md border border-border bg-muted"
+        >
+          {p.media_type === "video" ? (
+            <video src={p.url} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+          ) : (
+            <img src={p.url} alt={p.caption ?? ""} className="h-full w-full object-cover" />
+          )}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 const PROJECT_SORT_OPTIONS = {
@@ -169,7 +223,7 @@ function AdminProjects() {
   const queryClient = useQueryClient();
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [formTarget, setFormTarget] = useState<"create" | ProjectRecord | null>(null);
-  const [viewMediaTab, setViewMediaTab] = useState<"public" | "confidential">("public");
+  const [viewMediaTab, setViewMediaTab] = useState<"public" | "photos" | "confidential">("public");
   const [inquiryAccordionOpen, setInquiryAccordionOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [serviceFilter, setServiceFilter] = useState("");
@@ -240,7 +294,7 @@ function AdminProjects() {
       path: string;
       name: string;
       contentType?: string;
-      type?: ProjectAttachment["type"];
+      type?: AttachmentKind;
       isExternalLink?: boolean;
     }[],
     startIndex: number,
@@ -427,7 +481,18 @@ function AdminProjects() {
                       : "border-transparent text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  Public files
+                  Documents
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMediaTab("photos")}
+                  className={`border-b-2 px-3 py-2 text-sm font-medium ${
+                    viewMediaTab === "photos"
+                      ? "border-primary text-primary"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Photos &amp; videos
                 </button>
                 <button
                   type="button"
@@ -466,8 +531,12 @@ function AdminProjects() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground/70">No public files.</p>
+                    <p className="text-sm text-muted-foreground/70">No documents.</p>
                   )}
+                </div>
+              ) : viewMediaTab === "photos" ? (
+                <div className="pt-3">
+                  <ProjectMediaGrid projectId={viewingProject.id} />
                 </div>
               ) : (
                 <div className="pt-3">
@@ -793,7 +862,7 @@ function AdminProjects() {
               )}
               {p.attachments?.length > 0 && (
                 <div className="mt-1 text-xs text-muted-foreground">
-                  {p.attachments.length} file{p.attachments.length === 1 ? "" : "s"} attached
+                  {p.attachments.length} document{p.attachments.length === 1 ? "" : "s"} attached
                 </div>
               )}
             </div>

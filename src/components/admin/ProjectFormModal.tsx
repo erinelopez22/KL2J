@@ -1,10 +1,15 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { X, Trash2, FileText, Video, Image as ImageIcon, Lock } from "lucide-react";
+import { X, Trash2, FileText, Video, Image as ImageIcon, Lock, Play } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { createProject, updateProject, deleteProject } from "@/lib/admin/projects.functions";
+import {
+  addGalleryPhoto,
+  deleteGalleryPhoto,
+  updateGalleryPhoto,
+} from "@/lib/admin/gallery.functions";
 import {
   deleteSiteMedia,
   deleteConfidentialMedia,
@@ -20,17 +25,24 @@ import {
   type LightboxItem,
 } from "@/components/AttachmentLightbox";
 
+// Shared by ProjectAttachment/ConfidentialAttachment's `type` field and the
+// AttachmentIcon/attachmentTypeFor helpers below. Photos/videos for a
+// project live only in gallery_photos now (see ProjectPhotosTab) —
+// ProjectAttachment narrows to documents only, but confidential attachments
+// still span all three kinds.
+export type AttachmentKind = "image" | "video" | "document";
+
 export type ProjectAttachment = {
   url: string;
   path: string;
-  type: "image" | "video" | "document";
+  type: "document";
   name: string;
   description?: string;
   isExternalLink?: boolean;
 };
 export type ConfidentialAttachment = {
   path: string;
-  type: "image" | "video" | "document";
+  type: AttachmentKind;
   name: string;
   description?: string;
   isExternalLink?: boolean;
@@ -100,7 +112,7 @@ type FormState = {
   inquiry_id: string;
 };
 
-export function attachmentTypeFor(contentType: string): ProjectAttachment["type"] {
+export function attachmentTypeFor(contentType: string): AttachmentKind {
   if (contentType.startsWith("image/")) return "image";
   if (contentType.startsWith("video/")) return "video";
   return "document";
@@ -113,7 +125,7 @@ function AttachmentRow({
   onDescriptionChange,
   onRemove,
 }: {
-  attachment: { path: string; name: string; type: ProjectAttachment["type"]; description?: string };
+  attachment: { path: string; name: string; type: AttachmentKind; description?: string };
   onOpen?: () => void;
   variant: "public" | "confidential";
   onDescriptionChange: (description: string) => void;
@@ -160,7 +172,7 @@ function AttachmentRow({
   );
 }
 
-export function AttachmentIcon({ type }: { type: ProjectAttachment["type"] }) {
+export function AttachmentIcon({ type }: { type: AttachmentKind }) {
   if (type === "image") return <ImageIcon className="h-4 w-4" />;
   if (type === "video") return <Video className="h-4 w-4" />;
   return <FileText className="h-4 w-4" />;
@@ -181,6 +193,192 @@ function emptyForm(): FormState {
     is_public: false,
     inquiry_id: "",
   };
+}
+
+type ProjectGalleryPhoto = {
+  id: string;
+  url: string;
+  storage_path: string | null;
+  caption: string | null;
+  media_type: "photo" | "video";
+  sort_order: number;
+};
+
+// Photos & videos for a project live only in gallery_photos (see
+// src/lib/project-gallery-sync.server.ts) — this reads/writes that table
+// directly, scoped to the project's one linked folder, reusing the same
+// admin server functions /admin/gallery uses. Only rendered once a project
+// has an id (a folder needs a project_id to attach to).
+function ProjectPhotosTab({ projectId }: { projectId: string }) {
+  const queryClient = useQueryClient();
+  const confirm = useConfirm();
+  const doAddPhoto = useServerFn(addGalleryPhoto);
+  const doDeletePhoto = useServerFn(deleteGalleryPhoto);
+  const doUpdatePhoto = useServerFn(updateGalleryPhoto);
+  const [lightbox, setLightbox] = useState<{ items: LightboxItem[]; index: number } | null>(null);
+
+  const { data: folder } = useQuery({
+    queryKey: ["project-gallery-folder", projectId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("gallery_folders")
+        .select("id")
+        .eq("project_id", projectId)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+  const folderId = folder?.id ?? null;
+
+  const { data: photos, isLoading } = useQuery({
+    queryKey: ["project-gallery-photos", folderId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("gallery_photos")
+        .select("id, url, storage_path, caption, media_type, sort_order")
+        .eq("folder_id", folderId as string)
+        .order("sort_order");
+      if (error) throw error;
+      return data as ProjectGalleryPhoto[];
+    },
+    enabled: !!folderId,
+  });
+
+  function refresh() {
+    queryClient.invalidateQueries({ queryKey: ["project-gallery-photos", folderId] });
+    queryClient.invalidateQueries({ queryKey: ["public-projects"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-gallery"] });
+    queryClient.invalidateQueries({ queryKey: ["public-gallery"] });
+  }
+
+  async function onUploaded(result: { url: string; path?: string; contentType: string }) {
+    if (!folderId) return;
+    try {
+      await doAddPhoto({
+        data: {
+          url: result.url,
+          storage_path: result.path ?? result.url,
+          media_type: result.contentType.startsWith("video/") ? "video" : "photo",
+          folder_id: folderId,
+          sort_order: photos?.length ?? 0,
+          origin: "project",
+        },
+      });
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed");
+    }
+  }
+
+  async function removePhoto(photo: ProjectGalleryPhoto) {
+    if (!(await confirm("Remove this photo/video? This cannot be undone.", { destructive: true })))
+      return;
+    try {
+      await doDeletePhoto({ data: { id: photo.id, storage_path: photo.storage_path ?? undefined } });
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete");
+    }
+  }
+
+  async function saveCaption(photo: ProjectGalleryPhoto, caption: string) {
+    if (caption === (photo.caption ?? "")) return;
+    try {
+      await doUpdatePhoto({ data: { id: photo.id, caption: caption || null } });
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update caption");
+    }
+  }
+
+  function openPhotoLightbox(list: ProjectGalleryPhoto[], startIndex: number) {
+    const items: LightboxItem[] = list.map((p) => ({
+      name: p.caption ?? "Photo",
+      kind: p.media_type === "video" ? "video" : "image",
+      resolveUrl: () => p.url,
+    }));
+    setLightbox({ items, index: startIndex });
+  }
+
+  return (
+    <div>
+      <p className="mb-1.5 text-[11px] text-muted-foreground/70">
+        Visible to visitors on the public project page. No drag-reorder here — for that, use{" "}
+        <a href="/admin/gallery" target="_blank" rel="noreferrer" className="underline">
+          /admin/gallery
+        </a>{" "}
+        against this same folder.
+      </p>
+      <FileDrop
+        folder="projects"
+        accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime"
+        allowExternalLink={false}
+        label="Upload a photo or video"
+        onUploaded={onUploaded}
+      />
+      {isLoading ? (
+        <p className="mt-3 text-sm text-muted-foreground">Loading…</p>
+      ) : photos && photos.length > 0 ? (
+        <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
+          {photos.map((p, i) => (
+            <div
+              key={p.id}
+              className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-muted"
+            >
+              <button
+                type="button"
+                onClick={() => openPhotoLightbox(photos, i)}
+                className="block h-full w-full"
+              >
+                {p.media_type === "video" ? (
+                  <>
+                    <video
+                      src={p.url}
+                      muted
+                      playsInline
+                      preload="metadata"
+                      className="h-full w-full object-cover"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center bg-slate-950/25">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90">
+                        <Play className="h-3.5 w-3.5 fill-slate-900 text-slate-900" />
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <img src={p.url} alt={p.caption ?? ""} className="h-full w-full object-cover" />
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => removePhoto(p)}
+                className="absolute right-1 top-1 rounded-md bg-black/60 p-1 text-white opacity-0 transition group-hover:opacity-100"
+                aria-label="Remove"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+              <input
+                defaultValue={p.caption ?? ""}
+                onBlur={(e) => saveCaption(p, e.target.value)}
+                placeholder="Caption"
+                className="absolute inset-x-0 bottom-0 bg-black/60 px-1.5 py-1 text-[10px] text-white placeholder:text-white/50 focus:outline-none"
+              />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-3 text-sm text-muted-foreground">No photos or videos yet.</p>
+      )}
+      {lightbox && (
+        <AttachmentLightbox
+          items={lightbox.items}
+          startIndex={lightbox.index}
+          onClose={() => setLightbox(null)}
+        />
+      )}
+    </div>
+  );
 }
 
 export function ProjectFormModal({
@@ -222,7 +420,7 @@ export function ProjectFormModal({
     }
     return base;
   });
-  const [mediaTab, setMediaTab] = useState<"public" | "confidential">("public");
+  const [mediaTab, setMediaTab] = useState<"documents" | "photos" | "confidential">("documents");
   const [personName, setPersonName] = useState("");
   const [saving, setSaving] = useState(false);
   const doCreate = useServerFn(createProject);
@@ -307,7 +505,7 @@ export function ProjectFormModal({
     docs: {
       path: string;
       name: string;
-      type?: ProjectAttachment["type"];
+      type?: AttachmentKind;
       contentType?: string;
       isExternalLink?: boolean;
     }[],
@@ -342,7 +540,7 @@ export function ProjectFormModal({
         {
           url: result.url,
           path: result.isExternalLink ? result.url : (result.path ?? result.url),
-          type: result.isExternalLink ? "document" : attachmentTypeFor(result.contentType),
+          type: "document",
           name: result.name,
           isExternalLink: result.isExternalLink,
         },
@@ -720,14 +918,25 @@ export function ProjectFormModal({
                 <div className="flex gap-1 border-b border-border">
                   <button
                     type="button"
-                    onClick={() => setMediaTab("public")}
+                    onClick={() => setMediaTab("documents")}
                     className={`border-b-2 px-3 py-2 text-sm font-medium ${
-                      mediaTab === "public"
+                      mediaTab === "documents"
                         ? "border-primary text-primary"
                         : "border-transparent text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    Public files
+                    Documents
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMediaTab("photos")}
+                    className={`border-b-2 px-3 py-2 text-sm font-medium ${
+                      mediaTab === "photos"
+                        ? "border-primary text-primary"
+                        : "border-transparent text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Photos &amp; videos
                   </button>
                   <button
                     type="button"
@@ -742,16 +951,16 @@ export function ProjectFormModal({
                   </button>
                 </div>
 
-                {mediaTab === "public" ? (
+                {mediaTab === "documents" ? (
                   <div className="pt-3">
                     <p className="mb-1.5 text-[11px] text-muted-foreground/70">
-                      Visible to visitors on the public site. Photos and videos here also appear in
-                      this project's gallery folder automatically.
+                      Documents visible to visitors on the public project page (e.g. PDFs). For
+                      photos and videos, use the Photos &amp; videos tab.
                     </p>
                     <FileDrop
                       folder="projects"
-                      accept="image/jpeg,image/png,image/webp,application/pdf,video/mp4,video/webm,video/quicktime"
-                      label="Upload a photo, document, or video"
+                      accept="application/pdf"
+                      label="Upload a document"
                       onUploaded={addAttachment}
                     />
                     {form.attachments.length > 0 && (
@@ -769,6 +978,16 @@ export function ProjectFormModal({
                           />
                         ))}
                       </div>
+                    )}
+                  </div>
+                ) : mediaTab === "photos" ? (
+                  <div className="pt-3">
+                    {project ? (
+                      <ProjectPhotosTab projectId={project.id} />
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Save the project first, then come back here to add photos and videos.
+                      </p>
                     )}
                   </div>
                 ) : (

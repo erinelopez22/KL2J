@@ -2,10 +2,12 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
+// Photos and videos live only in gallery_photos now — attachments holds
+// documents only (see src/lib/project-gallery-sync.server.ts).
 const AttachmentSchema = z.object({
   url: z.string().url(),
   path: z.string().min(1),
-  type: z.enum(["image", "video", "document"]),
+  type: z.literal("document"),
   name: z.string().min(1).max(200),
   description: z.string().max(300).optional(),
   isExternalLink: z.boolean().optional(),
@@ -53,13 +55,8 @@ export const createProject = createServerFn({ method: "POST" })
       console.error("createProject failed", error);
       throw new Error(`Failed to create project: ${error.message}`);
     }
-    const { syncProjectGallery } = await import("@/lib/project-gallery-sync.server");
-    await syncProjectGallery(
-      created.id,
-      data.title,
-      data.attachments,
-      data.cover_photo_url ?? null,
-    );
+    const { ensureProjectGalleryFolder } = await import("@/lib/project-gallery-sync.server");
+    await ensureProjectGalleryFolder(created.id, data.title);
     const { syncInquiryAttachmentsToProject } = await import("@/lib/project-inquiry-sync.server");
     await syncInquiryAttachmentsToProject(created.id, data.inquiry_id);
     return { ok: true, id: created.id };
@@ -81,31 +78,22 @@ export const updateProject = createServerFn({ method: "POST" })
       throw new Error(`Failed to update project: ${error.message}`);
     }
 
-    // Re-select the full row rather than trusting `rest` — callers like
-    // togglePublic only send {id, is_public}, so this is the only reliable
-    // way to keep the gallery/inquiry sync current after every save.
+    // Re-select rather than trusting `rest` — callers like togglePublic
+    // only send {id, is_public}, so this is the only reliable way to keep
+    // the gallery folder name and inquiry sync current after every save.
     const { data: row, error: fetchErr } = await supabaseAdmin
       .from("projects")
-      .select("title, attachments, cover_photo_url, inquiry_id")
+      .select("title, inquiry_id")
       .eq("id", id)
       .single();
-    if (!fetchErr && row) {
-      const { syncProjectGallery } = await import("@/lib/project-gallery-sync.server");
-      await syncProjectGallery(
-        id,
-        row.title,
-        row.attachments as unknown as {
-          url: string;
-          path: string;
-          type: "image" | "video" | "document";
-        }[],
-        row.cover_photo_url,
-      );
-      if (row.inquiry_id) {
-        const { syncInquiryAttachmentsToProject } =
-          await import("@/lib/project-inquiry-sync.server");
-        await syncInquiryAttachmentsToProject(id, row.inquiry_id);
-      }
+    if (fetchErr || !row) {
+      throw new Error(`Failed to re-read project after update: ${fetchErr?.message}`);
+    }
+    const { ensureProjectGalleryFolder } = await import("@/lib/project-gallery-sync.server");
+    await ensureProjectGalleryFolder(id, row.title);
+    if (row.inquiry_id) {
+      const { syncInquiryAttachmentsToProject } = await import("@/lib/project-inquiry-sync.server");
+      await syncInquiryAttachmentsToProject(id, row.inquiry_id);
     }
     return { ok: true };
   });
@@ -117,6 +105,22 @@ export const deleteProject = createServerFn({ method: "POST" })
     const { assertRole } = await import("@/lib/admin/roles.server");
     await assertRole(context.userId, "admin");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // gallery_photos is this project's only copy of its media, and its
+    // folder_id -> gallery_folders FK is ON DELETE SET NULL (not CASCADE),
+    // so deleting the project row first would orphan the photos as
+    // "Unsorted" instead of removing them. Delete the folder's contents
+    // explicitly first.
+    const { data: folder } = await supabaseAdmin
+      .from("gallery_folders")
+      .select("id")
+      .eq("project_id", data.id)
+      .maybeSingle();
+    if (folder) {
+      const { deleteGalleryFolderContents } = await import("@/lib/project-gallery-sync.server");
+      await deleteGalleryFolderContents(folder.id);
+    }
+
     const { error } = await supabaseAdmin.from("projects").delete().eq("id", data.id);
     if (error) {
       console.error("deleteProject failed", error);

@@ -47,6 +47,7 @@ import {
   type PublicReview,
   type PublicAttachment,
   type PublicProject,
+  type PublicProjectMedia,
 } from "@/lib/public-content";
 import { LocationAutosuggest } from "@/components/LocationAutosuggest";
 import { PublicDocumentUpload, type UploadedDocument } from "@/components/PublicDocumentUpload";
@@ -584,6 +585,126 @@ function CTA({
   );
 }
 
+function MediaTile({
+  m,
+  altText,
+  badge,
+  className,
+  onClick,
+}: {
+  m: { url: string; type: "image" | "video" };
+  altText: string;
+  badge?: number;
+  className: string;
+  onClick?: () => void;
+}) {
+  const content = (
+    <>
+      {m.type === "video" ? (
+        <video src={m.url} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+      ) : (
+        <img src={m.url} alt={altText} className="h-full w-full object-cover" />
+      )}
+      {m.type === "video" && !badge && (
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-950/25">
+          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/90">
+            <Play className="h-3 w-3 fill-slate-900 text-slate-900" />
+          </div>
+        </div>
+      )}
+      {!!badge && (
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-950/55">
+          <span className="text-base font-semibold text-white">+{badge}</span>
+        </div>
+      )}
+    </>
+  );
+  return onClick ? (
+    <button type="button" onClick={onClick} className={className}>
+      {content}
+    </button>
+  ) : (
+    <div className={className}>{content}</div>
+  );
+}
+
+// Collapsed: single row, up to maxVisible tiles, "+N" on the last one if
+// there's more. Clicking "+N" expands into a scrollable grid (capped to
+// ~3 rows tall) instead of jumping into the lightbox — only when the row is
+// interactive (onItemClick provided); the RelatedProjects sidebar cards
+// pass no onItemClick, so their "+N" tile stays a plain non-interactive
+// badge (the whole card is already a button that opens the project).
+function MediaRow({
+  media,
+  altText,
+  maxVisible = 4,
+  heightClass = "h-20",
+  onItemClick,
+}: {
+  media: { url: string; type: "image" | "video" }[];
+  altText: string;
+  maxVisible?: number;
+  heightClass?: string;
+  onItemClick?: (index: number) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  if (media.length === 0) return null;
+  const visibleMedia = media.slice(0, maxVisible);
+  const hiddenCount = media.length - visibleMedia.length;
+
+  if (expanded) {
+    return (
+      <div>
+        <div className="grid max-h-[480px] grid-cols-4 gap-1 overflow-y-auto pr-1">
+          {media.map((m, i) => (
+            <MediaTile
+              key={i}
+              m={m}
+              altText={altText}
+              className="relative aspect-square overflow-hidden rounded-lg bg-muted"
+              onClick={onItemClick ? () => onItemClick(i) : undefined}
+            />
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => setExpanded(false)}
+          className="mt-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:underline"
+        >
+          Show less
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex w-full gap-1">
+      {visibleMedia.map((m, i) => {
+        const isLastVisible = i === visibleMedia.length - 1;
+        const isOverflowTile = isLastVisible && hiddenCount > 0;
+        return (
+          <MediaTile
+            key={i}
+            m={m}
+            altText={altText}
+            badge={isOverflowTile ? hiddenCount : undefined}
+            className={`relative ${heightClass} flex-1 overflow-hidden rounded-lg bg-muted`}
+            onClick={
+              isOverflowTile
+                ? onItemClick
+                  ? () => setExpanded(true)
+                  : undefined
+                : onItemClick
+                  ? () => onItemClick(i)
+                  : undefined
+            }
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 function RelatedProjects({ service }: { service: string }) {
   const { data } = usePublicProjects();
   const navigate = useNavigate();
@@ -593,7 +714,7 @@ function RelatedProjects({ service }: { service: string }) {
   if (projects.length === 0) return null;
 
   function openProject(id: string) {
-    navigate({ to: "/", search: (prev) => ({ ...prev, project: id }) });
+    navigate({ to: "/", search: (prev) => ({ ...prev, project: id }), resetScroll: false });
   }
 
   return (
@@ -602,33 +723,48 @@ function RelatedProjects({ service }: { service: string }) {
         {service ? `Projects we've completed for ${service}` : "Projects we've completed"}
       </p>
       <div className="scrollbar-on-dark mt-3 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
-        {projects.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            onClick={() => openProject(p.id)}
-            className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-card p-3 text-left text-card-foreground shadow-sm transition hover:shadow-md"
-          >
-            {p.cover_photo_url ? (
-              <img
-                src={p.cover_photo_url}
-                alt={p.title}
-                className="h-14 w-14 shrink-0 rounded-lg object-cover"
-              />
-            ) : (
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-muted">
-                <Compass className="h-6 w-6 text-muted-foreground" />
+        {projects.map((p) => {
+          const media: { url: string; type: "image" | "video" }[] =
+            p.media.length > 0
+              ? p.media.map((m) => ({ url: m.url, type: m.media_type === "video" ? "video" : "image" }))
+              : p.cover_photo_url
+                ? [{ url: p.cover_photo_url, type: "image" }]
+                : [];
+          return (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => openProject(p.id)}
+              className="block w-full rounded-xl border border-white/10 bg-card p-3 text-left text-card-foreground shadow-sm transition hover:shadow-md"
+            >
+              <div className="flex items-center gap-2.5">
+                {p.cover_photo_url ? (
+                  <img
+                    src={p.cover_photo_url}
+                    alt={p.title}
+                    className="h-9 w-9 shrink-0 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted">
+                    <Compass className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold leading-tight">{p.title}</p>
+                  <p className="truncate text-xs text-muted-foreground">{p.location}</p>
+                </div>
               </div>
-            )}
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold">{p.title}</p>
-              <p className="truncate text-xs text-muted-foreground">{p.location}</p>
               {p.description && (
-                <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{p.description}</p>
+                <p className="mt-2 line-clamp-3 text-xs text-card-foreground/80">{p.description}</p>
               )}
-            </div>
-          </button>
-        ))}
+              {media.length > 0 && (
+                <div className="mt-2">
+                  <MediaRow media={media} altText={p.title} />
+                </div>
+              )}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -1278,6 +1414,7 @@ type ProjectViewAllSortKey = keyof typeof PROJECT_VIEW_ALL_SORT_OPTIONS;
 function Projects() {
   const { data } = usePublicProjects();
   const search = Route.useSearch();
+  const navigate = useNavigate();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [lightbox, setLightbox] = useState<{ items: LightboxItem[]; index: number } | null>(null);
@@ -1321,11 +1458,33 @@ function Projects() {
     setShowAll(false);
   }
 
+  function closeProject() {
+    setSelectedId(null);
+    // Clear the deep-link id too, and the guard that tracks it — otherwise
+    // search.project still equals the id after closing, so re-clicking the
+    // same project elsewhere (e.g. the "Projects we've completed" list)
+    // sets the search param to the same value, the effect below never sees
+    // a change, and the modal never reopens.
+    lastDeepLinkId.current = null;
+    if (search.project) {
+      navigate({ to: "/", search: (prev) => ({ ...prev, project: undefined }), resetScroll: false });
+    }
+  }
+
   function openAttachments(docs: PublicAttachment[], startIndex: number) {
     const items: LightboxItem[] = docs.map((d) => ({
       name: d.name,
       kind: d.isExternalLink ? "external" : d.type,
       resolveUrl: () => d.url,
+    }));
+    setLightbox({ items, index: startIndex });
+  }
+
+  function openMedia(media: PublicProjectMedia[], startIndex: number) {
+    const items: LightboxItem[] = media.map((m) => ({
+      name: m.caption ?? "Photo",
+      kind: m.media_type === "video" ? "video" : "image",
+      resolveUrl: () => m.url,
     }));
     setLightbox({ items, index: startIndex });
   }
@@ -1450,7 +1609,7 @@ function Projects() {
       {selected && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4"
-          onClick={() => setSelectedId(null)}
+          onClick={closeProject}
         >
           <div
             className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-card shadow-2xl"
@@ -1470,7 +1629,7 @@ function Projects() {
                   <ProjectStatusBadge status={selected.inquiry_status} />
                 </div>
                 <button
-                  onClick={() => setSelectedId(null)}
+                  onClick={closeProject}
                   className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted"
                   aria-label="Close"
                 >
@@ -1494,54 +1653,40 @@ function Projects() {
                   {selected.description}
                 </p>
               )}
+              {selected.media?.length > 0 && (
+                <div className="mt-5">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Photos &amp; videos
+                  </p>
+                  <div className="mt-2">
+                    <MediaRow
+                      media={selected.media.map((m) => ({
+                        url: m.url,
+                        type: m.media_type === "video" ? "video" : "image",
+                      }))}
+                      altText={selected.title}
+                      onItemClick={(i) => openMedia(selected.media, i)}
+                    />
+                  </div>
+                </div>
+              )}
               {selected.attachments?.length > 0 && (
                 <div className="mt-5">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Files
                   </p>
                   <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                    {selected.attachments.map((a, i) =>
-                      a.type === "image" ? (
-                        <button
-                          key={a.path}
-                          type="button"
-                          onClick={() => openAttachments(selected.attachments, i)}
-                          className="aspect-square overflow-hidden rounded-lg border border-border bg-muted"
-                        >
-                          <img src={a.url} alt={a.name} className="h-full w-full object-cover" />
-                        </button>
-                      ) : a.type === "video" ? (
-                        <button
-                          key={a.path}
-                          type="button"
-                          onClick={() => openAttachments(selected.attachments, i)}
-                          className="group relative col-span-2 aspect-video overflow-hidden rounded-lg border border-border bg-muted sm:col-span-3"
-                        >
-                          <video
-                            src={a.url}
-                            muted
-                            playsInline
-                            preload="metadata"
-                            className="h-full w-full object-cover"
-                          />
-                          <div className="absolute inset-0 flex items-center justify-center bg-slate-950/25 transition group-hover:bg-slate-950/40">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90">
-                              <Play className="h-4 w-4 fill-slate-900 text-slate-900" />
-                            </div>
-                          </div>
-                        </button>
-                      ) : (
-                        <button
-                          key={a.path}
-                          type="button"
-                          onClick={() => openAttachments(selected.attachments, i)}
-                          className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm hover:bg-muted"
-                        >
-                          <FileText className="h-4 w-4 shrink-0 text-primary" />
-                          <span className="truncate">{a.name}</span>
-                        </button>
-                      ),
-                    )}
+                    {selected.attachments.map((a, i) => (
+                      <button
+                        key={a.path}
+                        type="button"
+                        onClick={() => openAttachments(selected.attachments, i)}
+                        className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm hover:bg-muted"
+                      >
+                        <FileText className="h-4 w-4 shrink-0 text-primary" />
+                        <span className="truncate">{a.name}</span>
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}

@@ -30,9 +30,15 @@ export type PublicDocument = {
 export type PublicAttachment = {
   url: string;
   path: string;
-  type: "image" | "video" | "document";
+  type: "document";
   name: string;
   isExternalLink?: boolean;
+};
+export type PublicProjectMedia = {
+  id: string;
+  url: string;
+  caption: string | null;
+  media_type: "photo" | "video";
 };
 
 export type PublicProject = {
@@ -46,6 +52,7 @@ export type PublicProject = {
   personnel: string[];
   cover_photo_url: string | null;
   attachments: PublicAttachment[];
+  media: PublicProjectMedia[];
   sort_order: number;
   inquiry_status: string | null;
 };
@@ -193,6 +200,14 @@ export function usePublicDocuments() {
   });
 }
 
+type RawGalleryPhoto = PublicProjectMedia & { sort_order: number };
+type RawPublicProjectRow = Omit<PublicProject, "media"> & {
+  gallery_folders:
+    | { gallery_photos: RawGalleryPhoto[] }
+    | { gallery_photos: RawGalleryPhoto[] }[]
+    | null;
+};
+
 export function usePublicProjects() {
   return useQuery({
     queryKey: ["public-projects"],
@@ -200,7 +215,7 @@ export function usePublicProjects() {
       const { data, error } = await supabase
         .from("projects")
         .select(
-          "id,title,location,description,service,start_date,end_date,personnel,cover_photo_url,attachments,sort_order,inquiry_status",
+          "id,title,location,description,service,start_date,end_date,personnel,cover_photo_url,attachments,sort_order,inquiry_status,gallery_folders(gallery_photos(id,url,caption,sort_order,media_type))",
         )
         // Admins are also allowed to read every project via a separate RLS
         // policy (so /admin/projects can show drafts) — that policy applies
@@ -211,7 +226,18 @@ export function usePublicProjects() {
         .eq("is_public", true)
         .order("sort_order", { ascending: false });
       if (error) throw error;
-      return data as PublicProject[];
+      // Photos/videos live in gallery_photos, joined through the project's
+      // one linked gallery_folders row — postgrest-js's cardinality
+      // inference for that hop varies by version, so normalize array-or-
+      // object defensively rather than assuming one shape.
+      return (data as unknown as RawPublicProjectRow[]).map((row): PublicProject => {
+        const { gallery_folders, ...rest } = row;
+        const folder = Array.isArray(gallery_folders) ? gallery_folders[0] : gallery_folders;
+        const media: PublicProjectMedia[] = [...(folder?.gallery_photos ?? [])]
+          .sort((a, b) => a.sort_order - b.sort_order)
+          .map(({ id, url, caption, media_type }) => ({ id, url, caption, media_type }));
+        return { ...rest, media };
+      });
     },
     staleTime: 60_000,
   });
