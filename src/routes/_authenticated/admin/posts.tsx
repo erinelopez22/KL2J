@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -14,9 +14,18 @@ import {
   X,
   ExternalLink,
   Search,
+  Users2,
+  Upload,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { deletePost, sendPostBatch } from "@/lib/admin/posts.functions";
+import { deletePost } from "@/lib/admin/posts.functions";
+import { SendProgress } from "@/components/admin/SendProgress";
+import {
+  addEmailContact,
+  bulkImportEmailContacts,
+  deleteEmailContact,
+} from "@/lib/admin/email-contacts.functions";
+import { parseContactsCsv } from "@/lib/admin/parseContactsCsv";
 import { useConfirm } from "@/components/ConfirmDialogProvider";
 import { ctaForPost } from "@/lib/postCta";
 import {
@@ -59,100 +68,18 @@ const STATUS_STYLES: Record<PostRow["status"], string> = {
   sent: "bg-emerald-100 text-emerald-700",
 };
 
-function SendProgress({
-  post,
-  retryFailed,
-  onDone,
-}: {
-  post: PostRow;
-  retryFailed: boolean;
-  onDone: () => void;
-}) {
-  const doSendBatch = useServerFn(sendPostBatch);
-  const [sending, setSending] = useState(false);
-  const [erroredOut, setErroredOut] = useState(false);
-  const [progress, setProgress] = useState({
-    sent: post.sent_count,
-    failed: retryFailed ? 0 : post.failed_count,
-    total: post.total_count,
-  });
-  const startedRef = useRef(false);
-
-  async function run(isRetryFailed: boolean) {
-    setSending(true);
-    setErroredOut(false);
-    let first = true;
-    try {
-      for (;;) {
-        const result = await doSendBatch({
-          data: { id: post.id, retryFailed: first && isRetryFailed },
-        });
-        first = false;
-        setProgress((p) => ({
-          sent: p.sent + result.sentThisBatch,
-          failed: post.total_count - result.remainingPending - (p.sent + result.sentThisBatch),
-          total: p.total,
-        }));
-        if (result.done) break;
-      }
-      toast.success("Send complete");
-      onDone();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Sending stopped due to an error");
-      setErroredOut(true);
-    } finally {
-      setSending(false);
-    }
-  }
-
-  useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
-    run(retryFailed);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const pct =
-    progress.total > 0
-      ? Math.round(((progress.sent + progress.failed) / progress.total) * 100)
-      : 100;
-
-  return (
-    <div className="mt-2 rounded-md border border-border bg-muted/30 p-3">
-      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-        <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
-      </div>
-      <p className="mt-1.5 text-xs text-muted-foreground">
-        {progress.sent} sent, {progress.failed} failed of {progress.total}
-      </p>
-      {sending && (
-        <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Sending…
-        </p>
-      )}
-      {!sending && erroredOut && (
-        <button
-          type="button"
-          onClick={() => run(false)}
-          className="mt-2 flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
-        >
-          <Send className="h-3.5 w-3.5" /> Resume sending
-        </button>
-      )}
-    </div>
-  );
-}
-
 function PostViewer({
   post,
   onClose,
   onEdit,
+  onDuplicate,
   onDeleted,
   onChanged,
 }: {
   post: PostRow;
   onClose: () => void;
   onEdit: (post: PostRow) => void;
+  onDuplicate: (post: PostRow) => void;
   onDeleted: () => void;
   onChanged: () => void;
 }) {
@@ -313,12 +240,205 @@ function PostViewer({
                 <RotateCcw className="h-3.5 w-3.5" /> Resend failed
               </button>
             )}
+            {post.status === "sent" && !sendActive && (
+              <button
+                onClick={() => onDuplicate(post)}
+                className="flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted"
+                title="Create a new draft with this post's content — recipients start empty"
+              >
+                <RotateCcw className="h-3.5 w-3.5" /> Resend / Duplicate
+              </button>
+            )}
             <button
               onClick={handleDelete}
               className="ml-auto flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10"
             >
               <Trash2 className="h-3.5 w-3.5" /> Delete
             </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type EmailContact = { id: string; email: string; name: string | null; source: string; created_at: string };
+
+function EmailListModal({ onClose }: { onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const confirm = useConfirm();
+  const doAdd = useServerFn(addEmailContact);
+  const doBulkImport = useServerFn(bulkImportEmailContacts);
+  const doDelete = useServerFn(deleteEmailContact);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [importing, setImporting] = useState(false);
+
+  const { data: contacts, isLoading } = useQuery({
+    queryKey: ["admin-email-contacts"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("email_contacts")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data as EmailContact[];
+    },
+  });
+
+  function refresh() {
+    queryClient.invalidateQueries({ queryKey: ["admin-email-contacts"] });
+  }
+
+  async function addOne() {
+    if (!email.trim()) {
+      toast.error("Enter an email address");
+      return;
+    }
+    setAdding(true);
+    try {
+      await doAdd({ data: { email: email.trim(), name: name.trim() || undefined } });
+      setEmail("");
+      setName("");
+      refresh();
+      toast.success("Contact added");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to add contact");
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  async function handleCsvUpload(file: File) {
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const parsed = parseContactsCsv(text);
+      if (parsed.length === 0) {
+        toast.error("No valid emails found in that file");
+        return;
+      }
+      const result = await doBulkImport({ data: { contacts: parsed } });
+      refresh();
+      toast.success(
+        `Imported ${result.imported} contact${result.imported === 1 ? "" : "s"}` +
+          (result.skipped > 0 ? ` (${result.skipped} already on the list)` : ""),
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function removeContact(contact: EmailContact) {
+    if (!(await confirm(`Remove ${contact.email} from the list?`, { destructive: true }))) return;
+    try {
+      await doDelete({ data: { id: contact.id } });
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to remove contact");
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4" onClick={onClose}>
+      <div
+        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-2xl sm:p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Email list</h2>
+          <button onClick={onClose} className="rounded-md p-1 text-muted-foreground hover:bg-muted" aria-label="Close">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <p className="mb-4 text-xs text-muted-foreground">
+          A standing contact list, separate from inquiries — select "From email list" as a recipient
+          source when composing a post.
+        </p>
+
+        <div className="flex flex-wrap items-end gap-2 rounded-lg border border-border bg-muted/30 p-3">
+          <label className="min-w-[160px] flex-1 text-sm">
+            <span className="mb-1 block text-xs font-medium text-muted-foreground">Email</span>
+            <input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="someone@example.com"
+              className="h-9 w-full rounded-md border border-border bg-background px-2.5 text-sm"
+            />
+          </label>
+          <label className="min-w-[120px] flex-1 text-sm">
+            <span className="mb-1 block text-xs font-medium text-muted-foreground">Name (optional)</span>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="h-9 w-full rounded-md border border-border bg-background px-2.5 text-sm"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={addOne}
+            disabled={adding}
+            className="h-9 shrink-0 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
+            Add
+          </button>
+        </div>
+
+        <div className="mt-2">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+            className="flex items-center gap-1.5 rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground hover:border-primary hover:text-primary disabled:opacity-50"
+          >
+            {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+            Bulk import from CSV (columns: email, name)
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleCsvUpload(file);
+              if (fileInputRef.current) fileInputRef.current.value = "";
+            }}
+          />
+        </div>
+
+        <div className="mt-4 border-t border-border pt-3">
+          <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+            {contacts?.length ?? 0} contact{contacts?.length === 1 ? "" : "s"}
+          </p>
+          {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+          {!isLoading && contacts?.length === 0 && (
+            <p className="text-sm text-muted-foreground">No contacts yet.</p>
+          )}
+          <div className="max-h-64 space-y-1 overflow-y-auto">
+            {contacts?.map((c) => (
+              <div
+                key={c.id}
+                className="flex items-center justify-between gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 text-sm"
+              >
+                <div className="min-w-0">
+                  <span className="block truncate font-medium">{c.name || c.email}</span>
+                  {c.name && <span className="block truncate text-xs text-muted-foreground">{c.email}</span>}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeContact(c)}
+                  className="shrink-0 text-muted-foreground hover:text-destructive"
+                  aria-label={`Remove ${c.email}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -348,7 +468,9 @@ function AdminPosts() {
   const doDelete = useServerFn(deletePost);
   const [filter, setFilter] = useState<"all" | PostRow["status"]>("all");
   const [editing, setEditing] = useState<PostRow | "new" | null>(null);
+  const [duplicating, setDuplicating] = useState<PostRow | null>(null);
   const [viewing, setViewing] = useState<PostRow | null>(null);
+  const [showEmailList, setShowEmailList] = useState(false);
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<PostSortKey>("newest");
 
@@ -367,6 +489,7 @@ function AdminPosts() {
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ["admin-posts"] });
   }
+
 
   async function remove(post: PostRow) {
     const message =
@@ -406,14 +529,24 @@ function AdminPosts() {
             Announce new projects, services, or company updates by email to your customers.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setEditing("new")}
-          className="flex shrink-0 items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4" /> New post
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowEmailList(true)}
+            className="flex items-center gap-1.5 rounded-md border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted"
+          >
+            <Users2 className="h-4 w-4" /> Email list
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditing("new")}
+            className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+          >
+            <Plus className="h-4 w-4" /> New post
+          </button>
+        </div>
       </div>
+      {showEmailList && <EmailListModal onClose={() => setShowEmailList(false)} />}
 
       <div className="mt-4 flex flex-wrap gap-2">
         {(["all", "draft", "sending", "sent"] as const).map((f) => (
@@ -524,6 +657,10 @@ function AdminPosts() {
             setViewing(null);
             setEditing(p);
           }}
+          onDuplicate={(p) => {
+            setViewing(null);
+            setDuplicating(p);
+          }}
           onDeleted={() => {
             setViewing(null);
             refresh();
@@ -538,6 +675,17 @@ function AdminPosts() {
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
+            refresh();
+          }}
+        />
+      )}
+
+      {duplicating && (
+        <PostEditor
+          duplicateFrom={duplicating}
+          onClose={() => setDuplicating(null)}
+          onSaved={() => {
+            setDuplicating(null);
             refresh();
           }}
         />

@@ -25,13 +25,22 @@ import {
   ExternalLink,
   Smile,
   Palette,
+  Send,
+  Users,
+  Plus,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { createPostDraft, updatePostDraft } from "@/lib/admin/posts.functions";
+import { SendProgress, type SendablePost } from "@/components/admin/SendProgress";
+import { useConfirm } from "@/components/ConfirmDialogProvider";
 import { uploadSiteMedia } from "@/lib/admin/media.functions";
 import { fileToBase64 } from "@/lib/admin/fileToBase64";
 import { dedupeContactsByEmail } from "@/lib/admin/dedupeEmailContacts";
 import { ctaForPost, type PostType } from "@/lib/postCta";
+import { isOversizedFile } from "@/lib/uploadLimits";
+import { OversizeFileLinkPrompt } from "@/components/OversizeFileLinkPrompt";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import {
   Command,
@@ -48,6 +57,7 @@ export type PostAttachment = {
   name: string;
   contentType: string;
   kind: "image" | "video" | "document";
+  isExternalLink?: boolean;
 };
 
 export type PostRecord = {
@@ -83,6 +93,7 @@ const TYPE_OPTIONS: { value: PostType; label: string; emoji: string; color: stri
 ];
 
 type InquiryContact = { id: string; name: string; email: string | null; created_at: string };
+type EmailListContact = { id: string; email: string; name: string | null; created_at: string };
 type RecipientMode = "none" | "all" | "selected";
 
 // Email-safe font stacks only — custom web fonts aren't reliably supported
@@ -387,9 +398,32 @@ function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
   );
 }
 
+/** Emails of customer records actually included by the current recipient mode
+ * — used to tell whether a custom email is a true duplicate (vs. just matching
+ * some unrelated contact that isn't part of the selection). */
+function includedContactEmails(
+  mode: RecipientMode,
+  deduped: InquiryContact[],
+  selectedIds: Set<string>,
+): Set<string> {
+  if (mode === "all") {
+    return new Set(deduped.filter((c) => c.email).map((c) => c.email!.trim().toLowerCase()));
+  }
+  if (mode === "selected") {
+    return new Set(
+      deduped
+        .filter((c) => c.email && selectedIds.has(c.id))
+        .map((c) => c.email!.trim().toLowerCase()),
+    );
+  }
+  return new Set();
+}
+
 function RecipientPicker({
   contacts,
   contactsLoading,
+  emailContacts,
+  emailContactsLoading,
   mode,
   onModeChange,
   selectedIds,
@@ -400,6 +434,8 @@ function RecipientPicker({
 }: {
   contacts: InquiryContact[];
   contactsLoading: boolean;
+  emailContacts: EmailListContact[];
+  emailContactsLoading: boolean;
   mode: RecipientMode;
   onModeChange: (m: RecipientMode) => void;
   selectedIds: Set<string>;
@@ -409,15 +445,18 @@ function RecipientPicker({
   onRemoveCustom: (email: string) => void;
 }) {
   const [customInput, setCustomInput] = useState("");
+  const [showAllPreview, setShowAllPreview] = useState(false);
+  const [showBulkAdd, setShowBulkAdd] = useState(false);
+  const [bulkInput, setBulkInput] = useState("");
 
   const deduped = useMemo(() => dedupeContactsByEmail(contacts), [contacts]);
-  const contactEmailSet = useMemo(
-    () => new Set(deduped.filter((c) => c.email).map((c) => c.email!.trim().toLowerCase())),
-    [deduped],
+  const includedEmails = useMemo(
+    () => includedContactEmails(mode, deduped, selectedIds),
+    [mode, deduped, selectedIds],
   );
   const uniqueCustomEmails = useMemo(
-    () => customEmails.filter((e) => !contactEmailSet.has(e.trim().toLowerCase())),
-    [customEmails, contactEmailSet],
+    () => customEmails.filter((e) => !includedEmails.has(e.trim().toLowerCase())),
+    [customEmails, includedEmails],
   );
   const fromRecordsCount =
     mode === "all" ? deduped.length : mode === "selected" ? selectedIds.size : 0;
@@ -434,9 +473,33 @@ function RecipientPicker({
     setCustomInput("");
   }
 
+  function addBulkFromInput() {
+    const candidates = bulkInput
+      .split(/[\n,;]+/)
+      .map((e) => e.trim())
+      .filter(Boolean);
+    if (candidates.length === 0) return;
+    const seen = new Set<string>();
+    let added = 0;
+    let invalid = 0;
+    for (const email of candidates) {
+      const key = email.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        invalid++;
+        continue;
+      }
+      onAddCustom(email);
+      added++;
+    }
+    setBulkInput("");
+    if (added > 0) toast.success(`Added ${added} recipient${added === 1 ? "" : "s"}`);
+    if (invalid > 0) toast.error(`Skipped ${invalid} invalid email${invalid === 1 ? "" : "es"}`);
+  }
+
   return (
-    <div className="rounded-xl border border-border bg-muted/10 p-3">
-      <p className="mb-2 text-sm font-semibold">Who's this going to?</p>
+    <div>
       <div className="flex flex-wrap gap-2">
         {(
           [
@@ -449,6 +512,10 @@ function RecipientPicker({
             key={opt.value}
             type="button"
             onClick={() => onModeChange(opt.value)}
+            onDoubleClick={() => {
+              if (opt.value === "all") setShowAllPreview((v) => !v);
+            }}
+            title={opt.value === "all" ? "Double-click to see who's included" : undefined}
             className={`rounded-full border px-3 py-1.5 text-sm ${
               mode === opt.value
                 ? "border-primary/40 bg-primary/10 text-primary"
@@ -459,6 +526,24 @@ function RecipientPicker({
           </button>
         ))}
       </div>
+
+      {mode === "all" && showAllPreview && (
+        <div className="mt-2 max-h-48 overflow-y-auto rounded-md border border-border bg-background p-2">
+          {deduped.length === 0 ? (
+            <p className="p-2 text-sm text-muted-foreground">No customers with an email yet.</p>
+          ) : (
+            deduped.map((c) => (
+              <div key={c.id} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm">
+                <CheckSquare className="h-3.5 w-3.5 shrink-0 text-primary" />
+                <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                <span className="min-w-0 shrink truncate text-xs text-muted-foreground">
+                  {c.email}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
 
       {mode === "selected" && (
         <div className="mt-2 rounded-md border border-border bg-background">
@@ -534,7 +619,74 @@ function RecipientPicker({
             ))}
           </div>
         )}
+        <button
+          type="button"
+          onClick={() => setShowBulkAdd((v) => !v)}
+          className="mt-2 text-xs font-medium text-primary hover:underline"
+        >
+          {showBulkAdd ? "Hide bulk add" : "Bulk add multiple emails"}
+        </button>
+        {showBulkAdd && (
+          <div className="mt-1.5">
+            <textarea
+              value={bulkInput}
+              onChange={(e) => setBulkInput(e.target.value)}
+              rows={3}
+              placeholder={"Paste multiple emails — separated by commas, semicolons, or one per line"}
+              className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm"
+            />
+            <button
+              type="button"
+              onClick={addBulkFromInput}
+              className="mt-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-muted"
+            >
+              Add all
+            </button>
+          </div>
+        )}
       </div>
+
+      {emailContacts.length > 0 && (
+        <div className="mt-3">
+          <span className="mb-1 block text-xs text-muted-foreground">Or pick from your email list</span>
+          <div className="rounded-md border border-border bg-background">
+            <Command shouldFilter={true}>
+              <CommandInput placeholder="Search your email list…" />
+              <CommandList>
+                {emailContactsLoading && (
+                  <div className="py-6 text-center text-sm text-muted-foreground">Loading…</div>
+                )}
+                <CommandEmpty>No contacts found.</CommandEmpty>
+                {emailContacts.map((c) => {
+                  const checked = customEmails.some(
+                    (e) => e.trim().toLowerCase() === c.email.trim().toLowerCase(),
+                  );
+                  return (
+                    <CommandItem
+                      key={c.id}
+                      value={`${c.name ?? ""} ${c.email}`}
+                      onSelect={() => (checked ? onRemoveCustom(c.email) : onAddCustom(c.email))}
+                      className="cursor-pointer"
+                    >
+                      {checked ? (
+                        <CheckSquare className="h-4 w-4 shrink-0 text-primary" />
+                      ) : (
+                        <Square className="h-4 w-4 shrink-0 text-muted-foreground/50" />
+                      )}
+                      <span className="min-w-0 flex-1 truncate">{c.name || c.email}</span>
+                      {c.name && (
+                        <span className="min-w-0 shrink truncate text-xs text-muted-foreground">
+                          {c.email}
+                        </span>
+                      )}
+                    </CommandItem>
+                  );
+                })}
+              </CommandList>
+            </Command>
+          </div>
+        </div>
+      )}
 
       <p className="mt-3 text-sm font-medium">
         {totalCount} recipient{totalCount === 1 ? "" : "s"} selected
@@ -550,10 +702,19 @@ function RecipientPicker({
 }
 
 export function AttachmentTile({ a, onRemove }: { a: PostAttachment; onRemove?: () => void }) {
+  const [expanded, setExpanded] = useState(false);
+  // Composing (onRemove present) defaults to a small icon with an expand
+  // toggle; the read-only sent-post viewer keeps its original grid-filling size.
+  const editable = !!onRemove;
+  const sizeClass = editable ? (expanded ? "h-40 w-40" : "h-16 w-16") : "aspect-square";
+  const canPreview = a.kind === "image" || a.kind === "video";
+
   const inner = (
     <>
       {a.kind === "image" ? (
         <img src={a.url} alt={a.name} className="h-full w-full object-cover" />
+      ) : a.kind === "video" && editable && expanded ? (
+        <video src={a.url} controls className="h-full w-full object-cover" />
       ) : (
         <div className="flex h-full w-full flex-col items-center justify-center gap-1 p-2 text-center">
           {a.kind === "video" ? (
@@ -561,14 +722,18 @@ export function AttachmentTile({ a, onRemove }: { a: PostAttachment; onRemove?: 
           ) : (
             <FileText className="h-6 w-6 text-muted-foreground" />
           )}
-          <span className="line-clamp-2 text-[10px] text-muted-foreground">{a.name}</span>
+          {(!editable || expanded) && (
+            <span className="line-clamp-2 text-[10px] text-muted-foreground">{a.name}</span>
+          )}
         </div>
       )}
     </>
   );
 
   return (
-    <div className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-muted">
+    <div
+      className={`group relative shrink-0 overflow-hidden rounded-lg border border-border bg-muted ${sizeClass}`}
+    >
       {onRemove ? (
         inner
       ) : (
@@ -581,6 +746,17 @@ export function AttachmentTile({ a, onRemove }: { a: PostAttachment; onRemove?: 
         >
           {inner}
         </a>
+      )}
+      {editable && canPreview && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-label={expanded ? `Shrink ${a.name}` : `Preview ${a.name}`}
+          title={expanded ? "Shrink" : "Preview"}
+          className="absolute bottom-1 left-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition group-hover:opacity-100"
+        >
+          {expanded ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
+        </button>
       )}
       {onRemove && (
         <button
@@ -598,22 +774,32 @@ export function AttachmentTile({ a, onRemove }: { a: PostAttachment; onRemove?: 
 
 export function PostEditor({
   post,
+  duplicateFrom,
   onClose,
   onSaved,
 }: {
   post?: PostRecord;
+  // Pre-fills content from a sent post without linking to it — save() still
+  // takes the create path (no `post` id), so this becomes a brand-new post
+  // with fresh, empty recipients rather than rewriting send history.
+  duplicateFrom?: PostRecord;
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [type, setType] = useState<PostType>(post?.type ?? "update");
-  const [title, setTitle] = useState(post?.title ?? "");
-  const [projectIds, setProjectIds] = useState<string[]>(post?.project_ids ?? []);
-  const [attachments, setAttachments] = useState<PostAttachment[]>(post?.attachments ?? []);
+  const confirm = useConfirm();
+  const source = post ?? duplicateFrom;
+  const [type, setType] = useState<PostType>(source?.type ?? "update");
+  const [title, setTitle] = useState(source?.title ?? "");
+  const [projectIds, setProjectIds] = useState<string[]>(source?.project_ids ?? []);
+  const [attachments, setAttachments] = useState<PostAttachment[]>(source?.attachments ?? []);
   const [mode, setMode] = useState<RecipientMode>(post?.recipient_mode ?? "none");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [customEmails, setCustomEmails] = useState<string[]>([]);
+  const [showRecipients, setShowRecipients] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [sendingPost, setSendingPost] = useState<SendablePost | null>(null);
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
+  const [oversizeQueue, setOversizeQueue] = useState<File[]>([]);
   const recipientsInitialized = useRef(false);
   const photoVideoInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -653,6 +839,28 @@ export function PostEditor({
       return data as InquiryContact[];
     },
   });
+
+  const { data: emailContacts, isLoading: emailContactsLoading } = useQuery({
+    queryKey: ["admin-email-contacts"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("email_contacts")
+        .select("id, email, name, created_at")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data as EmailListContact[];
+    },
+  });
+
+  const recipientSummaryCount = useMemo(() => {
+    const deduped = dedupeContactsByEmail(contacts ?? []);
+    const includedEmails = includedContactEmails(mode, deduped, selectedIds);
+    const uniqueCustomCount = customEmails.filter(
+      (e) => !includedEmails.has(e.trim().toLowerCase()),
+    ).length;
+    const fromRecordsCount = mode === "all" ? deduped.length : mode === "selected" ? selectedIds.size : 0;
+    return fromRecordsCount + uniqueCustomCount;
+  }, [contacts, mode, selectedIds, customEmails]);
 
   const { data: projects } = useQuery({
     queryKey: ["admin-projects-for-posts"],
@@ -712,7 +920,7 @@ export function PostEditor({
       FontSize,
       Placeholder.configure({ placeholder: "What's on your mind?" }),
     ],
-    content: post?.body_html ?? "",
+    content: source?.body_html ?? "",
     editorProps: {
       attributes: {
         class:
@@ -746,9 +954,15 @@ export function PostEditor({
   }
 
   async function handleAddAttachments(files: FileList) {
+    const list = Array.from(files);
+    const okFiles = list.filter((f) => !isOversizedFile(f));
+    const oversized = list.filter((f) => isOversizedFile(f));
+    if (oversized.length > 0) setOversizeQueue((q) => [...q, ...oversized]);
+    if (okFiles.length === 0) return;
+
     setUploadingAttachments(true);
     try {
-      for (const file of Array.from(files)) {
+      for (const file of okFiles) {
         const base64 = await fileToBase64(file);
         const result = await uploadSiteMedia({
           data: { folder: "posts", filename: file.name, contentType: file.type, base64 },
@@ -770,11 +984,20 @@ export function PostEditor({
     }
   }
 
+  function addAttachmentLink(file: File, link: string) {
+    setAttachments((prev) => [
+      ...prev,
+      { url: link, name: file.name, contentType: file.type, kind: "document", isExternalLink: true },
+    ]);
+    setOversizeQueue((q) => q.slice(1));
+    toast.success("Link saved");
+  }
+
   function removeAttachment(index: number) {
     setAttachments((prev) => prev.filter((_, i) => i !== index));
   }
 
-  async function save() {
+  async function save(action: "draft" | "send") {
     if (!title.trim()) {
       toast.error("Give this post a title");
       return;
@@ -782,6 +1005,16 @@ export function PostEditor({
     if (!editor || editor.isEmpty) {
       toast.error("Write something before posting");
       return;
+    }
+    if (action === "send") {
+      if (recipientSummaryCount === 0) {
+        toast.error("Add at least one recipient first");
+        return;
+      }
+      const count = recipientSummaryCount;
+      if (!(await confirm(`Send this post to ${count} recipient${count === 1 ? "" : "s"}?`))) {
+        return;
+      }
     }
     setSaving(true);
     try {
@@ -798,14 +1031,26 @@ export function PostEditor({
           customEmails,
         },
       };
+      let id: string;
       if (post) {
         await doUpdate({ data: { id: post.id, ...input } });
-        toast.success("Post updated");
+        id = post.id;
       } else {
-        await doCreate({ data: input });
-        toast.success("Draft saved");
+        const result = await doCreate({ data: input });
+        id = result.id;
       }
-      onSaved();
+      if (action === "send") {
+        const { data, error } = await supabase
+          .from("posts")
+          .select("id, total_count, sent_count, failed_count")
+          .eq("id", id)
+          .single();
+        if (error || !data) throw new Error("Post saved, but failed to start sending");
+        setSendingPost(data as SendablePost);
+      } else {
+        toast.success(post ? "Post updated" : "Draft saved");
+        onSaved();
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save post");
     } finally {
@@ -813,31 +1058,28 @@ export function PostEditor({
     }
   }
 
-  const gridCols =
-    attachments.length === 1
-      ? "grid-cols-1"
-      : attachments.length === 2
-        ? "grid-cols-2"
-        : "grid-cols-3";
-
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"
-      onClick={onClose}
+      onClick={sendingPost ? undefined : onClose}
     >
       <div
         className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-border bg-card shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="relative flex items-center justify-center border-b border-border px-4 py-3">
-          <h2 className="text-base font-semibold">{post ? "Edit post" : "Create post"}</h2>
-          <button
-            onClick={onClose}
-            className="absolute right-4 rounded-full p-1.5 text-muted-foreground hover:bg-muted"
-            aria-label="Close"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <h2 className="text-base font-semibold">
+            {sendingPost ? "Sending…" : post ? "Edit post" : "Create post"}
+          </h2>
+          {!sendingPost && (
+            <button
+              onClick={onClose}
+              className="absolute right-4 rounded-full p-1.5 text-muted-foreground hover:bg-muted"
+              aria-label="Close"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          )}
         </div>
 
         <div className="space-y-4 p-4">
@@ -908,11 +1150,19 @@ export function PostEditor({
           </div>
 
           {attachments.length > 0 && (
-            <div className={`grid gap-1.5 ${gridCols}`}>
+            <div className="flex flex-wrap gap-1.5">
               {attachments.map((a, i) => (
                 <AttachmentTile key={a.url} a={a} onRemove={() => removeAttachment(i)} />
               ))}
             </div>
+          )}
+
+          {oversizeQueue.length > 0 && (
+            <OversizeFileLinkPrompt
+              fileName={oversizeQueue[0].name}
+              onCancel={() => setOversizeQueue((q) => q.slice(1))}
+              onSave={(link) => addAttachmentLink(oversizeQueue[0], link)}
+            />
           )}
 
           <div className="flex items-center gap-1 rounded-xl border border-border p-2">
@@ -985,36 +1235,99 @@ export function PostEditor({
             </span>
           </a>
 
-          <RecipientPicker
-            contacts={contacts ?? []}
-            contactsLoading={contactsLoading}
-            mode={mode}
-            onModeChange={setMode}
-            selectedIds={selectedIds}
-            onToggleContact={toggleContact}
-            customEmails={customEmails}
-            onAddCustom={addCustomEmail}
-            onRemoveCustom={removeCustomEmail}
-          />
+          <button
+            type="button"
+            onClick={() => setShowRecipients(true)}
+            className="flex w-fit items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted"
+          >
+            <Users className="h-4 w-4 text-muted-foreground" />
+            <Plus className="h-3 w-3 text-muted-foreground" />
+            {recipientSummaryCount > 0
+              ? `${recipientSummaryCount} recipient${recipientSummaryCount === 1 ? "" : "s"}`
+              : "Add recipients"}
+          </button>
 
-          <div className="flex gap-2 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md border border-border bg-card px-4 py-2.5 text-sm font-medium hover:bg-muted"
+          {showRecipients && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"
+              onClick={() => setShowRecipients(false)}
             >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={save}
-              disabled={saving}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-primary py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-            >
-              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-              Post
-            </button>
-          </div>
+              <div
+                className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-base font-semibold">Recipients</h3>
+                  <button
+                    onClick={() => setShowRecipients(false)}
+                    className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+                    aria-label="Close"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                <RecipientPicker
+                  contacts={contacts ?? []}
+                  contactsLoading={contactsLoading}
+                  emailContacts={emailContacts ?? []}
+                  emailContactsLoading={emailContactsLoading}
+                  mode={mode}
+                  onModeChange={setMode}
+                  selectedIds={selectedIds}
+                  onToggleContact={toggleContact}
+                  customEmails={customEmails}
+                  onAddCustom={addCustomEmail}
+                  onRemoveCustom={removeCustomEmail}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowRecipients(false)}
+                  className="mt-3 w-full rounded-md bg-primary py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          )}
+
+          {sendingPost ? (
+            <SendProgress
+              post={sendingPost}
+              retryFailed={false}
+              onDone={() => {
+                setSendingPost(null);
+                onSaved();
+              }}
+            />
+          ) : (
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-md border border-border bg-card px-4 py-2.5 text-sm font-medium hover:bg-muted"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => save("draft")}
+                disabled={saving}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border bg-card py-2.5 text-sm font-semibold hover:bg-muted disabled:opacity-60"
+              >
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                Save as Draft
+              </button>
+              <button
+                type="button"
+                onClick={() => save("send")}
+                disabled={saving}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-primary py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+              >
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                Send now
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

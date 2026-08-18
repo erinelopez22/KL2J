@@ -15,6 +15,7 @@ import {
   Search,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { CoverImage } from "@/components/CoverImage";
 import { deleteProject, updateProject } from "@/lib/admin/projects.functions";
 import { getConfidentialFileUrl } from "@/lib/admin/media.functions";
 import {
@@ -62,6 +63,11 @@ type LinkedInquiry = {
 
 function platformLabel(channel: string | null): string {
   if (channel === "quote_form") return "Request a Quote form";
+  if (channel === "referral") return "Referral";
+  if (channel === "facebook") return "Facebook Messenger";
+  if (channel === "others") return "Other";
+  // "manual" is a legacy value from before channel tagging was required.
+  if (channel === "manual") return "Added by admin";
   if (channel) return "Chatbot";
   return "Unknown";
 }
@@ -228,6 +234,7 @@ function AdminProjects() {
   const [search, setSearch] = useState("");
   const [serviceFilter, setServiceFilter] = useState("");
   const [visibilityFilter, setVisibilityFilter] = useState<"all" | "public" | "private">("all");
+  const [sizeFilter, setSizeFilter] = useState<"all" | "major" | "small">("all");
   const [sortKey, setSortKey] = useState<ProjectSortKey>("newest");
   const doDelete = useServerFn(deleteProject);
   const confirm = useConfirm();
@@ -345,13 +352,19 @@ function AdminProjects() {
       if (serviceFilter && p.service !== serviceFilter) return false;
       if (visibilityFilter === "public" && !p.is_public) return false;
       if (visibilityFilter === "private" && p.is_public) return false;
+      if (sizeFilter !== "all" && p.size !== sizeFilter) return false;
       if (!searchLower) return true;
       return [p.title, p.location, p.service, ...(p.personnel ?? [])]
         .filter(Boolean)
         .some((field) => field!.toLowerCase().includes(searchLower));
     })
     .sort(PROJECT_SORT_OPTIONS[sortKey].cmp);
-  const hasActiveFilters = !!(search || serviceFilter || visibilityFilter !== "all");
+  const hasActiveFilters = !!(
+    search ||
+    serviceFilter ||
+    visibilityFilter !== "all" ||
+    sizeFilter !== "all"
+  );
 
   async function togglePublic(p: ProjectRecord) {
     try {
@@ -422,12 +435,14 @@ function AdminProjects() {
               </div>
             )}
 
-            {viewingProject.cover_photo_url && (
-              <img
-                src={viewingProject.cover_photo_url}
-                alt={viewingProject.title}
-                className="mt-4 aspect-video w-full rounded-lg object-cover"
-              />
+            {viewingProject.photo_urls?.[0] && (
+              <div className="relative mt-4 aspect-video w-full overflow-hidden rounded-lg">
+                <CoverImage
+                  src={viewingProject.photo_urls[0]}
+                  alt={viewingProject.title}
+                  position={viewingProject.photo_positions?.[viewingProject.photo_urls[0]]}
+                />
+              </div>
             )}
 
             <section className="mt-5">
@@ -796,6 +811,15 @@ function AdminProjects() {
           <option value="private">Private only</option>
         </select>
         <select
+          value={sizeFilter}
+          onChange={(e) => setSizeFilter(e.target.value as "all" | "major" | "small")}
+          className="h-10 rounded-md border border-border bg-card px-3 text-sm"
+        >
+          <option value="all">Major + small</option>
+          <option value="major">Major only</option>
+          <option value="small">Small only</option>
+        </select>
+        <select
           value={sortKey}
           onChange={(e) => setSortKey(e.target.value as ProjectSortKey)}
           className="h-10 rounded-md border border-border bg-card px-3 text-sm"
@@ -813,6 +837,7 @@ function AdminProjects() {
               setSearch("");
               setServiceFilter("");
               setVisibilityFilter("all");
+              setSizeFilter("all");
             }}
             className="rounded-md border border-border px-3 text-sm hover:bg-muted"
           >
@@ -838,12 +863,10 @@ function AdminProjects() {
             }}
             className="flex min-w-0 cursor-pointer gap-3 rounded-lg border border-border bg-card p-3 text-left hover:border-primary/40 hover:shadow-sm"
           >
-            {p.cover_photo_url && (
-              <img
-                src={p.cover_photo_url}
-                alt={p.title}
-                className="h-16 w-16 shrink-0 rounded-md object-cover"
-              />
+            {p.photo_urls?.[0] && (
+              <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md">
+                <CoverImage src={p.photo_urls[0]} alt={p.title} position={p.photo_positions?.[p.photo_urls[0]]} />
+              </div>
             )}
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">

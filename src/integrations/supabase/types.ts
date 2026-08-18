@@ -304,6 +304,30 @@ export type Database = {
         };
         Relationships: [];
       };
+      email_contacts: {
+        Row: {
+          created_at: string;
+          email: string;
+          id: string;
+          name: string | null;
+          source: string;
+        };
+        Insert: {
+          created_at?: string;
+          email: string;
+          id?: string;
+          name?: string | null;
+          source?: string;
+        };
+        Update: {
+          created_at?: string;
+          email?: string;
+          id?: string;
+          name?: string | null;
+          source?: string;
+        };
+        Relationships: [];
+      };
       gallery_folders: {
         Row: {
           created_at: string;
@@ -499,6 +523,7 @@ export type Database = {
           created_at: string;
           id: string;
           inquiry_id: string;
+          is_read: boolean;
           message: string | null;
         };
         Insert: {
@@ -508,6 +533,7 @@ export type Database = {
           created_at?: string;
           id?: string;
           inquiry_id: string;
+          is_read?: boolean;
           message?: string | null;
         };
         Update: {
@@ -517,6 +543,7 @@ export type Database = {
           created_at?: string;
           id?: string;
           inquiry_id?: string;
+          is_read?: boolean;
           message?: string | null;
         };
         Relationships: [
@@ -775,7 +802,10 @@ export type Database = {
           is_public: boolean;
           location: string;
           personnel: string[];
+          photo_urls: string[];
+          photo_positions: Json;
           service: string | null;
+          size: string;
           sort_order: number;
           start_date: string | null;
           title: string;
@@ -793,7 +823,10 @@ export type Database = {
           is_public?: boolean;
           location: string;
           personnel?: string[];
+          photo_urls?: string[];
+          photo_positions?: Json;
           service?: string | null;
+          size?: string;
           sort_order?: number;
           start_date?: string | null;
           title: string;
@@ -811,7 +844,10 @@ export type Database = {
           is_public?: boolean;
           location?: string;
           personnel?: string[];
+          photo_urls?: string[];
+          photo_positions?: Json;
           service?: string | null;
+          size?: string;
           sort_order?: number;
           start_date?: string | null;
           title?: string;
@@ -856,6 +892,36 @@ export type Database = {
         };
         Relationships: [];
       };
+      equipment: {
+        Row: {
+          active: boolean;
+          created_at: string;
+          description: string;
+          icon: string;
+          id: string;
+          sort_order: number;
+          title: string;
+        };
+        Insert: {
+          active?: boolean;
+          created_at?: string;
+          description: string;
+          icon?: string;
+          id?: string;
+          sort_order?: number;
+          title: string;
+        };
+        Update: {
+          active?: boolean;
+          created_at?: string;
+          description?: string;
+          icon?: string;
+          id?: string;
+          sort_order?: number;
+          title?: string;
+        };
+        Relationships: [];
+      };
       services: {
         Row: {
           active: boolean;
@@ -892,21 +958,30 @@ export type Database = {
       site_settings: {
         Row: {
           favicon_url: string | null;
+          hero_banner_position: Json;
           hero_banner_url: string | null;
+          hero_headline: string | null;
+          hero_subtitle: string | null;
           id: number;
           logo_url: string | null;
           updated_at: string;
         };
         Insert: {
           favicon_url?: string | null;
+          hero_banner_position?: Json;
           hero_banner_url?: string | null;
+          hero_headline?: string | null;
+          hero_subtitle?: string | null;
           id?: number;
           logo_url?: string | null;
           updated_at?: string;
         };
         Update: {
           favicon_url?: string | null;
+          hero_banner_position?: Json;
           hero_banner_url?: string | null;
+          hero_headline?: string | null;
+          hero_subtitle?: string | null;
           id?: number;
           logo_url?: string | null;
           updated_at?: string;

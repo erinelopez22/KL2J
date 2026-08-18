@@ -1,6 +1,7 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { submitInquiry } from "@/lib/inquiries.functions";
 import {
@@ -32,10 +33,13 @@ import {
   Folder,
   ArrowLeft,
   Search,
+  Move,
+  Pencil,
 } from "lucide-react";
 import { ChatWidget } from "@/components/ChatWidget";
 import {
   usePublicServices,
+  usePublicEquipment,
   usePublicGalleryPhotos,
   usePublicGalleryFolders,
   type PublicGalleryFolder,
@@ -57,6 +61,11 @@ import { WriteReviewModal } from "@/components/WriteReviewModal";
 import { AttachmentLightbox, type LightboxItem } from "@/components/AttachmentLightbox";
 import { useConfirm } from "@/components/ConfirmDialogProvider";
 import { YesNoToggle } from "@/components/YesNoToggle";
+import { useEditMode } from "@/lib/editMode";
+import { updateBranding } from "@/lib/admin/branding.functions";
+import { Slider } from "@/components/ui/slider";
+import { CoverImage, DEFAULT_IMAGE_POSITION, type ImagePosition } from "@/components/CoverImage";
+import { QuickImageUpload } from "@/components/admin/QuickImageUpload";
 
 const FACEBOOK_PAGE_URL = "https://www.facebook.com/profile.php?id=61581147040190";
 const FACEBOOK_DOCS_URL =
@@ -137,7 +146,7 @@ const FALLBACK_SERVICES = [
   },
 ];
 
-function LandingPage() {
+export function LandingPage() {
   const confirm = useConfirm();
   const [selectedService, setSelectedService] = useState("");
 
@@ -205,6 +214,9 @@ function LandingPage() {
 function NavBar() {
   const [open, setOpen] = useState(false);
   const { data: settings } = usePublicSiteSettings();
+  const editable = useEditMode();
+  const queryClient = useQueryClient();
+  const doUpdateBranding = useServerFn(updateBranding);
   const logo = settings?.logo_url || logoUrl;
   const links = [
     { href: "#services", label: "Services" },
@@ -220,11 +232,27 @@ function NavBar() {
     <header className="sticky top-0 z-40 bg-background/85 backdrop-blur border-b border-border">
       <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-y-2">
         <a href="#top" className="flex shrink-0 items-center gap-2.5 font-bold">
-          <img
-            src={logo}
-            alt="KL2J Land Surveying and Engineering Services"
-            className="h-10 w-10 rounded-full object-cover ring-1 ring-border"
-          />
+          <div className="group/logo relative h-10 w-10 shrink-0">
+            <img
+              src={logo}
+              alt="KL2J Land Surveying and Engineering Services"
+              className="h-10 w-10 rounded-full object-cover ring-1 ring-border"
+            />
+            {editable && (
+              <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/0 opacity-0 transition group-hover/logo:bg-black/50 group-hover/logo:opacity-100">
+                <QuickImageUpload
+                  folder="branding"
+                  label="Change logo"
+                  iconOnly
+                  className="!bg-transparent hover:!bg-transparent"
+                  onUploaded={async (url) => {
+                    await doUpdateBranding({ data: { logo_url: url } });
+                    queryClient.invalidateQueries({ queryKey: ["site-settings"] });
+                  }}
+                />
+              </div>
+            )}
+          </div>
           <span className="whitespace-nowrap text-base tracking-tight">
             KL2J{" "}
             <span className="hidden whitespace-nowrap font-medium text-muted-foreground lg:inline">
@@ -288,42 +316,198 @@ function NavBar() {
 
 function Hero() {
   const { data: settings } = usePublicSiteSettings();
+  const editable = useEditMode();
+  const queryClient = useQueryClient();
+  const doUpdateBranding = useServerFn(updateBranding);
   const logo = settings?.logo_url || logoUrl;
   const hero = settings?.hero_banner_url || heroImage;
+  const savedHeroPosition = settings?.hero_banner_position ?? DEFAULT_IMAGE_POSITION;
+  const headline = settings?.hero_headline?.trim();
+  const subtitle = settings?.hero_subtitle?.trim();
+
+  const [repositioning, setRepositioning] = useState(false);
+  const [draftPosition, setDraftPosition] = useState<ImagePosition | null>(null);
+  const [editingText, setEditingText] = useState(false);
+  const [headlineDraft, setHeadlineDraft] = useState("");
+  const [subtitleDraft, setSubtitleDraft] = useState("");
+  const [savingText, setSavingText] = useState(false);
+
+  const heroPosition = draftPosition ?? savedHeroPosition;
+
+  async function saveBranding(patch: Record<string, unknown>) {
+    await doUpdateBranding({ data: patch });
+    queryClient.invalidateQueries({ queryKey: ["site-settings"] });
+  }
+
+  async function saveText() {
+    setSavingText(true);
+    try {
+      await saveBranding({
+        hero_headline: headlineDraft.trim() || undefined,
+        hero_subtitle: subtitleDraft.trim() || undefined,
+      });
+      setEditingText(false);
+    } finally {
+      setSavingText(false);
+    }
+  }
+
   return (
-    <section id="top" className="relative overflow-hidden">
+    <section id="top" className="group/hero relative overflow-hidden">
       <div className="absolute inset-0">
-        <img
+        <CoverImage
           src={hero}
           alt="Licensed geodetic engineer operating a total station in the field"
-          width={1920}
-          height={1280}
-          className="w-full h-full object-cover"
+          position={heroPosition}
+          editable={editable && repositioning}
+          onPositionChange={setDraftPosition}
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/85 via-slate-950/60 to-primary/30" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-slate-950/85 via-slate-950/60 to-primary/30" />
+        {editable && !repositioning && (
+          <div className="absolute bottom-4 right-4 flex gap-2 opacity-0 transition group-hover/hero:opacity-100">
+            <button
+              type="button"
+              onClick={() => {
+                setDraftPosition(savedHeroPosition);
+                setRepositioning(true);
+              }}
+              className="flex items-center gap-1.5 rounded-full bg-black/70 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-black/85"
+            >
+              <Move className="h-3.5 w-3.5" /> Reposition cover photo
+            </button>
+            <QuickImageUpload
+              folder="branding"
+              label="Change cover photo"
+              onUploaded={(url) => saveBranding({ hero_banner_url: url })}
+            />
+          </div>
+        )}
+        {editable && repositioning && (
+          <div className="absolute bottom-4 right-4 z-10 flex items-center gap-3 rounded-xl bg-black/70 px-3 py-2 text-white">
+            <span className="text-xs">Zoom</span>
+            <Slider
+              value={[heroPosition.zoom]}
+              onValueChange={([zoom]) => setDraftPosition((p) => ({ ...(p ?? savedHeroPosition), zoom }))}
+              min={1}
+              max={3}
+              step={0.05}
+              className="w-32"
+            />
+            <button
+              type="button"
+              onClick={async () => {
+                if (draftPosition) await saveBranding({ hero_banner_position: draftPosition });
+                setRepositioning(false);
+                setDraftPosition(null);
+              }}
+              className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRepositioning(false);
+                setDraftPosition(null);
+              }}
+              className="rounded-md border border-white/30 px-3 py-1.5 text-xs hover:bg-white/10"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
       </div>
-      <div className="relative max-w-6xl mx-auto px-4 py-16 md:py-20 text-white">
-        <div className="flex items-center gap-4">
-          <img
-            src={logo}
-            alt="KL2J logo"
-            className="h-16 w-16 md:h-20 md:w-20 rounded-full ring-2 ring-white/30 bg-white/95 object-cover shadow-xl"
-          />
+      <div className="relative max-w-6xl mx-auto px-4 py-16 md:py-20 text-white pointer-events-none">
+        <div className={`flex items-center gap-4 ${repositioning ? "" : "pointer-events-auto"}`}>
+          <div className="group/logo relative h-16 w-16 shrink-0 md:h-20 md:w-20">
+            <img
+              src={logo}
+              alt="KL2J logo"
+              className="h-16 w-16 md:h-20 md:w-20 rounded-full ring-2 ring-white/30 bg-white/95 object-cover shadow-xl"
+            />
+            {editable && (
+              <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/0 opacity-0 transition group-hover/logo:bg-black/50 group-hover/logo:opacity-100">
+                <QuickImageUpload
+                  folder="branding"
+                  label="Change logo"
+                  iconOnly
+                  className="!bg-transparent hover:!bg-transparent"
+                  onUploaded={(url) => saveBranding({ logo_url: url })}
+                />
+              </div>
+            )}
+          </div>
           <span className="inline-flex items-center gap-2 rounded-full bg-white/10 border border-white/20 px-3 py-1 text-xs uppercase tracking-wider">
             <BadgeCheck className="h-3.5 w-3.5" /> Licensed Geodetic Engineers
           </span>
         </div>
-        <h1 className="mt-5 text-4xl md:text-6xl font-bold tracking-tight max-w-3xl leading-[1.05]">
-          Precise land surveys.
-          <br />
-          Clean, defensible titles.
-        </h1>
-        <p className="mt-5 max-w-2xl text-lg text-white/85">
-          From relocating lost corners to subdivision, topographic, and as-built work — we deliver
-          survey-grade accuracy and full titling support so your project moves forward with
-          confidence.
-        </p>
-        <div className="mt-8 flex flex-wrap gap-3">
+        {editable && editingText ? (
+          <div
+            className={`mt-5 max-w-2xl space-y-2 rounded-xl bg-black/40 p-3 ${repositioning ? "" : "pointer-events-auto"}`}
+          >
+            <input
+              value={headlineDraft}
+              onChange={(e) => setHeadlineDraft(e.target.value)}
+              placeholder="Precise land surveys.&#10;Clean, defensible titles."
+              autoFocus
+              className="w-full rounded-md border border-white/30 bg-white/10 px-3 py-2 text-2xl font-bold text-white placeholder:text-white/50 focus:outline-none"
+            />
+            <textarea
+              value={subtitleDraft}
+              onChange={(e) => setSubtitleDraft(e.target.value)}
+              rows={3}
+              placeholder="Subtitle shown under the headline"
+              className="w-full resize-none rounded-md border border-white/30 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/50 focus:outline-none"
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={savingText}
+                onClick={saveText}
+                className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingText(false)}
+                className="rounded-md border border-white/30 px-3 py-1.5 text-xs hover:bg-white/10"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : editable ? (
+          <button
+            type="button"
+            onClick={() => {
+              setHeadlineDraft(headline ?? "");
+              setSubtitleDraft(subtitle ?? "");
+              setEditingText(true);
+            }}
+            className={`group/text mt-5 block max-w-3xl cursor-text rounded-lg text-left hover:bg-white/5 ${repositioning ? "" : "pointer-events-auto"}`}
+          >
+            <h1 className="text-4xl md:text-6xl font-bold tracking-tight leading-[1.05] whitespace-pre-line">
+              {headline || "Precise land surveys.\nClean, defensible titles."}
+              <Pencil className="ml-2 inline-block h-5 w-5 align-middle opacity-0 group-hover/text:opacity-70" />
+            </h1>
+            <p className="mt-5 max-w-2xl text-lg text-white/85">
+              {subtitle ||
+                "From relocating lost corners to subdivision, topographic, and as-built work — we deliver survey-grade accuracy and full titling support so your project moves forward with confidence."}
+            </p>
+          </button>
+        ) : (
+          <>
+            <h1 className="mt-5 text-4xl md:text-6xl font-bold tracking-tight max-w-3xl leading-[1.05] whitespace-pre-line">
+              {headline || "Precise land surveys.\nClean, defensible titles."}
+            </h1>
+            <p className="mt-5 max-w-2xl text-lg text-white/85">
+              {subtitle ||
+                "From relocating lost corners to subdivision, topographic, and as-built work — we deliver survey-grade accuracy and full titling support so your project moves forward with confidence."}
+            </p>
+          </>
+        )}
+        <div className={`mt-8 flex flex-wrap gap-3 ${repositioning ? "" : "pointer-events-auto"}`}>
           <a
             href="#services"
             className="inline-flex items-center gap-2 h-12 px-5 rounded-md bg-primary text-primary-foreground font-semibold whitespace-nowrap hover:bg-primary/90"
@@ -462,6 +646,12 @@ function Process() {
 }
 
 function WhyUs() {
+  const { data: equipment } = usePublicEquipment();
+  const [showAllEquipment, setShowAllEquipment] = useState(false);
+  const EQUIPMENT_PREVIEW_LIMIT = 4;
+  const equipmentPreview = equipment?.slice(0, EQUIPMENT_PREVIEW_LIMIT) ?? [];
+  const hasMoreEquipment = (equipment?.length ?? 0) > EQUIPMENT_PREVIEW_LIMIT;
+
   const points = [
     {
       icon: BadgeCheck,
@@ -471,7 +661,7 @@ function WhyUs() {
     {
       icon: Ruler,
       title: "Modern instrumentation",
-      desc: "Total stations, GNSS/RTK receivers, and drone photogrammetry deliver millimeter-grade repeatability.",
+      desc: "",
     },
     {
       icon: Landmark,
@@ -504,10 +694,64 @@ function WhyUs() {
               <p.icon className="h-6 w-6 text-primary" />
               <h3 className="mt-3 font-semibold">{p.title}</h3>
               <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">{p.desc}</p>
+              {p.title === "Modern instrumentation" && equipmentPreview.length > 0 && (
+                <>
+                
+                    {equipmentPreview.map((item) => (
+                      <li
+                        key={item.id}
+                        className="flex items-start gap-2 text-sm text-muted-foreground leading-relaxed"
+                      >
+                        <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-primary" />
+                        {item.title}
+                      </li>
+                    ))}
+                  {hasMoreEquipment && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllEquipment(true)}
+                      className="mt-1.5 text-[11px] font-medium text-primary hover:underline"
+                    >
+                      See more
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           ))}
         </div>
       </div>
+
+      {showAllEquipment && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"
+          onClick={() => setShowAllEquipment(false)}
+        >
+          <div
+            className="max-h-[80vh] w-full max-w-md overflow-y-auto rounded-xl border border-border bg-card p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="font-semibold">Our equipment</h3>
+              <button
+                onClick={() => setShowAllEquipment(false)}
+                className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <ul className="space-y-2">
+              {(equipment ?? []).map((item) => (
+                <li key={item.id} className="flex items-start gap-2 text-sm text-muted-foreground">
+                  <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-primary" />
+                  {item.title}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -592,7 +836,7 @@ function MediaTile({
   className,
   onClick,
 }: {
-  m: { url: string; type: "image" | "video" };
+  m: { url: string; type: "image" | "video"; position?: { x: number; y: number; zoom: number } };
   altText: string;
   badge?: number;
   className: string;
@@ -602,6 +846,8 @@ function MediaTile({
     <>
       {m.type === "video" ? (
         <video src={m.url} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+      ) : m.position ? (
+        <CoverImage src={m.url} alt={altText} position={m.position} />
       ) : (
         <img src={m.url} alt={altText} className="h-full w-full object-cover" />
       )}
@@ -641,7 +887,7 @@ function MediaRow({
   heightClass = "h-20",
   onItemClick,
 }: {
-  media: { url: string; type: "image" | "video" }[];
+  media: { url: string; type: "image" | "video"; position?: { x: number; y: number; zoom: number } }[];
   altText: string;
   maxVisible?: number;
   heightClass?: string;
@@ -724,11 +970,13 @@ function RelatedProjects({ service }: { service: string }) {
       </p>
       <div className="scrollbar-on-dark mt-3 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
         {projects.map((p) => {
-          const media: { url: string; type: "image" | "video" }[] =
+          const coverPhoto = p.photo_urls?.[0] ?? null;
+          const coverPosition = coverPhoto ? p.photo_positions?.[coverPhoto] : undefined;
+          const media: { url: string; type: "image" | "video"; position?: typeof coverPosition }[] =
             p.media.length > 0
               ? p.media.map((m) => ({ url: m.url, type: m.media_type === "video" ? "video" : "image" }))
-              : p.cover_photo_url
-                ? [{ url: p.cover_photo_url, type: "image" }]
+              : coverPhoto
+                ? [{ url: coverPhoto, type: "image", position: coverPosition }]
                 : [];
           return (
             <button
@@ -738,12 +986,10 @@ function RelatedProjects({ service }: { service: string }) {
               className="block w-full rounded-xl border border-white/10 bg-card p-3 text-left text-card-foreground shadow-sm transition hover:shadow-md"
             >
               <div className="flex items-center gap-2.5">
-                {p.cover_photo_url ? (
-                  <img
-                    src={p.cover_photo_url}
-                    alt={p.title}
-                    className="h-9 w-9 shrink-0 rounded-full object-cover"
-                  />
+                {coverPhoto ? (
+                  <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full">
+                    <CoverImage src={coverPhoto} alt={p.title} position={coverPosition} />
+                  </div>
                 ) : (
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted">
                     <Compass className="h-4 w-4 text-muted-foreground" />
@@ -831,6 +1077,7 @@ function ContactForm({
     if (!message.trim()) return "Tell us about your property";
     for (const item of selectedServiceChecklist) {
       if (item.type === "document") continue;
+      if (item.required === false) continue;
       const a = checklistAnswers[item.id];
       if (item.type === "checkbox") {
         if (a?.checked === undefined) return `Please answer "${item.label}"`;
@@ -1053,7 +1300,7 @@ function ContactForm({
                       return (
                         <div key={item.id}>
                           <span className="mb-1 block text-xs text-muted-foreground">
-                            {item.label} <RequiredMark />
+                            {item.label} <RequiredMark required={item.required !== false} />
                           </span>
                           <LocationAutosuggest
                             value={a.answer ?? ""}
@@ -1067,7 +1314,7 @@ function ContactForm({
                       return (
                         <div key={item.id}>
                           <span className="mb-1 block text-xs text-muted-foreground">
-                            {item.label} <RequiredMark />
+                            {item.label} <RequiredMark required={item.required !== false} />
                           </span>
                           <div className="flex items-center gap-2">
                             <input
@@ -1102,7 +1349,7 @@ function ContactForm({
                     return (
                       <div key={item.id}>
                         <span className="mb-1 block text-xs text-muted-foreground">
-                          {item.label} <RequiredMark />
+                          {item.label} <RequiredMark required={item.required !== false} />
                         </span>
                         <div className="flex items-center gap-2">
                           <input
@@ -1168,7 +1415,8 @@ function ContactForm({
   );
 }
 
-function RequiredMark() {
+function RequiredMark({ required = true }: { required?: boolean }) {
+  if (!required) return <span className="text-muted-foreground"> (optional)</span>;
   return <span className="text-destructive"> (required)</span>;
 }
 
@@ -1352,24 +1600,29 @@ function ProjectCard({
       onClick={onClick}
       className={`group overflow-hidden rounded-xl border border-border bg-card text-left shadow-sm transition-shadow hover:shadow-md ${className}`}
     >
-      {project.cover_photo_url && (
-        <div className="relative aspect-video overflow-hidden bg-muted">
-          <img
-            src={project.cover_photo_url}
-            alt={project.title}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.05]"
-            loading="lazy"
+      {(project.photo_urls?.length ?? 0) > 0 && (
+        <div className="relative bg-muted p-2 pb-0">
+          <MediaRow
+            media={project.photo_urls.map((url) => ({
+              url,
+              type: "image" as const,
+              position: project.photo_positions?.[url],
+            }))}
+            altText={project.title}
+            heightClass="h-36"
           />
           <ProjectStatusBadge
             status={project.inquiry_status}
-            className="absolute right-2 top-2 shadow"
+            className="absolute right-3 top-3 shadow"
           />
         </div>
       )}
       <div className="p-5">
         <div className="flex items-start justify-between gap-2">
           <h3 className="font-semibold text-lg">{project.title}</h3>
-          {!project.cover_photo_url && <ProjectStatusBadge status={project.inquiry_status} />}
+          {(project.photo_urls?.length ?? 0) === 0 && (
+            <ProjectStatusBadge status={project.inquiry_status} />
+          )}
         </div>
         {project.location && (
           <div className="mt-0.5 text-sm text-muted-foreground">{project.location}</div>
@@ -1413,7 +1666,10 @@ type ProjectViewAllSortKey = keyof typeof PROJECT_VIEW_ALL_SORT_OPTIONS;
 
 function Projects() {
   const { data } = usePublicProjects();
-  const search = Route.useSearch();
+  // strict:false so this also works when LandingPage is rendered outside the
+  // "/" route (e.g. the admin preview) — deep-linking via ?project= only
+  // matters on the real public route anyway.
+  const search = useSearch({ strict: false }) as { project?: string };
   const navigate = useNavigate();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
@@ -1615,12 +1871,18 @@ function Projects() {
             className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            {selected.cover_photo_url && (
-              <img
-                src={selected.cover_photo_url}
-                alt={selected.title}
-                className="aspect-video w-full rounded-t-2xl object-cover"
-              />
+            {(selected.photo_urls?.length ?? 0) > 0 && (
+              <div className="rounded-t-2xl bg-muted p-2">
+                <MediaRow
+                  media={selected.photo_urls.map((url) => ({
+                    url,
+                    type: "image" as const,
+                    position: selected.photo_positions?.[url],
+                  }))}
+                  altText={selected.title}
+                  heightClass="h-40"
+                />
+              </div>
             )}
             <div className="p-6">
               <div className="flex items-start justify-between gap-4">

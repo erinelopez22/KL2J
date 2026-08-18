@@ -21,6 +21,12 @@ const ConfidentialAttachmentSchema = z.object({
   isExternalLink: z.boolean().optional(),
 });
 
+const PhotoPositionSchema = z.object({
+  x: z.number().min(0).max(100),
+  y: z.number().min(0).max(100),
+  zoom: z.number().min(1).max(3),
+});
+
 const ProjectSchema = z.object({
   title: z.string().min(1).max(200),
   location: z.string().min(1).max(300),
@@ -29,10 +35,12 @@ const ProjectSchema = z.object({
   start_date: z.string().optional(),
   end_date: z.string().optional(),
   personnel: z.array(z.string().min(1).max(200)).default([]),
-  cover_photo_url: z.string().url().optional(),
+  photo_urls: z.array(z.string().url()).default([]),
+  photo_positions: z.record(z.string(), PhotoPositionSchema).default({}),
   attachments: z.array(AttachmentSchema).default([]),
   confidential_attachments: z.array(ConfidentialAttachmentSchema).default([]),
   is_public: z.boolean().default(false),
+  size: z.enum(["major", "small"]).default("small"),
   sort_order: z.number().int().default(0),
   inquiry_id: z.string().uuid().optional(),
 });

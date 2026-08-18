@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect, useLocation } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminNav } from "@/components/admin/AdminNav";
 
@@ -22,14 +22,21 @@ export const Route = createFileRoute("/_authenticated/admin")({
 
 function AdminLayout() {
   const { isAdmin, isSuperAdmin } = Route.useRouteContext();
+  const { pathname } = useLocation();
+  const fullBleed = pathname === "/admin/preview";
+
   return (
     <div className="min-h-screen bg-slate-100">
       <AdminNav isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} />
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-        <div className="rounded-xl border border-border bg-background p-6 shadow-md sm:p-8">
-          <Outlet />
-        </div>
-      </main>
+      {fullBleed ? (
+        <Outlet />
+      ) : (
+        <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+          <div className="rounded-xl border border-border bg-background p-6 shadow-md sm:p-8">
+            <Outlet />
+          </div>
+        </main>
+      )}
     </div>
   );
 }

@@ -18,6 +18,7 @@ const PostAttachmentSchema = z.object({
   name: z.string().min(1),
   contentType: z.string().min(1),
   kind: z.enum(["image", "video", "document"]),
+  isExternalLink: z.boolean().optional(),
 });
 
 const PostInputSchema = z.object({

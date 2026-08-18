@@ -4,13 +4,20 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 export const CHECKLIST_ITEM_TYPES = ["text", "number", "location", "checkbox", "document"] as const;
 export type ChecklistItemType = (typeof CHECKLIST_ITEM_TYPES)[number];
-export type ChecklistItem = { id: string; label: string; type: ChecklistItemType; unit?: string };
+export type ChecklistItem = {
+  id: string;
+  label: string;
+  type: ChecklistItemType;
+  unit?: string;
+  required?: boolean;
+};
 
 const ChecklistItemSchema = z.object({
   id: z.string().min(1).max(100),
   label: z.string().min(1).max(200),
   type: z.enum(CHECKLIST_ITEM_TYPES),
   unit: z.string().max(20).optional(),
+  required: z.boolean().optional().default(true),
 });
 
 const ServiceSchema = z.object({

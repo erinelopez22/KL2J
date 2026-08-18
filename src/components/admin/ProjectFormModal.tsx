@@ -2,9 +2,13 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { X, Trash2, FileText, Video, Image as ImageIcon, Lock, Play } from "lucide-react";
+import { X, Trash2, FileText, Video, Image as ImageIcon, Lock, Play, Move } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { createProject, updateProject, deleteProject } from "@/lib/admin/projects.functions";
+import { PhotoPositionEditor } from "@/components/admin/PhotoPositionEditor";
+import { CombinePhotoUpload } from "@/components/admin/CombinePhotoUpload";
+import { CoverImage, DEFAULT_IMAGE_POSITION, type ImagePosition } from "@/components/CoverImage";
+import { createInquiry } from "@/lib/admin/inquiries.functions";
 import {
   addGalleryPhoto,
   deleteGalleryPhoto,
@@ -89,10 +93,12 @@ export type ProjectRecord = {
   start_date: string | null;
   end_date: string | null;
   personnel: string[];
-  cover_photo_url: string | null;
+  photo_urls: string[];
+  photo_positions: Record<string, ImagePosition>;
   attachments: ProjectAttachment[];
   confidential_attachments: ConfidentialAttachment[];
   is_public: boolean;
+  size: "major" | "small";
   inquiry_id: string | null;
   sort_order: number;
 };
@@ -105,10 +111,12 @@ type FormState = {
   start_date: string;
   end_date: string;
   personnel: string[];
-  cover_photo_url: string;
+  photo_urls: string[];
+  photo_positions: Record<string, ImagePosition>;
   attachments: ProjectAttachment[];
   confidential_attachments: ConfidentialAttachment[];
   is_public: boolean;
+  size: "major" | "small";
   inquiry_id: string;
 };
 
@@ -187,10 +195,12 @@ function emptyForm(): FormState {
     start_date: "",
     end_date: "",
     personnel: [],
-    cover_photo_url: "",
+    photo_urls: [],
+    photo_positions: {},
     attachments: [],
     confidential_attachments: [],
     is_public: false,
+    size: "small",
     inquiry_id: "",
   };
 }
@@ -404,10 +414,12 @@ export function ProjectFormModal({
         start_date: project.start_date ?? "",
         end_date: project.end_date ?? "",
         personnel: project.personnel ?? [],
-        cover_photo_url: project.cover_photo_url ?? "",
+        photo_urls: project.photo_urls ?? [],
+        photo_positions: project.photo_positions ?? {},
         attachments: project.attachments ?? [],
         confidential_attachments: project.confidential_attachments ?? [],
         is_public: project.is_public ?? false,
+        size: project.size ?? "small",
         inquiry_id: project.inquiry_id ?? "",
       };
     }
@@ -421,6 +433,7 @@ export function ProjectFormModal({
     return base;
   });
   const [mediaTab, setMediaTab] = useState<"documents" | "photos" | "confidential">("documents");
+  const [repositioningUrl, setRepositioningUrl] = useState<string | null>(null);
   const [personName, setPersonName] = useState("");
   const [saving, setSaving] = useState(false);
   const doCreate = useServerFn(createProject);
@@ -429,7 +442,12 @@ export function ProjectFormModal({
   const doDeleteMedia = useServerFn(deleteSiteMedia);
   const doDeleteConfidential = useServerFn(deleteConfidentialMedia);
   const confirm = useConfirm();
-  const { data: inquiries } = useQuery({
+  const doCreateInquiry = useServerFn(createInquiry);
+  const [presetChannel, setPresetChannel] = useState<"referral" | "facebook" | null>(null);
+  const [presetName, setPresetName] = useState("");
+  const [presetPhone, setPresetPhone] = useState("");
+  const [creatingPreset, setCreatingPreset] = useState(false);
+  const { data: inquiries, refetch: refetchInquiries } = useQuery({
     queryKey: ["admin-inquiries-picker", project?.inquiry_id],
     queryFn: async () => {
       const [inquiriesRes, linkedRes] = await Promise.all([
@@ -483,6 +501,52 @@ export function ProjectFormModal({
           : f.location,
       service: (!project || !f.service.trim()) && inquiry ? (inquiry.service ?? "") : f.service,
     }));
+  }
+
+  // Quick-create shortcuts for customers who reached out outside the
+  // website (phone call / Facebook Messenger) — creates a real inquiry
+  // (via the same path as the admin Inquiries page's "Add inquiry" form,
+  // tagged with the matching channel) and links it immediately, instead of
+  // requiring a trip to /admin/inquiries first.
+  async function createPresetInquiry() {
+    if (!presetChannel) return;
+    if (!presetName.trim()) {
+      toast.error("Customer name is required");
+      return;
+    }
+    if (!presetPhone.trim()) {
+      toast.error("Phone number is required");
+      return;
+    }
+    setCreatingPreset(true);
+    try {
+      const result = await doCreateInquiry({
+        data: {
+          name: presetName.trim(),
+          phone: presetPhone.trim(),
+          service: form.service || undefined,
+          channel: presetChannel,
+          message:
+            presetChannel === "referral"
+              ? "Reached out via phone call / referral."
+              : "Reached out via Facebook Messenger.",
+        },
+      });
+      await refetchInquiries();
+      setForm((f) => ({
+        ...f,
+        inquiry_id: result.id,
+        title: !project || !f.title.trim() ? defaultTitleFromInquiry(presetName.trim(), f.service || undefined) : f.title,
+      }));
+      toast.success("Inquiry created and linked");
+      setPresetChannel(null);
+      setPresetName("");
+      setPresetPhone("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create inquiry");
+    } finally {
+      setCreatingPreset(false);
+    }
   }
 
   const selectedInquiryChecklist =
@@ -646,10 +710,12 @@ export function ProjectFormModal({
       start_date: form.start_date || undefined,
       end_date: form.end_date || undefined,
       personnel: form.personnel,
-      cover_photo_url: form.cover_photo_url || undefined,
+      photo_urls: form.photo_urls,
+      photo_positions: form.photo_positions,
       attachments: form.attachments,
       confidential_attachments: form.confidential_attachments,
       is_public: form.is_public,
+      size: form.size,
       inquiry_id: defaultInquiry?.id || form.inquiry_id || undefined,
       sort_order: project?.sort_order ?? 0,
     };
@@ -707,36 +773,68 @@ export function ProjectFormModal({
           <div className="space-y-10">
             <section>
               <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Cover photo
+                Cover photos
               </h3>
-              {form.cover_photo_url ? (
-                <div className="relative w-full max-w-sm overflow-hidden rounded-lg border border-border">
-                  <img
-                    src={form.cover_photo_url}
-                    alt="Cover"
-                    className="aspect-video w-full object-cover"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setForm((f) => ({ ...f, cover_photo_url: "" }))}
-                    className="absolute right-2 top-2 rounded-md bg-black/60 p-1.5 text-white hover:bg-black/80"
-                    aria-label="Remove cover photo"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+              <p className="mb-2 text-[11px] text-muted-foreground/70">
+                Shown as a horizontal row on the public project card and detail popup. The first photo
+                is used wherever only one image fits (e.g. the admin list thumbnail).
+              </p>
+              {form.photo_urls.length > 0 && (
+                <div className="mb-2 flex flex-wrap gap-2">
+                  {form.photo_urls.map((url, i) => {
+                    const pos = form.photo_positions[url] ?? DEFAULT_IMAGE_POSITION;
+                    return (
+                      <div
+                        key={url}
+                        className="relative h-24 w-32 shrink-0 overflow-hidden rounded-lg border border-border"
+                      >
+                        <CoverImage src={url} alt={`Cover ${i + 1}`} position={pos} />
+                        <button
+                          type="button"
+                          onClick={() => setRepositioningUrl(url)}
+                          className="absolute bottom-1 left-1 rounded-md bg-black/60 p-1 text-white hover:bg-black/80"
+                          aria-label={`Reposition cover photo ${i + 1}`}
+                        >
+                          <Move className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setForm((f) => {
+                              const { [url]: _removed, ...rest } = f.photo_positions;
+                              return {
+                                ...f,
+                                photo_urls: f.photo_urls.filter((u) => u !== url),
+                                photo_positions: rest,
+                              };
+                            })
+                          }
+                          className="absolute right-1 top-1 rounded-md bg-black/60 p-1 text-white hover:bg-black/80"
+                          aria-label={`Remove cover photo ${i + 1}`}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
-              ) : (
+              )}
+              <div className="flex flex-wrap items-start gap-3">
                 <div className="max-w-sm">
                   <FileDrop
                     folder="projects"
                     accept="image/jpeg,image/png,image/webp"
                     label="Upload a cover photo"
                     allowExternalLink={false}
-                    multiple={false}
-                    onUploaded={(result) => setForm((f) => ({ ...f, cover_photo_url: result.url }))}
+                    onUploaded={(result) =>
+                      setForm((f) => ({ ...f, photo_urls: [...f.photo_urls, result.url] }))
+                    }
                   />
                 </div>
-              )}
+                <CombinePhotoUpload
+                  onUploaded={(url) => setForm((f) => ({ ...f, photo_urls: [...f.photo_urls, url] }))}
+                />
+              </div>
             </section>
 
             {defaultInquiry ? (
@@ -747,31 +845,91 @@ export function ProjectFormModal({
                 <p className="mt-0.5 font-medium">{defaultInquiry.label}</p>
               </div>
             ) : (
-              <label className="block text-sm">
-                <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
-                  Linked inquiry {!project && <span className="text-destructive">(required)</span>}
-                </span>
-                <select
-                  value={form.inquiry_id}
-                  onChange={(e) => selectInquiry(e.target.value)}
-                  className={`h-10 w-full rounded-md border bg-background px-3 text-sm ${
-                    requiredInquiryMissing ? "border-destructive" : "border-border"
-                  }`}
-                >
-                  <option value="">— Select an inquiry —</option>
-                  {inquiries?.map((i) => (
-                    <option key={i.id} value={i.id}>
-                      {i.name} · {i.contact}
-                      {i.service ? ` · ${i.service}` : ""}
-                    </option>
-                  ))}
-                </select>
-                {requiredInquiryMissing && (
-                  <p className="mt-1 text-xs text-destructive">
-                    Projects are always created from an inquiry — pick which one this belongs to.
-                  </p>
+              <div>
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
+                    Linked inquiry {!project && <span className="text-destructive">(required)</span>}
+                  </span>
+                  <select
+                    value={form.inquiry_id}
+                    onChange={(e) => selectInquiry(e.target.value)}
+                    className={`h-10 w-full rounded-md border bg-background px-3 text-sm ${
+                      requiredInquiryMissing ? "border-destructive" : "border-border"
+                    }`}
+                  >
+                    <option value="">— Select an inquiry —</option>
+                    {inquiries?.map((i) => (
+                      <option key={i.id} value={i.id}>
+                        {i.name} · {i.contact}
+                        {i.service ? ` · ${i.service}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  {requiredInquiryMissing && (
+                    <p className="mt-1 text-xs text-destructive">
+                      Projects are always created from an inquiry — pick which one this belongs to.
+                    </p>
+                  )}
+                </label>
+
+                {presetChannel ? (
+                  <div className="mt-2 space-y-2 rounded-md border border-primary/30 bg-primary/5 p-3">
+                    <p className="text-xs font-semibold uppercase text-muted-foreground">
+                      New inquiry from {presetChannel === "referral" ? "Referral" : "Facebook"}
+                    </p>
+                    <input
+                      value={presetName}
+                      onChange={(e) => setPresetName(e.target.value)}
+                      placeholder="Customer name"
+                      className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                    />
+                    <input
+                      value={presetPhone}
+                      onChange={(e) => setPresetPhone(e.target.value)}
+                      placeholder="Phone number"
+                      className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={createPresetInquiry}
+                        disabled={creatingPreset}
+                        className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                      >
+                        {creatingPreset ? "Creating…" : "Create & link"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPresetChannel(null);
+                          setPresetName("");
+                          setPresetPhone("");
+                        }}
+                        className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPresetChannel("referral")}
+                      className="rounded-md border border-dashed border-border px-3 py-1.5 text-xs text-muted-foreground hover:border-primary hover:text-primary"
+                    >
+                      + Inquiry from Referral
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPresetChannel("facebook")}
+                      className="rounded-md border border-dashed border-border px-3 py-1.5 text-xs text-muted-foreground hover:border-primary hover:text-primary"
+                    >
+                      + Inquiry from Facebook
+                    </button>
+                  </div>
                 )}
-              </label>
+              </div>
             )}
 
             <section>
@@ -826,6 +984,27 @@ export function ProjectFormModal({
                     Show on public site
                   </span>
                 </label>
+                <div className="text-sm sm:col-span-2">
+                  <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
+                    Project size (admin only)
+                  </span>
+                  <div className="flex gap-1.5">
+                    {(["small", "major"] as const).map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setForm({ ...form, size: s })}
+                        className={`rounded-md border px-3 py-1.5 text-sm font-medium capitalize ${
+                          form.size === s
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border text-muted-foreground hover:bg-muted"
+                        }`}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div className="text-sm sm:col-span-2">
                   <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
                     Date range
@@ -1076,6 +1255,36 @@ export function ProjectFormModal({
           startIndex={lightbox.index}
           onClose={() => setLightbox(null)}
         />
+      )}
+      {repositioningUrl && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/70 p-4"
+          onClick={() => setRepositioningUrl(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl border border-border bg-card p-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="mb-3 text-sm font-semibold">Reposition cover photo</h3>
+            <PhotoPositionEditor
+              imageUrl={repositioningUrl}
+              position={form.photo_positions[repositioningUrl] ?? DEFAULT_IMAGE_POSITION}
+              onChange={(pos) =>
+                setForm((f) => ({
+                  ...f,
+                  photo_positions: { ...f.photo_positions, [repositioningUrl]: pos },
+                }))
+              }
+            />
+            <button
+              type="button"
+              onClick={() => setRepositioningUrl(null)}
+              className="mt-3 w-full rounded-md bg-primary py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              Done
+            </button>
+          </div>
+        </div>
       )}
     </>
   );

@@ -76,6 +76,7 @@ function AdminServices() {
   const [itemLabel, setItemLabel] = useState("");
   const [itemType, setItemType] = useState<ChecklistItemType>("text");
   const [itemUnit, setItemUnit] = useState("");
+  const [itemRequired, setItemRequired] = useState(true);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const doCreate = useServerFn(createService);
   const doUpdate = useServerFn(updateService);
@@ -86,6 +87,7 @@ function AdminServices() {
     setItemLabel("");
     setItemType("text");
     setItemUnit("");
+    setItemRequired(true);
     setEditingItemId(null);
   }
 
@@ -97,13 +99,18 @@ function AdminServices() {
       setForm((f) => ({
         ...f,
         checklist: f.checklist.map((c) =>
-          c.id === editingItemId ? { id: editingItemId, label, type: itemType, unit } : c,
+          c.id === editingItemId
+            ? { id: editingItemId, label, type: itemType, unit, required: itemRequired }
+            : c,
         ),
       }));
     } else {
       setForm((f) => ({
         ...f,
-        checklist: [...f.checklist, { id: crypto.randomUUID(), label, type: itemType, unit }],
+        checklist: [
+          ...f.checklist,
+          { id: crypto.randomUUID(), label, type: itemType, unit, required: itemRequired },
+        ],
       }));
     }
     resetItemForm();
@@ -114,6 +121,7 @@ function AdminServices() {
     setItemLabel(item.label);
     setItemType(item.type);
     setItemUnit(item.unit ?? "");
+    setItemRequired(item.required ?? true);
   }
 
   function removeChecklistItem(id: string) {
@@ -339,6 +347,16 @@ function AdminServices() {
                       placeholder="Unit (e.g. sqm)"
                       className="h-10 w-28 rounded-md border border-border bg-background px-2 text-sm"
                     />
+                  )}
+                  {itemType !== "checkbox" && itemType !== "document" && (
+                    <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        checked={itemRequired}
+                        onChange={(e) => setItemRequired(e.target.checked)}
+                      />
+                      Required
+                    </label>
                   )}
                   <button
                     type="button"

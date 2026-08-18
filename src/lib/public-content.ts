@@ -12,6 +12,13 @@ export type PublicService = {
   checklist: ChecklistItem[];
   sort_order: number;
 };
+export type PublicEquipment = {
+  id: string;
+  icon: string;
+  title: string;
+  description: string;
+  sort_order: number;
+};
 export type PublicPhoto = {
   id: string;
   url: string;
@@ -50,7 +57,8 @@ export type PublicProject = {
   start_date: string | null;
   end_date: string | null;
   personnel: string[];
-  cover_photo_url: string | null;
+  photo_urls: string[];
+  photo_positions: Record<string, { x: number; y: number; zoom: number }>;
   attachments: PublicAttachment[];
   media: PublicProjectMedia[];
   sort_order: number;
@@ -60,6 +68,9 @@ export type PublicSiteSettings = {
   logo_url: string | null;
   favicon_url: string | null;
   hero_banner_url: string | null;
+  hero_banner_position: { x: number; y: number; zoom: number };
+  hero_headline: string | null;
+  hero_subtitle: string | null;
 };
 
 export function usePublicServices() {
@@ -73,6 +84,22 @@ export function usePublicServices() {
         .order("sort_order");
       if (error) throw error;
       return data as PublicService[];
+    },
+    staleTime: 60_000,
+  });
+}
+
+export function usePublicEquipment() {
+  return useQuery({
+    queryKey: ["public-equipment"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("equipment")
+        .select("id,icon,title,description,sort_order")
+        .eq("active", true)
+        .order("sort_order");
+      if (error) throw error;
+      return data as PublicEquipment[];
     },
     staleTime: 60_000,
   });
@@ -215,7 +242,7 @@ export function usePublicProjects() {
       const { data, error } = await supabase
         .from("projects")
         .select(
-          "id,title,location,description,service,start_date,end_date,personnel,cover_photo_url,attachments,sort_order,inquiry_status,gallery_folders(gallery_photos(id,url,caption,sort_order,media_type))",
+          "id,title,location,description,service,start_date,end_date,personnel,photo_urls,photo_positions,attachments,sort_order,inquiry_status,gallery_folders(gallery_photos(id,url,caption,sort_order,media_type))",
         )
         // Admins are also allowed to read every project via a separate RLS
         // policy (so /admin/projects can show drafts) — that policy applies
@@ -274,7 +301,7 @@ export function usePublicSiteSettings() {
     queryFn: async () => {
       const { data, error } = await supabase.from("site_settings").select("*").eq("id", 1).single();
       if (error) throw error;
-      return data as PublicSiteSettings;
+      return data as unknown as PublicSiteSettings;
     },
     staleTime: 60_000,
   });

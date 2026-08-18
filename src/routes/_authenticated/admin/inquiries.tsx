@@ -6,7 +6,15 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { ProjectFormModal } from "@/components/admin/ProjectFormModal";
 import { getConfidentialFileUrl, uploadConfidentialMedia } from "@/lib/admin/media.functions";
-import { updateInquiryStatus, createInquiry, addAdminInquiryComment } from "@/lib/admin/inquiries.functions";
+import {
+  updateInquiryStatus,
+  createInquiry,
+  addAdminInquiryComment,
+  deleteInquiry,
+  markInquiryCommentsRead,
+  MANUAL_INQUIRY_CHANNELS,
+  type ManualInquiryChannel,
+} from "@/lib/admin/inquiries.functions";
 import { usePublicServices } from "@/lib/public-content";
 import { LocationAutosuggest } from "@/components/LocationAutosuggest";
 import { PublicDocumentUpload, type UploadedDocument } from "@/components/PublicDocumentUpload";
@@ -31,6 +39,8 @@ import {
   Globe,
   Bot,
   UserPlus,
+  Phone,
+  Facebook,
   CheckCircle2,
   Circle,
   ListChecks,
@@ -38,6 +48,7 @@ import {
   Paperclip,
   LayoutGrid,
   List,
+  Trash2,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/inquiries")({
@@ -97,7 +108,15 @@ type Inquiry = {
 
 type LinkedProject = { id: string; title: string; is_public: boolean };
 
-function InquiryCard({ inquiry, onOpen }: { inquiry: Inquiry; onOpen: () => void }) {
+function InquiryCard({
+  inquiry,
+  onOpen,
+  unreadCount,
+}: {
+  inquiry: Inquiry;
+  onOpen: () => void;
+  unreadCount?: number;
+}) {
   return (
     <div
       onClick={onOpen}
@@ -113,6 +132,11 @@ function InquiryCard({ inquiry, onOpen }: { inquiry: Inquiry; onOpen: () => void
         {inquiry.channel && (
           <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
             {inquiry.channel}
+          </span>
+        )}
+        {!!unreadCount && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-destructive px-1.5 py-0.5 text-[9px] font-semibold text-destructive-foreground">
+            <MessageSquare className="h-2.5 w-2.5" /> {unreadCount}
           </span>
         )}
         {!inquiry.email_sent && (
@@ -149,11 +173,13 @@ function StatusColumn({
   items,
   onOpen,
   onDropInquiry,
+  unreadCounts,
 }: {
   status: Status;
   items: Inquiry[];
   onOpen: (i: Inquiry) => void;
   onDropInquiry: (id: string, status: Status) => void;
+  unreadCounts: Record<string, number>;
 }) {
   const [dragOver, setDragOver] = useState(false);
 
@@ -181,7 +207,7 @@ function StatusColumn({
         style={{ minHeight: 80 }}
       >
         {items.map((i) => (
-          <InquiryCard key={i.id} inquiry={i} onOpen={() => onOpen(i)} />
+          <InquiryCard key={i.id} inquiry={i} onOpen={() => onOpen(i)} unreadCount={unreadCounts[i.id]} />
         ))}
       </div>
     </div>
@@ -192,11 +218,13 @@ function InquiryListRow({
   inquiry,
   onOpen,
   onStatusChange,
+  unreadCount,
   statusOptions,
 }: {
   inquiry: Inquiry;
   onOpen: () => void;
   onStatusChange: (status: Status) => void;
+  unreadCount?: number;
   statusOptions: readonly Status[];
 }) {
   return (
@@ -215,6 +243,11 @@ function InquiryListRow({
           {inquiry.channel && (
             <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
               {inquiry.channel}
+            </span>
+          )}
+          {!!unreadCount && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold text-primary">
+              <MessageSquare className="h-2.5 w-2.5" /> {unreadCount}
             </span>
           )}
           {!inquiry.email_sent && (
@@ -332,6 +365,11 @@ function parseInquiryMessage(message: string | null): { phone: string | null; de
 
 function platformLabel(channel: string | null): { label: string; icon: typeof Globe } {
   if (channel === "quote_form") return { label: "Request a Quote form", icon: Globe };
+  if (channel === "referral") return { label: "Referral", icon: Phone };
+  if (channel === "facebook") return { label: "Facebook Messenger", icon: Facebook };
+  if (channel === "others") return { label: "Other", icon: UserPlus };
+  // "manual" is a legacy value from before channel tagging was required —
+  // kept so inquiries created before this change still show sensibly.
   if (channel === "manual") return { label: "Added by admin", icon: UserPlus };
   if (channel) return { label: "Chatbot", icon: Bot };
   return { label: "Unknown", icon: Globe };
@@ -486,7 +524,9 @@ function AdminCommentComposer({ inquiryId, onSent }: { inquiryId: string; onSent
 }
 
 function InquiryCommentsTab({ inquiryId }: { inquiryId: string }) {
+  const queryClient = useQueryClient();
   const doGetUrl = useServerFn(getConfidentialFileUrl);
+  const doMarkRead = useServerFn(markInquiryCommentsRead);
   const [lightbox, setLightbox] = useState<{ items: LightboxItem[]; index: number } | null>(null);
   const {
     data: comments,
@@ -504,6 +544,16 @@ function InquiryCommentsTab({ inquiryId }: { inquiryId: string }) {
       return data as unknown as InquiryComment[];
     },
   });
+
+  useEffect(() => {
+    doMarkRead({ data: { inquiryId } })
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ["admin-notif-messages"] });
+        queryClient.invalidateQueries({ queryKey: ["admin-inquiries-unread-counts"] });
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inquiryId]);
 
   function openAttachments(docs: CommentAttachment[], startIndex: number) {
     const items: LightboxItem[] = docs.map((d) => ({
@@ -575,7 +625,15 @@ function InquiryCommentsTab({ inquiryId }: { inquiryId: string }) {
   );
 }
 
-function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => void }) {
+function InquiryDetail({
+  inquiry,
+  onClose,
+  onDeleted,
+}: {
+  inquiry: Inquiry;
+  onClose: () => void;
+  onDeleted: (id: string) => void;
+}) {
   // Newer inquiries have dedicated email/phone columns. Older rows only have
   // "contact" (email or phone, whichever the customer entered) with the
   // phone sometimes embedded as a "Phone: ..." prefix in the message.
@@ -587,8 +645,10 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
   const details = hasDedicatedFields ? inquiry.message : legacy.details;
   const platform = platformLabel(inquiry.channel);
   const doGetConfidentialUrl = useServerFn(getConfidentialFileUrl);
+  const doDeleteInquiry = useServerFn(deleteInquiry);
   const [tab, setTab] = useState<"details" | "comments" | "attachments">("details");
   const [lightbox, setLightbox] = useState<{ items: LightboxItem[]; index: number } | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const confirm = useConfirm();
 
   function openAttachments(docs: { path: string; name: string; contentType?: string; isExternalLink?: boolean }[], startIndex: number) {
@@ -622,6 +682,31 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
     }
   }
 
+  async function handleDelete() {
+    const { data: linked } = await supabase
+      .from("projects")
+      .select("id, title")
+      .eq("inquiry_id", inquiry.id)
+      .maybeSingle();
+    const warning = linked
+      ? ` The project "${linked.title}" is linked to it — it will stay, just unlinked.`
+      : "";
+    if (
+      !(await confirm(`Delete this inquiry? This cannot be undone.${warning}`, { destructive: true }))
+    )
+      return;
+    setDeleting(true);
+    try {
+      await doDeleteInquiry({ data: { id: inquiry.id } });
+      toast.success("Inquiry deleted");
+      onDeleted(inquiry.id);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4" onClick={onClose}>
       <div
@@ -634,13 +719,23 @@ function InquiryDetail({ inquiry, onClose }: { inquiry: Inquiry; onClose: () => 
           >
             {inquiry.status}
           </span>
-          <button
-            onClick={onClose}
-            className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted"
-            aria-label="Close"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="rounded-md p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+              aria-label="Delete inquiry"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+            <button
+              onClick={onClose}
+              className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+              aria-label="Close"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         {inquiry.inquiry_code && (
@@ -868,7 +963,14 @@ type ManualChecklistAnswer = {
   documents?: UploadedDocument[];
 };
 
+const MANUAL_CHANNEL_LABELS: Record<ManualInquiryChannel, string> = {
+  referral: "Referral",
+  facebook: "Facebook",
+  others: "Others",
+};
+
 function NewInquiryModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const [channel, setChannel] = useState<ManualInquiryChannel | "">("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -891,6 +993,10 @@ function NewInquiryModal({ onClose, onCreated }: { onClose: () => void; onCreate
   }
 
   async function submit() {
+    if (!channel) {
+      toast.error("Select how the customer reached out");
+      return;
+    }
     if (!name.trim()) {
       toast.error("Name is required");
       return;
@@ -907,6 +1013,7 @@ function NewInquiryModal({ onClose, onCreated }: { onClose: () => void; onCreate
           email: email.trim() || undefined,
           phone: phone.trim() || undefined,
           service: service || undefined,
+          channel,
           message: message.trim() || undefined,
           checklist_responses: selectedServiceChecklist.map((item) => ({
             id: item.id,
@@ -963,6 +1070,27 @@ function NewInquiryModal({ onClose, onCreated }: { onClose: () => void; onCreate
           For clients who reached out directly (phone, walk-in, etc.) instead of through the website.
         </p>
         <div className="space-y-3">
+          <div>
+            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
+              How did the customer reach out? <span className="text-destructive">(required)</span>
+            </span>
+            <div className="flex gap-1.5">
+              {MANUAL_INQUIRY_CHANNELS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setChannel(c)}
+                  className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium ${
+                    channel === c
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  {MANUAL_CHANNEL_LABELS[c]}
+                </button>
+              ))}
+            </div>
+          </div>
           <label className="block text-sm">
             <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
               Name <span className="text-destructive">(required)</span>
@@ -1114,8 +1242,10 @@ function AdminInquiries() {
   const [showCreate, setShowCreate] = useState(false);
   const [search, setSearch] = useState("");
   const [serviceFilter, setServiceFilter] = useState("");
+  const [channelFilter, setChannelFilter] = useState("");
   const [sortKey, setSortKey] = useState<InquirySortKey>("newest");
   const doUpdateStatus = useServerFn(updateInquiryStatus);
+  const queryClient = useQueryClient();
 
   async function load() {
     setLoading(true);
@@ -1128,11 +1258,31 @@ function AdminInquiries() {
     setLoading(false);
   }
 
+  const { data: unreadCounts = {} } = useQuery({
+    queryKey: ["admin-inquiries-unread-counts"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("inquiry_comments")
+        .select("inquiry_id")
+        .eq("author_type", "inquirer")
+        .eq("is_read", false);
+      if (error) throw error;
+      const counts: Record<string, number> = {};
+      for (const row of data ?? []) {
+        counts[row.inquiry_id] = (counts[row.inquiry_id] ?? 0) + 1;
+      }
+      return counts;
+    },
+  });
+
   useEffect(() => {
     load();
     const ch = supabase
       .channel("admin-inquiries-kanban")
       .on("postgres_changes", { event: "*", schema: "public", table: "inquiries" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "inquiry_comments" }, () =>
+        queryClient.invalidateQueries({ queryKey: ["admin-inquiries-unread-counts"] }),
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(ch);
@@ -1141,10 +1291,12 @@ function AdminInquiries() {
 
   const columns = showHidden ? ALL_STATUSES : STATUS_COLUMNS;
   const serviceOptions = Array.from(new Set(items.map((i) => i.service).filter((s): s is string => Boolean(s)))).sort();
+  const channelOptions = Array.from(new Set(items.map((i) => i.channel).filter((c): c is string => Boolean(c)))).sort();
   const searchLower = search.trim().toLowerCase();
   const filteredItems = items
     .filter((i) => {
       if (serviceFilter && i.service !== serviceFilter) return false;
+      if (channelFilter && i.channel !== channelFilter) return false;
       if (!searchLower) return true;
       return [i.name, i.contact, i.email, i.phone, i.service, i.message, i.inquiry_code]
         .filter(Boolean)
@@ -1258,6 +1410,18 @@ function AdminInquiries() {
           ))}
         </select>
         <select
+          value={channelFilter}
+          onChange={(e) => setChannelFilter(e.target.value)}
+          className="h-10 rounded-md border border-border bg-card px-3 text-sm"
+        >
+          <option value="">All platforms</option>
+          {channelOptions.map((c) => (
+            <option key={c} value={c}>
+              {platformLabel(c).label}
+            </option>
+          ))}
+        </select>
+        <select
           value={sortKey}
           onChange={(e) => setSortKey(e.target.value as InquirySortKey)}
           className="h-10 rounded-md border border-border bg-card px-3 text-sm"
@@ -1268,12 +1432,13 @@ function AdminInquiries() {
             </option>
           ))}
         </select>
-        {(search || serviceFilter) && (
+        {(search || serviceFilter || channelFilter) && (
           <button
             type="button"
             onClick={() => {
               setSearch("");
               setServiceFilter("");
+              setChannelFilter("");
             }}
             className="rounded-md border border-border px-3 text-sm hover:bg-muted"
           >
@@ -1303,6 +1468,7 @@ function AdminInquiries() {
               items={filteredItems.filter((i) => i.status === status)}
               onOpen={(i) => setOpenInquiryId(i.id)}
               onDropInquiry={moveInquiry}
+              unreadCounts={unreadCounts}
             />
           ))}
         </div>
@@ -1317,12 +1483,22 @@ function AdminInquiries() {
               onOpen={() => setOpenInquiryId(i.id)}
               onStatusChange={(status) => moveInquiry(i.id, status)}
               statusOptions={columns}
+              unreadCount={unreadCounts[i.id]}
             />
           ))}
         </div>
       )}
 
-      {openInquiry && <InquiryDetail inquiry={openInquiry} onClose={() => setOpenInquiryId(null)} />}
+      {openInquiry && (
+        <InquiryDetail
+          inquiry={openInquiry}
+          onClose={() => setOpenInquiryId(null)}
+          onDeleted={(id) => {
+            setItems((cur) => cur.filter((i) => i.id !== id));
+            setOpenInquiryId(null);
+          }}
+        />
+      )}
 
       {showCreate && (
         <NewInquiryModal
