@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { CoverImage } from "@/components/CoverImage";
+import { MediaRow } from "@/components/MediaRow";
 import { deleteProject, updateProject } from "@/lib/admin/projects.functions";
 import { getConfidentialFileUrl } from "@/lib/admin/media.functions";
 import {
@@ -449,22 +450,26 @@ function AdminProjects() {
             </div>
 
             {linkedInquiry && (
-              <div className="mt-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+              <div className="mt-3 truncate rounded-md border border-primary/30 bg-primary/5 px-3 py-1.5 text-sm">
                 <span className="text-xs font-semibold uppercase text-muted-foreground">
-                  Linked inquiry
-                </span>
-                <p className="mt-0.5 font-medium">
+                  Linked inquiry:
+                </span>{" "}
+                <span className="font-medium">
                   {linkedInquiry.name} · {linkedInquiry.contact}
-                </p>
+                </span>
               </div>
             )}
 
-            {viewingProject.photo_urls?.[0] && (
-              <div className="relative mt-4 aspect-video w-full overflow-hidden rounded-lg">
-                <CoverImage
-                  src={viewingProject.photo_urls[0]}
-                  alt={viewingProject.title}
-                  position={viewingProject.photo_positions?.[viewingProject.photo_urls[0]]}
+            {(viewingProject.photo_urls?.length ?? 0) > 0 && (
+              <div className="mt-3 rounded-lg bg-muted p-2">
+                <MediaRow
+                  media={viewingProject.photo_urls.map((url) => ({
+                    url,
+                    type: "image" as const,
+                    position: viewingProject.photo_positions?.[url],
+                  }))}
+                  altText={viewingProject.title}
+                  heightClass="h-110"
                 />
               </div>
             )}

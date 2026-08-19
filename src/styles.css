@@ -79,6 +79,10 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
   }
+  /* Every modal in the app is a hand-rolled `fixed inset-0` backdrop, so
+     this one rule locks background scroll behind all of them without
+     threading scroll-lock state through each modal component. */
+  body:has(.fixed.inset-0) { overflow: hidden; }
 }
 
 @utility bg-board-blue { background-image: linear-gradient(135deg, #0079BF 0%, #0C66E4 100%); }
