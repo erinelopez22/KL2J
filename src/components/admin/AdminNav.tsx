@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,6 +20,8 @@ import {
   Monitor,
   Bell,
   Cog,
+  Menu,
+  X,
 } from "lucide-react";
 
 const links = [
@@ -160,9 +162,47 @@ function NotificationBell() {
   );
 }
 
+function NavLinks({
+  isAdmin,
+  vertical,
+  onLinkClick,
+}: {
+  isAdmin: boolean;
+  vertical?: boolean;
+  onLinkClick?: () => void;
+}) {
+  return (
+    <div className={vertical ? "flex flex-col gap-1" : "flex flex-wrap items-center gap-1"}>
+      {links.map((l) => (
+        <Link
+          key={l.to}
+          to={l.to}
+          activeOptions={{ exact: l.exact }}
+          onClick={onLinkClick}
+          className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+          activeProps={{ className: "bg-primary/10 text-primary font-medium" }}
+        >
+          <l.icon className="h-4 w-4" /> {l.label}
+        </Link>
+      ))}
+      {isAdmin && (
+        <Link
+          to="/admin/users"
+          onClick={onLinkClick}
+          className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+          activeProps={{ className: "bg-primary/10 text-primary font-medium" }}
+        >
+          <Users className="h-4 w-4" /> Users
+        </Link>
+      )}
+    </div>
+  );
+}
+
 export function AdminNav({ isAdmin, isSuperAdmin }: { isAdmin: boolean; isSuperAdmin: boolean }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   async function signOut() {
     await qc.cancelQueries();
@@ -172,46 +212,63 @@ export function AdminNav({ isAdmin, isSuperAdmin }: { isAdmin: boolean; isSuperA
   }
 
   return (
-    <header className="relative sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-1 px-4 py-3 sm:px-6">
-        <span className="mr-4 text-sm font-bold tracking-tight">KL2J Admin</span>
-        <div className="flex flex-wrap items-center gap-1">
-          {links.map((l) => (
+    <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
+      <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-sm font-bold tracking-tight">KL2J Admin</span>
+
+          {/* Desktop: full inline nav */}
+          <div className="hidden md:flex md:flex-1 md:items-center md:gap-1 md:px-4">
+            <NavLinks isAdmin={isAdmin} />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <NotificationBell />
             <Link
-              key={l.to}
-              to={l.to}
-              activeOptions={{ exact: l.exact }}
-              className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
-              activeProps={{ className: "bg-primary/10 text-primary font-medium" }}
+              to="/"
+              className="hidden rounded-md border border-border bg-background px-3 py-1.5 text-sm hover:bg-muted md:inline-flex"
             >
-              <l.icon className="h-4 w-4" /> {l.label}
+              View site
             </Link>
-          ))}
-          {isAdmin && (
-            <Link
-              to="/admin/users"
-              className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
-              activeProps={{ className: "bg-primary/10 text-primary font-medium" }}
+            <button
+              onClick={signOut}
+              className="hidden items-center gap-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground md:flex"
             >
-              <Users className="h-4 w-4" /> Users
-            </Link>
-          )}
+              <LogOut className="h-4 w-4" /> Logout
+            </button>
+
+            {/* Mobile/tablet: menu toggle */}
+            <button
+              onClick={() => setMobileOpen((v) => !v)}
+              aria-label={mobileOpen ? "Close menu" : "Open menu"}
+              aria-expanded={mobileOpen}
+              className="rounded-md border border-border bg-background p-2 text-muted-foreground hover:bg-muted hover:text-foreground md:hidden"
+            >
+              {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
-      </div>
-      <div className="absolute right-4 top-3 flex items-center gap-2">
-        <NotificationBell />
-        <Link
-          to="/"
-          className="rounded-md border border-border bg-background px-3 py-1.5 text-sm hover:bg-muted"
-        >
-          View site
-        </Link>
-        <button
-          onClick={signOut}
-          className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground flex items-center gap-1"
-        >
-          <LogOut className="h-4 w-4" /> Logout
-        </button>
+
+        {mobileOpen && (
+          <div className="mt-3 border-t border-border pt-3 md:hidden">
+            <NavLinks isAdmin={isAdmin} vertical onLinkClick={() => setMobileOpen(false)} />
+            <div className="mt-2 flex gap-2 border-t border-border pt-2">
+              <Link
+                to="/"
+                onClick={() => setMobileOpen(false)}
+                className="flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-center text-sm hover:bg-muted"
+              >
+                View site
+              </Link>
+              <button
+                onClick={signOut}
+                className="flex flex-1 items-center justify-center gap-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <LogOut className="h-4 w-4" /> Logout
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </header>
   );

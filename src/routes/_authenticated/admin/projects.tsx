@@ -33,6 +33,7 @@ import {
   kindFromContentType,
   type LightboxItem,
 } from "@/components/AttachmentLightbox";
+import { useRealtimeInvalidate } from "@/lib/useRealtimeInvalidate";
 
 export const Route = createFileRoute("/_authenticated/admin/projects")({
   component: AdminProjects,
@@ -56,10 +57,19 @@ type LinkedInquiry = {
   email: string | null;
   phone: string | null;
   service: string | null;
+  services: string[];
   message: string | null;
   channel: string | null;
   checklist_responses: LinkedInquiryChecklistResponse[];
 };
+
+function recordServices(record: { service: string | null; services?: string[] }): string[] {
+  return record.services && record.services.length > 0
+    ? record.services
+    : record.service
+      ? [record.service]
+      : [];
+}
 
 function platformLabel(channel: string | null): string {
   if (channel === "quote_form") return "Request a Quote form";
@@ -252,6 +262,7 @@ function AdminProjects() {
       return data as unknown as ProjectRecord[];
     },
   });
+  useRealtimeInvalidate("projects", [["admin-projects"]]);
 
   const viewingProject = viewingId ? (projects?.find((p) => p.id === viewingId) ?? null) : null;
 
@@ -261,7 +272,7 @@ function AdminProjects() {
       const { data, error } = await supabase
         .from("inquiries")
         .select(
-          "id, created_at, name, contact, email, phone, service, message, channel, checklist_responses",
+          "id, created_at, name, contact, email, phone, service, services, message, channel, checklist_responses",
         )
         .eq("id", viewingProject!.inquiry_id!)
         .single();
@@ -343,18 +354,17 @@ function AdminProjects() {
     }
   }
 
-  const serviceOptions = Array.from(
-    new Set((projects ?? []).map((p) => p.service).filter((s): s is string => Boolean(s))),
-  ).sort();
+  const serviceOptions = Array.from(new Set((projects ?? []).flatMap((p) => recordServices(p)))).sort();
   const searchLower = search.trim().toLowerCase();
   const filteredProjects = (projects ?? [])
     .filter((p) => {
-      if (serviceFilter && p.service !== serviceFilter) return false;
+      const pServices = recordServices(p);
+      if (serviceFilter && !pServices.includes(serviceFilter)) return false;
       if (visibilityFilter === "public" && !p.is_public) return false;
       if (visibilityFilter === "private" && p.is_public) return false;
       if (sizeFilter !== "all" && p.size !== sizeFilter) return false;
       if (!searchLower) return true;
-      return [p.title, p.location, p.service, ...(p.personnel ?? [])]
+      return [p.title, p.location, ...pServices, ...(p.personnel ?? [])]
         .filter(Boolean)
         .some((field) => field!.toLowerCase().includes(searchLower));
     })
@@ -451,7 +461,9 @@ function AdminProjects() {
               </h3>
               <div className="divide-y divide-border overflow-hidden rounded-lg border border-border">
                 <DetailRow label="Project Name">{viewingProject.title}</DetailRow>
-                <DetailRow label="Project Type">{linkedInquiry?.service || "—"}</DetailRow>
+                <DetailRow label="Project Type">
+                  {linkedInquiry ? recordServices(linkedInquiry).join(", ") || "—" : "—"}
+                </DetailRow>
                 <DetailRow label="Project Date">
                   {viewingProject.start_date
                     ? `${viewingProject.start_date}${viewingProject.end_date ? ` – ${viewingProject.end_date}` : ""}`
@@ -875,7 +887,7 @@ function AdminProjects() {
               </div>
               {p.location && <div className="text-xs text-muted-foreground">{p.location}</div>}
               <div className="text-xs text-muted-foreground">
-                {p.service}
+                {recordServices(p).join(", ")}
                 {p.start_date ? ` · ${p.start_date}${p.end_date ? ` – ${p.end_date}` : ""}` : ""}
               </div>
               {p.personnel?.length > 0 && (

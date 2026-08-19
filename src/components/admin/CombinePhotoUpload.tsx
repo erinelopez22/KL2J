@@ -17,7 +17,7 @@ function loadImage(file: File): Promise<HTMLImageElement> {
 }
 
 /** Draws images side-by-side at a common height with a thin divider, exported as one JPEG. */
-async function mergeSideBySide(files: File[]): Promise<File> {
+export async function mergeSideBySide(files: File[]): Promise<File> {
   const images = await Promise.all(files.map(loadImage));
   const commonHeight = Math.min(900, ...images.map((img) => img.naturalHeight));
   const dividerWidth = 6;
@@ -47,7 +47,11 @@ async function mergeSideBySide(files: File[]): Promise<File> {
   return new File([blob], `combined-${Date.now()}.jpg`, { type: "image/jpeg" });
 }
 
-export function CombinePhotoUpload({ onUploaded }: { onUploaded: (url: string) => void }) {
+export function CombinePhotoUpload({
+  onUploaded,
+}: {
+  onUploaded: (result: { url: string; sourceFiles?: [File, File] }) => void;
+}) {
   const [busy, setBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const upload = useServerFn(uploadSiteMedia);
@@ -70,7 +74,10 @@ export function CombinePhotoUpload({ onUploaded }: { onUploaded: (url: string) =
       const result = await upload({
         data: { folder: "projects", filename: finalFile.name, contentType: finalFile.type, base64 },
       });
-      onUploaded(result.url);
+      onUploaded({
+        url: result.url,
+        sourceFiles: files.length === 2 ? [files[0], files[1]] : undefined,
+      });
       toast.success(files.length === 2 ? "Photos combined and uploaded" : "Uploaded");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");

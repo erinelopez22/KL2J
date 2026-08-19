@@ -2,11 +2,11 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { X, Trash2, FileText, Video, Image as ImageIcon, Lock, Play, Move } from "lucide-react";
+import { X, Trash2, FileText, Video, Image as ImageIcon, Lock, Play, Move, ArrowLeftRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { createProject, updateProject, deleteProject } from "@/lib/admin/projects.functions";
 import { PhotoPositionEditor } from "@/components/admin/PhotoPositionEditor";
-import { CombinePhotoUpload } from "@/components/admin/CombinePhotoUpload";
+import { CombinePhotoUpload, mergeSideBySide } from "@/components/admin/CombinePhotoUpload";
 import { CoverImage, DEFAULT_IMAGE_POSITION, type ImagePosition } from "@/components/CoverImage";
 import { createInquiry } from "@/lib/admin/inquiries.functions";
 import {
@@ -15,10 +15,12 @@ import {
   updateGalleryPhoto,
 } from "@/lib/admin/gallery.functions";
 import {
+  uploadSiteMedia,
   deleteSiteMedia,
   deleteConfidentialMedia,
   getConfidentialFileUrl,
 } from "@/lib/admin/media.functions";
+import { fileToBase64 } from "@/lib/admin/fileToBase64";
 import { FileDrop } from "@/components/admin/FileDrop";
 import { ConfidentialFileDrop } from "@/components/admin/ConfidentialFileDrop";
 import { LocationAutosuggest } from "@/components/LocationAutosuggest";
@@ -62,12 +64,12 @@ export type DefaultInquiry = {
   id: string;
   label: string;
   name: string;
-  service: string | null;
+  services: string[];
   checklist_responses: InquiryChecklistItem[];
 };
 
-function defaultTitleFromInquiry(name: string, service: string | null | undefined): string {
-  return service ? `${service} - ${name}` : name;
+function defaultTitleFromInquiry(name: string, services: string[] | undefined): string {
+  return services && services.length > 0 ? `${services.join(", ")} - ${name}` : name;
 }
 
 function defaultLocationFromInquiry(
@@ -90,6 +92,7 @@ export type ProjectRecord = {
   location: string;
   description: string | null;
   service: string | null;
+  services: string[];
   start_date: string | null;
   end_date: string | null;
   personnel: string[];
@@ -107,7 +110,7 @@ type FormState = {
   title: string;
   location: string;
   description: string;
-  service: string;
+  services: string[];
   start_date: string;
   end_date: string;
   personnel: string[];
@@ -191,7 +194,7 @@ function emptyForm(): FormState {
     title: "",
     location: "",
     description: "",
-    service: "",
+    services: [],
     start_date: "",
     end_date: "",
     personnel: [],
@@ -410,7 +413,7 @@ export function ProjectFormModal({
         title: project.title,
         location: project.location ?? "",
         description: project.description ?? "",
-        service: project.service ?? "",
+        services: project.services ?? [],
         start_date: project.start_date ?? "",
         end_date: project.end_date ?? "",
         personnel: project.personnel ?? [],
@@ -425,10 +428,10 @@ export function ProjectFormModal({
     }
     const base = emptyForm();
     if (defaultInquiry) {
-      base.title = defaultTitleFromInquiry(defaultInquiry.name, defaultInquiry.service);
+      base.title = defaultTitleFromInquiry(defaultInquiry.name, defaultInquiry.services);
       base.location = defaultLocationFromInquiry(defaultInquiry.checklist_responses);
       base.inquiry_id = defaultInquiry.id;
-      base.service = defaultInquiry.service ?? "";
+      base.services = defaultInquiry.services ?? [];
     }
     return base;
   });
@@ -441,6 +444,13 @@ export function ProjectFormModal({
   const doDelete = useServerFn(deleteProject);
   const doDeleteMedia = useServerFn(deleteSiteMedia);
   const doDeleteConfidential = useServerFn(deleteConfidentialMedia);
+  const doUploadMedia = useServerFn(uploadSiteMedia);
+  // Only combined (side-by-side merged) cover photos get a swap button —
+  // the source files live here in memory only, so swapping is only
+  // available for photos combined during this editing session (a page
+  // reload loses the source images, same as any other unsaved form state).
+  const [combinedSources, setCombinedSources] = useState<Record<string, [File, File]>>({});
+  const [swappingUrl, setSwappingUrl] = useState<string | null>(null);
   const confirm = useConfirm();
   const doCreateInquiry = useServerFn(createInquiry);
   const [presetChannel, setPresetChannel] = useState<"referral" | "facebook" | null>(null);
@@ -453,7 +463,7 @@ export function ProjectFormModal({
       const [inquiriesRes, linkedRes] = await Promise.all([
         supabase
           .from("inquiries")
-          .select("id, name, contact, service, created_at, checklist_responses")
+          .select("id, name, contact, services, created_at, checklist_responses")
           .order("created_at", { ascending: false })
           .limit(200),
         supabase.from("projects").select("inquiry_id").not("inquiry_id", "is", null),
@@ -469,7 +479,7 @@ export function ProjectFormModal({
         id: string;
         name: string;
         contact: string;
-        service: string | null;
+        services: string[];
         created_at: string;
         checklist_responses: InquiryChecklistItem[];
       }[];
@@ -493,13 +503,13 @@ export function ProjectFormModal({
       inquiry_id: id,
       title:
         (!project || !f.title.trim()) && inquiry
-          ? defaultTitleFromInquiry(inquiry.name, inquiry.service)
+          ? defaultTitleFromInquiry(inquiry.name, inquiry.services)
           : f.title,
       location:
         (!project || !f.location.trim()) && inquiry
           ? defaultLocationFromInquiry(inquiry.checklist_responses)
           : f.location,
-      service: (!project || !f.service.trim()) && inquiry ? (inquiry.service ?? "") : f.service,
+      services: (!project || f.services.length === 0) && inquiry ? (inquiry.services ?? []) : f.services,
     }));
   }
 
@@ -524,7 +534,7 @@ export function ProjectFormModal({
         data: {
           name: presetName.trim(),
           phone: presetPhone.trim(),
-          service: form.service || undefined,
+          services: form.services,
           channel: presetChannel,
           message:
             presetChannel === "referral"
@@ -536,7 +546,7 @@ export function ProjectFormModal({
       setForm((f) => ({
         ...f,
         inquiry_id: result.id,
-        title: !project || !f.title.trim() ? defaultTitleFromInquiry(presetName.trim(), f.service || undefined) : f.title,
+        title: !project || !f.title.trim() ? defaultTitleFromInquiry(presetName.trim(), f.services) : f.title,
       }));
       toast.success("Inquiry created and linked");
       setPresetChannel(null);
@@ -689,6 +699,46 @@ export function ProjectFormModal({
     setForm({ ...form, personnel: form.personnel.filter((p) => p !== name) });
   }
 
+  async function swapCombinedPhoto(url: string) {
+    const sources = combinedSources[url];
+    if (!sources) return;
+    setSwappingUrl(url);
+    try {
+      const swappedFile = await mergeSideBySide([sources[1], sources[0]]);
+      const base64 = await fileToBase64(swappedFile);
+      const result = await doUploadMedia({
+        data: {
+          folder: "projects",
+          filename: swappedFile.name,
+          contentType: swappedFile.type,
+          base64,
+        },
+      });
+      setForm((f) => {
+        const idx = f.photo_urls.indexOf(url);
+        if (idx === -1) return f;
+        const nextUrls = [...f.photo_urls];
+        nextUrls[idx] = result.url;
+        const { [url]: oldPosition, ...restPositions } = f.photo_positions;
+        return {
+          ...f,
+          photo_urls: nextUrls,
+          photo_positions: oldPosition
+            ? { ...restPositions, [result.url]: oldPosition }
+            : restPositions,
+        };
+      });
+      setCombinedSources((s) => {
+        const { [url]: _old, ...rest } = s;
+        return { ...rest, [result.url]: [sources[1], sources[0]] };
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to swap photo positions");
+    } finally {
+      setSwappingUrl(null);
+    }
+  }
+
   async function submit() {
     if (!form.title.trim()) {
       toast.error("Title is required");
@@ -706,7 +756,7 @@ export function ProjectFormModal({
       title: form.title.trim(),
       location: form.location.trim(),
       description: form.description.trim() || undefined,
-      service: form.service || undefined,
+      services: form.services,
       start_date: form.start_date || undefined,
       end_date: form.end_date || undefined,
       personnel: form.personnel,
@@ -797,9 +847,21 @@ export function ProjectFormModal({
                         >
                           <Move className="h-3.5 w-3.5" />
                         </button>
+                        {combinedSources[url] && (
+                          <button
+                            type="button"
+                            onClick={() => swapCombinedPhoto(url)}
+                            disabled={swappingUrl === url}
+                            className="absolute bottom-1 left-9 rounded-md bg-black/60 p-1 text-white hover:bg-black/80 disabled:opacity-60"
+                            aria-label={`Swap the two photos' positions in cover photo ${i + 1}`}
+                            title="Swap the two photos' positions"
+                          >
+                            <ArrowLeftRight className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                         <button
                           type="button"
-                          onClick={() =>
+                          onClick={() => {
                             setForm((f) => {
                               const { [url]: _removed, ...rest } = f.photo_positions;
                               return {
@@ -807,8 +869,12 @@ export function ProjectFormModal({
                                 photo_urls: f.photo_urls.filter((u) => u !== url),
                                 photo_positions: rest,
                               };
-                            })
-                          }
+                            });
+                            setCombinedSources((s) => {
+                              const { [url]: _removed, ...rest } = s;
+                              return rest;
+                            });
+                          }}
                           className="absolute right-1 top-1 rounded-md bg-black/60 p-1 text-white hover:bg-black/80"
                           aria-label={`Remove cover photo ${i + 1}`}
                         >
@@ -832,7 +898,12 @@ export function ProjectFormModal({
                   />
                 </div>
                 <CombinePhotoUpload
-                  onUploaded={(url) => setForm((f) => ({ ...f, photo_urls: [...f.photo_urls, url] }))}
+                  onUploaded={(result) => {
+                    setForm((f) => ({ ...f, photo_urls: [...f.photo_urls, result.url] }));
+                    if (result.sourceFiles) {
+                      setCombinedSources((s) => ({ ...s, [result.url]: result.sourceFiles! }));
+                    }
+                  }}
                 />
               </div>
             </section>
@@ -861,7 +932,7 @@ export function ProjectFormModal({
                     {inquiries?.map((i) => (
                       <option key={i.id} value={i.id}>
                         {i.name} · {i.contact}
-                        {i.service ? ` · ${i.service}` : ""}
+                        {i.services?.length > 0 ? ` · ${i.services.join(", ")}` : ""}
                       </option>
                     ))}
                   </select>
@@ -947,23 +1018,37 @@ export function ProjectFormModal({
                     className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                   />
                 </label>
-                <label className="block text-sm sm:col-span-2">
+                <div className="text-sm sm:col-span-2">
                   <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
-                    Service
+                    Services
                   </span>
-                  <select
-                    value={form.service}
-                    onChange={(e) => setForm({ ...form, service: e.target.value })}
-                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-                  >
-                    <option value="">No specific service</option>
-                    {(services ?? []).map((s) => (
-                      <option key={s.title} value={s.title}>
-                        {s.title}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                  <div className="flex flex-wrap gap-2">
+                    {(services ?? []).map((s) => {
+                      const checked = form.services.includes(s.title);
+                      return (
+                        <button
+                          key={s.title}
+                          type="button"
+                          onClick={() =>
+                            setForm((f) => ({
+                              ...f,
+                              services: checked
+                                ? f.services.filter((x) => x !== s.title)
+                                : [...f.services, s.title],
+                            }))
+                          }
+                          className={`rounded-full border px-3 py-1.5 text-sm transition ${
+                            checked
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-border bg-background hover:bg-muted"
+                          }`}
+                        >
+                          {s.title}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 <label className="block text-sm sm:col-span-2">
                   <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
                     Location <span className="text-destructive">(required)</span>

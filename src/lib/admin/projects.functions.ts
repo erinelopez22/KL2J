@@ -31,7 +31,7 @@ const ProjectSchema = z.object({
   title: z.string().min(1).max(200),
   location: z.string().min(1).max(300),
   description: z.string().max(2000).optional(),
-  service: z.string().max(200).optional(),
+  services: z.array(z.string().max(200)).default([]),
   start_date: z.string().optional(),
   end_date: z.string().optional(),
   personnel: z.array(z.string().min(1).max(200)).default([]),

@@ -31,7 +31,9 @@ export const lookupInquiryByCode = createServerFn({ method: "POST" })
 
     const { data: inquiry, error } = await supabaseAdmin
       .from("inquiries")
-      .select("id, name, email, phone, service, message, status, created_at, checklist_responses, attachments")
+      .select(
+        "id, name, email, phone, service, services, message, status, created_at, checklist_responses, attachments",
+      )
       .eq("inquiry_code", code)
       .maybeSingle();
     if (error) {

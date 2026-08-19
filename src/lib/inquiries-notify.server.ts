@@ -27,7 +27,7 @@ export type InquiryInput = {
   name: string;
   email?: string | null;
   phone?: string | null;
-  service?: string | null;
+  services?: string[];
   message?: string | null;
   channel?: string | null;
   checklist_responses?: ChecklistResponseInput[];
@@ -49,6 +49,7 @@ export async function insertInquiryAndNotify(data: InquiryInput): Promise<{
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   const contact = data.email || data.phone || "";
+  const servicesLabel = data.services && data.services.length > 0 ? data.services.join(", ") : "";
   let inserted: { id: string; inquiry_code: string } | null = null;
   let lastInsertErr: { code?: string; message: string } | null = null;
 
@@ -61,7 +62,7 @@ export async function insertInquiryAndNotify(data: InquiryInput): Promise<{
         contact,
         email: data.email ?? null,
         phone: data.phone ?? null,
-        service: data.service ?? null,
+        services: data.services ?? [],
         message: data.message ?? null,
         channel: data.channel ?? null,
         checklist_responses: data.checklist_responses ?? [],
@@ -91,7 +92,7 @@ export async function insertInquiryAndNotify(data: InquiryInput): Promise<{
   const logPrefix = `[inquiry:${inserted.id}]`;
 
   try {
-    const subject = `New KL2J Inquiry: ${data.service || "General"} — ${data.name}`;
+    const subject = `New KL2J Inquiry: ${servicesLabel || "General"} — ${data.name}`;
     const checklistHtml =
       data.checklist_responses && data.checklist_responses.length > 0
         ? data.checklist_responses
@@ -118,7 +119,7 @@ export async function insertInquiryAndNotify(data: InquiryInput): Promise<{
     <tr><td style="padding:6px 0;color:#666;">Name</td><td>${esc(data.name)}</td></tr>
     <tr><td style="padding:6px 0;color:#666;">Email</td><td>${esc(data.email || "—")}</td></tr>
     <tr><td style="padding:6px 0;color:#666;">Phone</td><td>${esc(data.phone || "—")}</td></tr>
-    <tr><td style="padding:6px 0;color:#666;">Service</td><td>${esc(data.service || "—")}</td></tr>
+    <tr><td style="padding:6px 0;color:#666;">Service</td><td>${esc(servicesLabel || "—")}</td></tr>
     <tr><td style="padding:6px 0;color:#666;">Channel</td><td>${esc(data.channel || "chat")}</td></tr>
     <tr><td style="padding:6px 0;color:#666;vertical-align:top;">Message</td><td style="white-space:pre-wrap;">${esc(data.message || "—")}</td></tr>
     <tr><td style="padding:6px 0;color:#666;vertical-align:top;">Documents</td><td>${checklistHtml}</td></tr>
@@ -147,7 +148,7 @@ export async function insertInquiryAndNotify(data: InquiryInput): Promise<{
       const inquirerHtml = `
 <div style="font-family:system-ui,Arial,sans-serif;max-width:560px;margin:0 auto;padding:16px;color:#111;">
   <h2 style="margin:0 0 12px;color:#8b1e1e;">Thanks for reaching out to KL2J!</h2>
-  <p>We've received your inquiry${data.service ? ` for <strong>${esc(data.service)}</strong>` : ""}. A member of our team will follow up soon.</p>
+  <p>We've received your inquiry${servicesLabel ? ` for <strong>${esc(servicesLabel)}</strong>` : ""}. A member of our team will follow up soon.</p>
   <p style="margin:20px 0;padding:16px;background:#f7f2f2;border-radius:8px;text-align:center;">
     Your inquiry code<br/>
     <span style="font-size:22px;font-weight:700;letter-spacing:1px;color:#8b1e1e;">${esc(inserted.inquiry_code)}</span>

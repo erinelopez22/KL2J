@@ -9,6 +9,7 @@ type Inquiry = {
   name: string;
   contact: string;
   service: string | null;
+  services: string[];
   message: string | null;
   channel: string | null;
   status: string;
@@ -132,8 +133,10 @@ function InboxPage() {
                       {i.status}
                     </span>
                   </div>
-                  {i.service && (
-                    <div className="mt-1 text-sm font-medium text-primary">{i.service}</div>
+                  {(i.services?.length > 0 || i.service) && (
+                    <div className="mt-1 text-sm font-medium text-primary">
+                      {i.services?.length > 0 ? i.services.join(", ") : i.service}
+                    </div>
                   )}
                   {i.message && (
                     <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">{i.message}</p>

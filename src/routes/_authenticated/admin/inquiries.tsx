@@ -16,6 +16,8 @@ import {
   type ManualInquiryChannel,
 } from "@/lib/admin/inquiries.functions";
 import { usePublicServices } from "@/lib/public-content";
+import { mergeChecklists } from "@/lib/serviceChecklist";
+import { useRealtimeInvalidate } from "@/lib/useRealtimeInvalidate";
 import { LocationAutosuggest } from "@/components/LocationAutosuggest";
 import { PublicDocumentUpload, type UploadedDocument } from "@/components/PublicDocumentUpload";
 import { fileToBase64 } from "@/lib/admin/fileToBase64";
@@ -97,6 +99,7 @@ type Inquiry = {
   email: string | null;
   phone: string | null;
   service: string | null;
+  services: string[];
   message: string | null;
   channel: string | null;
   checklist_responses: ChecklistResponse[];
@@ -107,6 +110,10 @@ type Inquiry = {
 };
 
 type LinkedProject = { id: string; title: string; is_public: boolean };
+
+function inquiryServices(inquiry: Pick<Inquiry, "service" | "services">): string[] {
+  return inquiry.services?.length > 0 ? inquiry.services : inquiry.service ? [inquiry.service] : [];
+}
 
 function InquiryCard({
   inquiry,
@@ -151,7 +158,9 @@ function InquiryCard({
       <div className="mt-1 text-xs text-muted-foreground">
         {[inquiry.email, inquiry.phone].filter(Boolean).join(" · ") || inquiry.contact}
       </div>
-      {inquiry.service && <div className="mt-1 text-xs font-medium text-primary">{inquiry.service}</div>}
+      {inquiryServices(inquiry).length > 0 && (
+        <div className="mt-1 text-xs font-medium text-primary">{inquiryServices(inquiry).join(", ")}</div>
+      )}
       {inquiry.checklist_responses?.length > 0 && (
         <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
           <ListChecks className="h-3 w-3" />
@@ -261,7 +270,9 @@ function InquiryListRow({
         </div>
         <div className="mt-1 truncate text-xs text-muted-foreground">
           {[inquiry.email, inquiry.phone].filter(Boolean).join(" · ") || inquiry.contact}
-          {inquiry.service && <span className="ml-2 font-medium text-primary">{inquiry.service}</span>}
+          {inquiryServices(inquiry).length > 0 && (
+            <span className="ml-2 font-medium text-primary">{inquiryServices(inquiry).join(", ")}</span>
+          )}
         </div>
         {inquiry.message && <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{inquiry.message}</p>}
       </div>
@@ -345,7 +356,7 @@ function LinkedProjectSection({ inquiry }: { inquiry: Inquiry }) {
             id: inquiry.id,
             label: `${inquiry.name} · ${inquiry.contact}`,
             name: inquiry.name,
-            service: inquiry.service,
+            services: inquiryServices(inquiry),
             checklist_responses: inquiry.checklist_responses,
           }}
           onClose={() => setShowForm(false)}
@@ -543,6 +554,9 @@ function InquiryCommentsTab({ inquiryId }: { inquiryId: string }) {
       if (error) throw error;
       return data as unknown as InquiryComment[];
     },
+  });
+  useRealtimeInvalidate("inquiry_comments", [["inquiry-comments", inquiryId]], {
+    filter: `inquiry_id=eq.${inquiryId}`,
   });
 
   useEffect(() => {
@@ -784,9 +798,11 @@ function InquiryDetail({
 
         {tab === "details" && (
         <>
-        {inquiry.service && (
+        {inquiryServices(inquiry).length > 0 && (
           <div className="mt-3 rounded-lg bg-primary/10 px-3 py-2.5">
-            <span className="text-sm font-bold text-primary">Service Type : {inquiry.service}</span>
+            <span className="text-sm font-bold text-primary">
+              Service Type : {inquiryServices(inquiry).join(", ")}
+            </span>
           </div>
         )}
 
@@ -974,17 +990,17 @@ function NewInquiryModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [service, setService] = useState("");
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [checklistAnswers, setChecklistAnswers] = useState<Record<string, ManualChecklistAnswer>>({});
   const [saving, setSaving] = useState(false);
   const [createdCode, setCreatedCode] = useState<string | null>(null);
   const doCreate = useServerFn(createInquiry);
   const { data: services } = usePublicServices();
-  const selectedServiceChecklist = services?.find((s) => s.title === service)?.checklist ?? [];
+  const selectedServiceChecklist = mergeChecklists(services ?? [], selectedServices);
 
-  function chooseService(title: string) {
-    setService(title);
+  function toggleService(title: string) {
+    setSelectedServices((prev) => (prev.includes(title) ? prev.filter((x) => x !== title) : [...prev, title]));
     setChecklistAnswers({});
   }
 
@@ -1012,7 +1028,7 @@ function NewInquiryModal({ onClose, onCreated }: { onClose: () => void; onCreate
           name: name.trim(),
           email: email.trim() || undefined,
           phone: phone.trim() || undefined,
-          service: service || undefined,
+          services: selectedServices,
           channel,
           message: message.trim() || undefined,
           checklist_responses: selectedServiceChecklist.map((item) => ({
@@ -1119,21 +1135,28 @@ function NewInquiryModal({ onClose, onCreated }: { onClose: () => void; onCreate
             />
           </label>
           <p className="text-xs text-muted-foreground/70">Provide at least an email or phone number.</p>
-          <label className="block text-sm">
-            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Service</span>
-            <select
-              value={service}
-              onChange={(e) => chooseService(e.target.value)}
-              className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-            >
-              <option value="">Select a service</option>
-              {services?.map((s) => (
-                <option key={s.id} value={s.title}>
-                  {s.title}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="text-sm">
+            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Services</span>
+            <div className="flex flex-wrap gap-2">
+              {services?.map((s) => {
+                const checked = selectedServices.includes(s.title);
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => toggleService(s.title)}
+                    className={`rounded-full border px-3 py-1.5 text-sm transition ${
+                      checked
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border bg-background hover:bg-muted"
+                    }`}
+                  >
+                    {s.title}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           {selectedServiceChecklist.length > 0 && (
             <div className="rounded-lg border border-border bg-muted/30 p-3">
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -1228,7 +1251,8 @@ const INQUIRY_SORT_OPTIONS = {
   name_asc: { label: "Name A-Z", cmp: (a: Inquiry, b: Inquiry) => a.name.localeCompare(b.name) },
   service_asc: {
     label: "Service A-Z",
-    cmp: (a: Inquiry, b: Inquiry) => (a.service ?? "").localeCompare(b.service ?? ""),
+    cmp: (a: Inquiry, b: Inquiry) =>
+      inquiryServices(a).join(", ").localeCompare(inquiryServices(b).join(", ")),
   },
 } as const;
 type InquirySortKey = keyof typeof INQUIRY_SORT_OPTIONS;
@@ -1290,15 +1314,16 @@ function AdminInquiries() {
   }, []);
 
   const columns = showHidden ? ALL_STATUSES : STATUS_COLUMNS;
-  const serviceOptions = Array.from(new Set(items.map((i) => i.service).filter((s): s is string => Boolean(s)))).sort();
+  const serviceOptions = Array.from(new Set(items.flatMap((i) => inquiryServices(i)))).sort();
   const channelOptions = Array.from(new Set(items.map((i) => i.channel).filter((c): c is string => Boolean(c)))).sort();
   const searchLower = search.trim().toLowerCase();
   const filteredItems = items
     .filter((i) => {
-      if (serviceFilter && i.service !== serviceFilter) return false;
+      const iServices = inquiryServices(i);
+      if (serviceFilter && !iServices.includes(serviceFilter)) return false;
       if (channelFilter && i.channel !== channelFilter) return false;
       if (!searchLower) return true;
-      return [i.name, i.contact, i.email, i.phone, i.service, i.message, i.inquiry_code]
+      return [i.name, i.contact, i.email, i.phone, ...iServices, i.message, i.inquiry_code]
         .filter(Boolean)
         .some((field) => field!.toLowerCase().includes(searchLower));
     })

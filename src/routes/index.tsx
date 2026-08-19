@@ -27,6 +27,7 @@ import {
   ExternalLink,
   X,
   Maximize2,
+  Minimize2,
   Handshake,
   Play,
   Star,
@@ -61,6 +62,7 @@ import { WriteReviewModal } from "@/components/WriteReviewModal";
 import { AttachmentLightbox, type LightboxItem } from "@/components/AttachmentLightbox";
 import { useConfirm } from "@/components/ConfirmDialogProvider";
 import { YesNoToggle } from "@/components/YesNoToggle";
+import { mergeChecklists } from "@/lib/serviceChecklist";
 import { useEditMode } from "@/lib/editMode";
 import { updateBranding } from "@/lib/admin/branding.functions";
 import { Slider } from "@/components/ui/slider";
@@ -148,11 +150,13 @@ const FALLBACK_SERVICES = [
 
 export function LandingPage() {
   const confirm = useConfirm();
-  const [selectedService, setSelectedService] = useState("");
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
 
   async function goToServiceForm(title: string) {
-    if (!(await confirm(`Get inquiry for "${title}"?`, { confirmLabel: "Yes, continue" }))) return;
-    setSelectedService(title);
+    if (!selectedServices.includes(title)) {
+      if (!(await confirm(`Add "${title}" to your inquiry?`, { confirmLabel: "Yes, add it" }))) return;
+      setSelectedServices((prev) => [...prev, title]);
+    }
     document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
   }
 
@@ -203,7 +207,7 @@ export function LandingPage() {
       <Reviews />
       <FacebookCTA />
       <Photos />
-      <CTA selectedService={selectedService} onSelectedServiceChange={setSelectedService} />
+      <CTA selectedServices={selectedServices} onSelectedServicesChange={setSelectedServices} />
       <Partners />
       <Footer />
       <ChatWidget />
@@ -757,11 +761,11 @@ function WhyUs() {
 }
 
 function CTA({
-  selectedService,
-  onSelectedServiceChange,
+  selectedServices,
+  onSelectedServicesChange,
 }: {
-  selectedService: string;
-  onSelectedServiceChange: (title: string) => void;
+  selectedServices: string[];
+  onSelectedServicesChange: (services: string[]) => void;
 }) {
   const formWrapperRef = useRef<HTMLDivElement>(null);
   const [formHeight, setFormHeight] = useState<number | null>(null);
@@ -818,10 +822,10 @@ function CTA({
                 <MapPin className="h-3.5 w-3.5" /> Serving clients nationwide
               </span>
             </div>
-            <RelatedProjects service={selectedService} />
+            <RelatedProjects services={selectedServices} />
           </div>
           <div ref={formWrapperRef} className="self-start">
-            <ContactForm service={selectedService} onServiceChange={onSelectedServiceChange} />
+            <ContactForm services={selectedServices} onServicesChange={onSelectedServicesChange} />
           </div>
         </div>
       </div>
@@ -886,12 +890,19 @@ function MediaRow({
   maxVisible = 4,
   heightClass = "h-20",
   onItemClick,
+  expandedFillParent = false,
 }: {
   media: { url: string; type: "image" | "video"; position?: { x: number; y: number; zoom: number } }[];
   altText: string;
   maxVisible?: number;
   heightClass?: string;
   onItemClick?: (index: number) => void;
+  // By default the expanded (all-photos) grid caps itself at 480px with its
+  // own scrollbar, since most call sites aren't inside a sized flex
+  // ancestor. Pass this when the caller already wraps MediaRow in a
+  // `min-h-0 flex-1` container that should own the scrolling instead —
+  // otherwise you get two nested scrollbars fighting each other.
+  expandedFillParent?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   if (media.length === 0) return null;
@@ -900,8 +911,12 @@ function MediaRow({
 
   if (expanded) {
     return (
-      <div>
-        <div className="grid max-h-[480px] grid-cols-4 gap-1 overflow-y-auto pr-1">
+      <div className={expandedFillParent ? "flex h-full min-h-0 flex-col" : ""}>
+        <div
+          className={`grid grid-cols-4 gap-1 overflow-y-auto pr-1 ${
+            expandedFillParent ? "min-h-0 flex-1" : "max-h-[480px]"
+          }`}
+        >
           {media.map((m, i) => (
             <MediaTile
               key={i}
@@ -915,7 +930,9 @@ function MediaRow({
         <button
           type="button"
           onClick={() => setExpanded(false)}
-          className="mt-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:underline"
+          className={`mt-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:underline ${
+            expandedFillParent ? "shrink-0" : ""
+          }`}
         >
           Show less
         </button>
@@ -951,12 +968,15 @@ function MediaRow({
   );
 }
 
-function RelatedProjects({ service }: { service: string }) {
+function RelatedProjects({ services }: { services: string[] }) {
   const { data } = usePublicProjects();
   const navigate = useNavigate();
   if (!data || data.length === 0) return null;
 
-  const projects = service ? data.filter((p) => p.service === service) : data;
+  const projects =
+    services.length > 0
+      ? data.filter((p) => p.services?.some((s) => services.includes(s)))
+      : data;
   if (projects.length === 0) return null;
 
   function openProject(id: string) {
@@ -966,7 +986,9 @@ function RelatedProjects({ service }: { service: string }) {
   return (
     <div className="mt-8 flex min-h-0 flex-1 flex-col">
       <p className="text-xs font-semibold uppercase tracking-wide text-primary-foreground/70">
-        {service ? `Projects we've completed for ${service}` : "Projects we've completed"}
+        {services.length > 0
+          ? `Projects we've completed for ${services.join(", ")}`
+          : "Projects we've completed"}
       </p>
       <div className="scrollbar-on-dark mt-3 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
         {projects.map((p) => {
@@ -1024,11 +1046,11 @@ type ChecklistAnswer = {
 };
 
 function ContactForm({
-  service,
-  onServiceChange,
+  services,
+  onServicesChange,
 }: {
-  service: string;
-  onServiceChange: (title: string) => void;
+  services: string[];
+  onServicesChange: (services: string[]) => void;
 }) {
   const [sent, setSent] = useState(false);
   const [inquiryCode, setInquiryCode] = useState<string | null>(null);
@@ -1041,10 +1063,12 @@ function ContactForm({
   const sendInquiry = useServerFn(submitInquiry);
   const { data: servicesData } = usePublicServices();
   const serviceOptions = servicesData ?? [];
-  const selectedServiceChecklist = serviceOptions.find((s) => s.title === service)?.checklist ?? [];
+  const selectedServiceChecklist = mergeChecklists(serviceOptions, services);
 
-  function chooseService(title: string) {
-    onServiceChange(title);
+  function toggleService(title: string) {
+    onServicesChange(
+      services.includes(title) ? services.filter((s) => s !== title) : [...services, title],
+    );
     setChecklistAnswers({});
   }
 
@@ -1056,7 +1080,7 @@ function ContactForm({
     fullName.trim() !== "" ||
     email.trim() !== "" ||
     phone.trim() !== "" ||
-    service !== "" ||
+    services.length > 0 ||
     message.trim() !== "" ||
     Object.keys(checklistAnswers).length > 0;
 
@@ -1064,7 +1088,7 @@ function ContactForm({
     setFullName("");
     setEmail("");
     setPhone("");
-    onServiceChange("");
+    onServicesChange([]);
     setMessage("");
     setChecklistAnswers({});
   }
@@ -1073,7 +1097,7 @@ function ContactForm({
     if (!fullName.trim()) return "Enter your full name";
     if (!email.trim()) return "Enter your email";
     if (!phone.trim()) return "Enter your phone number";
-    if (!service) return "Select a service";
+    if (services.length === 0) return "Select at least one service";
     if (!message.trim()) return "Tell us about your property";
     for (const item of selectedServiceChecklist) {
       if (item.type === "document") continue;
@@ -1102,7 +1126,7 @@ function ContactForm({
           name: fullName.trim(),
           email: email.trim() || null,
           phone: phone.trim() || null,
-          service: service || null,
+          services,
           message: message.trim() || null,
           channel: "quote_form",
           checklist_responses: selectedServiceChecklist.map((item) => ({
@@ -1244,23 +1268,31 @@ function ContactForm({
             <Field
               label={
                 <>
-                  Service needed <RequiredMark />
+                  Services needed <RequiredMark />
                 </>
               }
             >
-              <select
-                className="input"
-                value={service}
-                onChange={(e) => chooseService(e.target.value)}
-              >
-                <option value="" disabled>
-                  Select a service
-                </option>
-                {(serviceOptions.length > 0 ? serviceOptions : FALLBACK_SERVICES).map((s) => (
-                  <option key={s.title}>{s.title}</option>
-                ))}
-                <option>Not sure yet</option>
-              </select>
+              <div className="flex flex-wrap gap-2">
+                {[...(serviceOptions.length > 0 ? serviceOptions : FALLBACK_SERVICES), { title: "Not sure yet" }].map(
+                  (s) => {
+                    const checked = services.includes(s.title);
+                    return (
+                      <button
+                        key={s.title}
+                        type="button"
+                        onClick={() => toggleService(s.title)}
+                        className={`rounded-full border px-3 py-1.5 text-sm transition ${
+                          checked
+                            ? "border-primary/40 bg-primary/10 text-primary"
+                            : "border-border bg-background hover:bg-muted"
+                        }`}
+                      >
+                        {s.title}
+                      </button>
+                    );
+                  },
+                )}
+              </div>
             </Field>
             {selectedServiceChecklist.length > 0 && (
               <div className="rounded-lg border border-border bg-secondary/30 p-3">
@@ -1628,7 +1660,7 @@ function ProjectCard({
           <div className="mt-0.5 text-sm text-muted-foreground">{project.location}</div>
         )}
         <div className="mt-1 text-xs font-medium uppercase tracking-wide text-primary">
-          {project.service}
+          {project.services?.length > 0 ? project.services.join(", ") : project.service}
           <ProjectDateRange p={project} />
         </div>
         {project.personnel?.length > 0 && (
@@ -1672,12 +1704,14 @@ function Projects() {
   const search = useSearch({ strict: false }) as { project?: string };
   const navigate = useNavigate();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [lightbox, setLightbox] = useState<{ items: LightboxItem[]; index: number } | null>(null);
   const lastDeepLinkId = useRef<string | null>(null);
   const [allSearch, setAllSearch] = useState("");
   const [allServiceFilter, setAllServiceFilter] = useState("");
   const [allStatusFilter, setAllStatusFilter] = useState("");
+  const [allSizeFilter, setAllSizeFilter] = useState<"" | "major" | "small">("");
   const [allSortKey, setAllSortKey] = useState<ProjectViewAllSortKey>("newest");
 
   useEffect(() => {
@@ -1692,7 +1726,9 @@ function Projects() {
 
   const selected = data.find((p) => p.id === selectedId) ?? null;
   const allServiceOptions = Array.from(
-    new Set(data.map((p) => p.service).filter((s): s is string => Boolean(s))),
+    new Set(
+      data.flatMap((p) => (p.services?.length > 0 ? p.services : [p.service])).filter((s): s is string => Boolean(s)),
+    ),
   ).sort();
   const allStatusOptions = Array.from(
     new Set(data.map((p) => p.inquiry_status).filter((s): s is string => Boolean(s))),
@@ -1700,10 +1736,12 @@ function Projects() {
   const allSearchLower = allSearch.trim().toLowerCase();
   const filteredAllProjects = data
     .filter((p) => {
-      if (allServiceFilter && p.service !== allServiceFilter) return false;
+      const pServices = p.services?.length > 0 ? p.services : p.service ? [p.service] : [];
+      if (allServiceFilter && !pServices.includes(allServiceFilter)) return false;
       if (allStatusFilter && p.inquiry_status !== allStatusFilter) return false;
+      if (allSizeFilter && p.size !== allSizeFilter) return false;
       if (!allSearchLower) return true;
-      return [p.title, p.location, p.service, ...(p.personnel ?? [])]
+      return [p.title, p.location, ...pServices, ...(p.personnel ?? [])]
         .filter(Boolean)
         .some((field) => field!.toLowerCase().includes(allSearchLower));
     })
@@ -1712,10 +1750,12 @@ function Projects() {
   function openProject(id: string) {
     setSelectedId(id);
     setShowAll(false);
+    setExpanded(false);
   }
 
   function closeProject() {
     setSelectedId(null);
+    setExpanded(false);
     // Clear the deep-link id too, and the guard that tracks it — otherwise
     // search.project still equals the id after closing, so re-clicking the
     // same project elsewhere (e.g. the "Projects we've completed" list)
@@ -1836,6 +1876,15 @@ function Projects() {
                 </select>
               )}
               <select
+                value={allSizeFilter}
+                onChange={(e) => setAllSizeFilter(e.target.value as "" | "major" | "small")}
+                className="h-10 rounded-md border border-border bg-background px-3 text-sm"
+              >
+                <option value="">All project sizes</option>
+                <option value="major">Major projects</option>
+                <option value="small">Small projects</option>
+              </select>
+              <select
                 value={allSortKey}
                 onChange={(e) => setAllSortKey(e.target.value as ProjectViewAllSortKey)}
                 className="h-10 rounded-md border border-border bg-background px-3 text-sm"
@@ -1868,11 +1917,13 @@ function Projects() {
           onClick={closeProject}
         >
           <div
-            className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-card shadow-2xl"
+            className={`flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-card shadow-2xl transition-[max-height] duration-200 ${
+              expanded ? "max-h-[95vh]" : "max-h-[85vh]"
+            }`}
             onClick={(e) => e.stopPropagation()}
           >
             {(selected.photo_urls?.length ?? 0) > 0 && (
-              <div className="rounded-t-2xl bg-muted p-2">
+              <div className="shrink-0 rounded-t-2xl bg-muted p-2">
                 <MediaRow
                   media={selected.photo_urls.map((url) => ({
                     url,
@@ -1880,47 +1931,59 @@ function Projects() {
                     position: selected.photo_positions?.[url],
                   }))}
                   altText={selected.title}
-                  heightClass="h-40"
+                  heightClass={expanded ? "h-96" : "h-40"}
                 />
               </div>
             )}
-            <div className="p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex min-w-0 items-center gap-2">
-                  <h3 className="text-xl font-bold">{selected.title}</h3>
-                  <ProjectStatusBadge status={selected.inquiry_status} />
+            <div className="flex min-h-0 flex-1 flex-col p-6">
+              <div className="shrink-0">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <h3 className="text-xl font-bold">{selected.title}</h3>
+                    <ProjectStatusBadge status={selected.inquiry_status} />
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      onClick={() => setExpanded((v) => !v)}
+                      className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+                      aria-label={expanded ? "Shrink" : "Expand"}
+                      title={expanded ? "Shrink" : "Expand"}
+                    >
+                      {expanded ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+                    </button>
+                    <button
+                      onClick={closeProject}
+                      className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+                      aria-label="Close"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
                 </div>
-                <button
-                  onClick={closeProject}
-                  className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted"
-                  aria-label="Close"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-              {selected.location && (
-                <div className="text-sm text-muted-foreground">{selected.location}</div>
-              )}
-              <div className="mt-1 text-xs font-medium uppercase tracking-wide text-primary">
-                {selected.service}
-                <ProjectDateRange p={selected} />
-              </div>
-              {selected.personnel?.length > 0 && (
-                <div className="mt-2 text-sm text-muted-foreground">
-                  Team: {selected.personnel.join(", ")}
+                {selected.location && (
+                  <div className="text-sm text-muted-foreground">{selected.location}</div>
+                )}
+                <div className="mt-1 text-xs font-medium uppercase tracking-wide text-primary">
+                  {selected.services?.length > 0 ? selected.services.join(", ") : selected.service}
+                  <ProjectDateRange p={selected} />
                 </div>
-              )}
-              {selected.description && (
-                <p className="mt-4 whitespace-pre-wrap text-sm text-muted-foreground leading-relaxed">
-                  {selected.description}
-                </p>
-              )}
+                {selected.personnel?.length > 0 && (
+                  <div className="mt-2 text-sm text-muted-foreground">
+                    Team: {selected.personnel.join(", ")}
+                  </div>
+                )}
+                {selected.description && (
+                  <p className="mt-4 whitespace-pre-wrap text-sm text-muted-foreground leading-relaxed">
+                    {selected.description}
+                  </p>
+                )}
+              </div>
               {selected.media?.length > 0 && (
-                <div className="mt-5">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <div className="mt-5 flex min-h-0 flex-1 flex-col">
+                  <p className="shrink-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Photos &amp; videos
                   </p>
-                  <div className="mt-2">
+                  <div className="mt-2 min-h-0 flex-1 overflow-y-auto">
                     <MediaRow
                       media={selected.media.map((m) => ({
                         url: m.url,
@@ -1928,12 +1991,13 @@ function Projects() {
                       }))}
                       altText={selected.title}
                       onItemClick={(i) => openMedia(selected.media, i)}
+                      expandedFillParent
                     />
                   </div>
                 </div>
               )}
               {selected.attachments?.length > 0 && (
-                <div className="mt-5">
+                <div className="mt-5 shrink-0">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Files
                   </p>

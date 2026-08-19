@@ -54,6 +54,7 @@ type InquiryView = {
   email: string | null;
   phone: string | null;
   service: string | null;
+  services: string[];
   message: string | null;
   status: string;
   created_at: string;
@@ -348,7 +349,9 @@ function InquiryPanel({
       <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
         <div className="min-w-0">
           <h2 className="truncate text-lg font-semibold">{inquiry.name}</h2>
-          <p className="text-sm text-muted-foreground">{inquiry.service || "General inquiry"}</p>
+          <p className="text-sm text-muted-foreground">
+            {inquiry.services?.length > 0 ? inquiry.services.join(", ") : inquiry.service || "General inquiry"}
+          </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium uppercase">{inquiry.status}</span>
@@ -547,6 +550,19 @@ function MyInquiriesPage() {
     if (search.code) lookup(search.code);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search.code]);
+
+  // inquiry_comments only grants SELECT to admins (RLS), so an anonymous
+  // visitor can't get true postgres_changes push for new admin replies —
+  // poll instead while an inquiry is open, so a new reply still shows up
+  // without the customer manually reloading.
+  useEffect(() => {
+    if (!inquiry) return;
+    const codeToPoll = code.trim();
+    if (!codeToPoll) return;
+    const interval = setInterval(() => lookup(codeToPoll), 12_000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inquiry?.id]);
 
   async function submitCode(e: React.FormEvent) {
     e.preventDefault();

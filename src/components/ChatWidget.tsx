@@ -8,6 +8,7 @@ import { LocationAutosuggest } from "@/components/LocationAutosuggest";
 import { PublicDocumentUpload, type UploadedDocument } from "@/components/PublicDocumentUpload";
 import { splitAreaAnswer, joinAreaAnswer } from "@/lib/areaUnit";
 import { YesNoToggle } from "@/components/YesNoToggle";
+import { mergeChecklists } from "@/lib/serviceChecklist";
 import logoUrl from "@/assets/kl2j-logo.jpg";
 
 type ChecklistAnswer = {
@@ -51,7 +52,7 @@ export function ChatWidget() {
   const [step, setStep] = useState<Step>("intro");
   const [stepHistory, setStepHistory] = useState<Step[]>([]);
   const [messages, setMessages] = useState<Msg[]>([]);
-  const [service, setService] = useState<string>("");
+  const [services, setServices] = useState<string[]>([]);
   const [checklistAnswers, setChecklistAnswers] = useState<Record<string, ChecklistAnswer>>({});
   const [intent, setIntent] = useState<string>("");
   const [name, setName] = useState("");
@@ -69,7 +70,8 @@ export function ChatWidget() {
     servicesData && servicesData.length > 0
       ? [...servicesData.map((s) => s.title), "Other / Not sure"]
       : FALLBACK_SERVICES;
-  const serviceChecklist = servicesData?.find((s) => s.title === service)?.checklist ?? [];
+  const serviceChecklist = mergeChecklists(servicesData ?? [], services);
+  const servicesLabel = services.join(", ");
 
   useEffect(() => {
     if (open && messages.length === 0) {
@@ -104,10 +106,14 @@ export function ChatWidget() {
     });
   }
 
-  function chooseService(s: string) {
-    setService(s);
+  function toggleService(s: string) {
+    setServices((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
     setChecklistAnswers({});
-    pushUser(s);
+  }
+
+  function confirmServices() {
+    if (services.length === 0) return;
+    pushUser(servicesLabel);
     pushBot("Got it. How can we help you today?");
     goToStep("intent");
   }
@@ -126,7 +132,7 @@ export function ChatWidget() {
         return `• ${item.label} (you can confirm you have it without uploading, if you prefer)`;
       return `• ${item.label}`;
     });
-    return `Here's what we'll typically need for ${service}:\n${lines.join("\n")}`;
+    return `Here's what we'll typically need for ${servicesLabel}:\n${lines.join("\n")}`;
   }
 
   function chooseIntent(i: { id: string; label: string }) {
@@ -161,6 +167,7 @@ export function ChatWidget() {
     if (!name.trim() || !email.trim() || !phone.trim() || !note.trim()) return false;
     return serviceChecklist.every((item) => {
       if (item.type === "document") return true;
+      if (item.required === false) return true;
       const a = checklistAnswers[item.id];
       if (item.type === "checkbox") return a?.checked !== undefined;
       return Boolean(a?.answer?.trim());
@@ -179,7 +186,7 @@ export function ChatWidget() {
           name: name.trim(),
           email: email.trim() || null,
           phone: phone.trim() || null,
-          service,
+          services,
           message: `${intent}${note ? "\n\n" + note : ""}`,
           channel: "chatbot",
           checklist_responses: buildChecklistResponses(),
@@ -208,7 +215,7 @@ export function ChatWidget() {
   }
 
   function prefilledMessage() {
-    return `Hi KL2J, I'm ${name || "an inquirer"} interested in ${service || "your services"}. ${intent || ""}${
+    return `Hi KL2J, I'm ${name || "an inquirer"} interested in ${servicesLabel || "your services"}. ${intent || ""}${
       note ? "\n\nDetails: " + note : ""
     }`.trim();
   }
@@ -222,7 +229,7 @@ export function ChatWidget() {
     else if (channel === "call") url = `tel:${SMART_NUMBER}`;
     else if (channel === "email")
       url = `mailto:${STAFF_EMAIL}?subject=${encodeURIComponent(
-        `Inquiry: ${service || "KL2J Services"}`,
+        `Inquiry: ${servicesLabel || "KL2J Services"}`,
       )}&body=${text}`;
     // fire-and-forget log + email notification
     sendInquiry({
@@ -230,7 +237,7 @@ export function ChatWidget() {
         name: name.trim() || "Anonymous",
         email: email.trim() || null,
         phone: phone.trim() || (email.trim() ? null : channel),
-        service,
+        services,
         message: `Handoff → ${channel}\n${intent}${note ? "\n" + note : ""}`,
         channel,
         checklist_responses: buildChecklistResponses(),
@@ -246,7 +253,7 @@ export function ChatWidget() {
     setMessages([]);
     setStep("intro");
     setStepHistory([]);
-    setService("");
+    setServices([]);
     setChecklistAnswers({});
     setIntent("");
     setName("");
@@ -324,16 +331,32 @@ export function ChatWidget() {
 
             {/* Inline pickers */}
             {step === "service" && (
-              <div className="flex flex-wrap gap-2 pt-1">
-                {SERVICES.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => chooseService(s)}
-                    className="rounded-full border border-primary/30 bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:border-primary hover:bg-primary/10"
-                  >
-                    {s}
-                  </button>
-                ))}
+              <div className="flex flex-col gap-2 pt-1">
+                <div className="flex flex-wrap gap-2">
+                  {SERVICES.map((s) => {
+                    const checked = services.includes(s);
+                    return (
+                      <button
+                        key={s}
+                        onClick={() => toggleService(s)}
+                        className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                          checked
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-primary/30 bg-card text-foreground hover:border-primary hover:bg-primary/10"
+                        }`}
+                      >
+                        {s}
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  disabled={services.length === 0}
+                  onClick={confirmServices}
+                  className="self-end rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+                >
+                  Continue
+                </button>
               </div>
             )}
 
@@ -453,7 +476,7 @@ export function ChatWidget() {
                         return (
                           <div key={item.id}>
                             <span className="mb-1 block text-xs text-muted-foreground">
-                              {item.label} *
+                              {item.label} {item.required === false ? "(optional)" : "*"}
                             </span>
                             <YesNoToggle
                               value={a.checked}
@@ -479,7 +502,7 @@ export function ChatWidget() {
                         return (
                           <div key={item.id}>
                             <span className="mb-1 block text-xs text-muted-foreground">
-                              {item.label} *
+                              {item.label} {item.required === false ? "(optional)" : "*"}
                             </span>
                             <LocationAutosuggest
                               value={a.answer ?? ""}
@@ -493,7 +516,7 @@ export function ChatWidget() {
                         return (
                           <div key={item.id}>
                             <span className="mb-1 block text-xs text-muted-foreground">
-                              {item.label} *
+                              {item.label} {item.required === false ? "(optional)" : "*"}
                             </span>
                             <div className="flex items-center gap-2">
                               <input
@@ -528,7 +551,7 @@ export function ChatWidget() {
                       return (
                         <div key={item.id}>
                           <span className="mb-1 block text-xs text-muted-foreground">
-                            {item.label} *
+                            {item.label} {item.required === false ? "(optional)" : "*"}
                           </span>
                           <div className="flex items-center gap-2">
                             <input

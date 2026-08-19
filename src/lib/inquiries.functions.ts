@@ -26,7 +26,7 @@ const InquirySchema = z
     name: z.string().min(1).max(200),
     email: z.string().email().max(200).optional().nullable(),
     phone: z.string().min(1).max(50).optional().nullable(),
-    service: z.string().max(200).optional().nullable(),
+    services: z.array(z.string().max(200)).optional().default([]),
     message: z.string().max(4000).optional().nullable(),
     channel: z.string().max(50).optional().nullable(),
     checklist_responses: z.array(ChecklistResponseSchema).optional().default([]),

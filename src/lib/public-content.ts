@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { ChecklistItem } from "@/lib/admin/services.functions";
+import { useRealtimeInvalidate } from "@/lib/useRealtimeInvalidate";
 
 export type { ChecklistItem, ChecklistItemType } from "@/lib/admin/services.functions";
 
@@ -54,6 +55,7 @@ export type PublicProject = {
   location: string;
   description: string | null;
   service: string | null;
+  services: string[];
   start_date: string | null;
   end_date: string | null;
   personnel: string[];
@@ -63,6 +65,7 @@ export type PublicProject = {
   media: PublicProjectMedia[];
   sort_order: number;
   inquiry_status: string | null;
+  size: "major" | "small";
 };
 export type PublicSiteSettings = {
   logo_url: string | null;
@@ -85,7 +88,10 @@ export function usePublicServices() {
       if (error) throw error;
       return data as PublicService[];
     },
-    staleTime: 60_000,
+    // Unlike the other public queries, this drives what's marked required
+    // on a real inquiry form — always refetch on mount/focus rather than
+    // risk an admin's checklist edit not showing up on an already-open tab.
+    staleTime: 0,
   });
 }
 
@@ -106,6 +112,7 @@ export function usePublicEquipment() {
 }
 
 export function usePublicGalleryPhotos() {
+  useRealtimeInvalidate("gallery_photos", [["public-gallery"]]);
   return useQuery({
     queryKey: ["public-gallery"],
     queryFn: async () => {
@@ -134,6 +141,8 @@ export type PublicGalleryFolder = {
 const UNSORTED_FOLDER_ID = "__unsorted__";
 
 export function usePublicGalleryFolders() {
+  useRealtimeInvalidate("gallery_photos", [["public-gallery-folders"]]);
+  useRealtimeInvalidate("gallery_folders", [["public-gallery-folders"]]);
   return useQuery({
     queryKey: ["public-gallery-folders"],
     queryFn: async () => {
@@ -236,13 +245,25 @@ type RawPublicProjectRow = Omit<PublicProject, "media"> & {
 };
 
 export function usePublicProjects() {
+  useRealtimeInvalidate("projects", [["public-projects"]]);
+  useRealtimeInvalidate("gallery_photos", [["public-projects"]]);
+  useRealtimeInvalidate("gallery_folders", [["public-projects"]]);
   return useQuery({
     queryKey: ["public-projects"],
+    // Realtime evaluates the anon SELECT policy (`is_public = true`) against
+    // the row's NEW value before delivering an event — so the one moment
+    // that actually needs to reach visitors, an admin flipping a project to
+    // hidden, is exactly the one Realtime silently drops (the new row no
+    // longer passes the policy, so it looks "invisible" to that subscriber).
+    // Publishing/edits/deletes of already-visible rows all still push live;
+    // this is just a safety net for that one asymmetric case so a hidden
+    // project still disappears for anyone with the tab already open.
+    refetchInterval: 60_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("projects")
         .select(
-          "id,title,location,description,service,start_date,end_date,personnel,photo_urls,photo_positions,attachments,sort_order,inquiry_status,gallery_folders(gallery_photos(id,url,caption,sort_order,media_type))",
+          "id,title,location,description,service,services,start_date,end_date,personnel,photo_urls,photo_positions,attachments,sort_order,inquiry_status,size,gallery_folders(gallery_photos(id,url,caption,sort_order,media_type))",
         )
         // Admins are also allowed to read every project via a separate RLS
         // policy (so /admin/projects can show drafts) — that policy applies

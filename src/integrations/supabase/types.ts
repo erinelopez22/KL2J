@@ -477,6 +477,7 @@ export type Database = {
           name: string;
           phone: string | null;
           service: string | null;
+          services: string[];
           status: string;
         };
         Insert: {
@@ -494,6 +495,7 @@ export type Database = {
           name: string;
           phone?: string | null;
           service?: string | null;
+          services?: string[];
           status?: string;
         };
         Update: {
@@ -511,6 +513,7 @@ export type Database = {
           name?: string;
           phone?: string | null;
           service?: string | null;
+          services?: string[];
           status?: string;
         };
         Relationships: [];
@@ -805,6 +808,7 @@ export type Database = {
           photo_urls: string[];
           photo_positions: Json;
           service: string | null;
+          services: string[];
           size: string;
           sort_order: number;
           start_date: string | null;
@@ -826,6 +830,7 @@ export type Database = {
           photo_urls?: string[];
           photo_positions?: Json;
           service?: string | null;
+          services?: string[];
           size?: string;
           sort_order?: number;
           start_date?: string | null;
@@ -847,6 +852,7 @@ export type Database = {
           photo_urls?: string[];
           photo_positions?: Json;
           service?: string | null;
+          services?: string[];
           size?: string;
           sort_order?: number;
           start_date?: string | null;

@@ -41,6 +41,7 @@ import { FileDrop } from "@/components/admin/FileDrop";
 import { LocationAutosuggest } from "@/components/LocationAutosuggest";
 import { useConfirm } from "@/components/ConfirmDialogProvider";
 import { AttachmentLightbox, type LightboxItem } from "@/components/AttachmentLightbox";
+import { useRealtimeInvalidate } from "@/lib/useRealtimeInvalidate";
 
 export const Route = createFileRoute("/_authenticated/admin/gallery")({
   component: AdminGallery,
@@ -292,6 +293,7 @@ function AdminGallery() {
       return data as Photo[];
     },
   });
+  useRealtimeInvalidate("gallery_photos", [["admin-gallery"]]);
 
   const { data: folders } = useQuery({
     queryKey: ["admin-gallery-folders"],
@@ -304,6 +306,7 @@ function AdminGallery() {
       return data as GalleryFolder[];
     },
   });
+  useRealtimeInvalidate("gallery_folders", [["admin-gallery-folders"]]);
 
   const { data: projects } = useQuery({
     queryKey: ["admin-gallery-projects-picker"],
