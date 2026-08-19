@@ -6,9 +6,15 @@
 // (projects.attachments holds documents only) — there is nothing left to
 // sync between the two. This is the only remaining touchpoint: keep a
 // project's one linked gallery folder (matched by project_id, UNIQUE)
-// existing and named after the project. Throws on failure so callers
-// (createProject/updateProject) surface it to the admin instead of silently
-// succeeding with a project that has no working folder.
+// existing, named after the project by default when first created. Throws
+// on failure so callers (createProject/updateProject) surface it to the
+// admin instead of silently succeeding with a project that has no working
+// folder.
+//
+// Deliberately does NOT rename an existing folder to match a later project
+// title change — an admin can give a project-linked folder its own name via
+// /admin/gallery (see updateGalleryFolder), and that should stick rather
+// than getting silently overwritten the next time the project is saved.
 export async function ensureProjectGalleryFolder(
   projectId: string,
   title: string,
@@ -17,29 +23,19 @@ export async function ensureProjectGalleryFolder(
 
   const { data: existing, error: fetchErr } = await supabaseAdmin
     .from("gallery_folders")
-    .select("id, name")
+    .select("id")
     .eq("project_id", projectId)
     .maybeSingle();
   if (fetchErr) throw new Error(`Failed to look up gallery folder: ${fetchErr.message}`);
+  if (existing) return existing.id;
 
-  if (!existing) {
-    const { data: created, error: createErr } = await supabaseAdmin
-      .from("gallery_folders")
-      .insert({ name: title, project_id: projectId })
-      .select("id")
-      .single();
-    if (createErr) throw new Error(`Failed to create gallery folder: ${createErr.message}`);
-    return created.id;
-  }
-
-  if (existing.name !== title) {
-    const { error: renameErr } = await supabaseAdmin
-      .from("gallery_folders")
-      .update({ name: title })
-      .eq("id", existing.id);
-    if (renameErr) throw new Error(`Failed to rename gallery folder: ${renameErr.message}`);
-  }
-  return existing.id;
+  const { data: created, error: createErr } = await supabaseAdmin
+    .from("gallery_folders")
+    .insert({ name: title, project_id: projectId })
+    .select("id")
+    .single();
+  if (createErr) throw new Error(`Failed to create gallery folder: ${createErr.message}`);
+  return created.id;
 }
 
 // Deletes a gallery folder and everything inside it — the real storage

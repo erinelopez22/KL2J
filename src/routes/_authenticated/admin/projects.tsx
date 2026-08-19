@@ -283,6 +283,20 @@ function AdminProjects() {
   });
   const inquiryDocuments = inquiryDocumentsFrom(linkedInquiry?.checklist_responses);
 
+  const { data: linkedGalleryFolder } = useQuery({
+    queryKey: ["project-linked-gallery-folder", viewingProject?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("gallery_folders")
+        .select("id, name")
+        .eq("project_id", viewingProject!.id)
+        .maybeSingle();
+      if (error) throw error;
+      return data as { id: string; name: string } | null;
+    },
+    enabled: !!viewingProject?.id,
+  });
+
   async function fetchConfidentialUrl(path: string): Promise<string> {
     const { url } = await doGetConfidentialUrl({ data: { path } });
     return url;
@@ -462,7 +476,7 @@ function AdminProjects() {
               <div className="divide-y divide-border overflow-hidden rounded-lg border border-border">
                 <DetailRow label="Project Name">{viewingProject.title}</DetailRow>
                 <DetailRow label="Project Type">
-                  {linkedInquiry ? recordServices(linkedInquiry).join(", ") || "—" : "—"}
+                  {recordServices(viewingProject).join(", ") || "—"}
                 </DetailRow>
                 <DetailRow label="Project Date">
                   {viewingProject.start_date
@@ -563,6 +577,14 @@ function AdminProjects() {
                 </div>
               ) : viewMediaTab === "photos" ? (
                 <div className="pt-3">
+                  {linkedGalleryFolder && (
+                    <div className="mb-3 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
+                      <span className="text-xs font-semibold uppercase text-muted-foreground">
+                        Linked gallery folder
+                      </span>
+                      <p className="mt-0.5 font-medium">{linkedGalleryFolder.name}</p>
+                    </div>
+                  )}
                   <ProjectMediaGrid projectId={viewingProject.id} />
                 </div>
               ) : (

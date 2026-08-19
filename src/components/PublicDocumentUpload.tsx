@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Upload, FileText, X, LinkIcon } from "lucide-react";
 import { uploadInquiryDocument } from "@/lib/public-media.functions";
 import { fileToBase64 } from "@/lib/admin/fileToBase64";
+import { compressImage } from "@/lib/compressImage";
 import { isOversizedFile } from "@/lib/uploadLimits";
 import { OversizeFileLinkPrompt } from "@/components/OversizeFileLinkPrompt";
 
@@ -56,17 +57,19 @@ export function PublicDocumentUpload({
   const upload = useServerFn(uploadInquiryDocument);
 
   async function handleFiles(files: FileList) {
+    setBusy(true);
+    const compressed = await Promise.all(Array.from(files).map(compressImage));
     const okFiles: File[] = [];
     const oversized: File[] = [];
-    for (const file of Array.from(files)) {
+    for (const file of compressed) {
       (isOversizedFile(file) ? oversized : okFiles).push(file);
     }
     if (oversized.length > 0) setOversizeQueue((q) => [...q, ...oversized]);
     if (okFiles.length === 0) {
       if (inputRef.current) inputRef.current.value = "";
+      setBusy(false);
       return;
     }
-    setBusy(true);
     try {
       const uploaded: UploadedDocument[] = [];
       for (const file of okFiles) {

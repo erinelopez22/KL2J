@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Lock } from "lucide-react";
 import { uploadConfidentialMedia } from "@/lib/admin/media.functions";
 import { fileToBase64 } from "@/lib/admin/fileToBase64";
+import { compressImage } from "@/lib/compressImage";
 import { isOversizedFile } from "@/lib/uploadLimits";
 import { OversizeFileLinkPrompt } from "@/components/OversizeFileLinkPrompt";
 
@@ -24,17 +25,19 @@ export function ConfidentialFileDrop({
 
   async function handleFiles(files: FileList | File[]) {
     const list = Array.from(files);
+    setBusy(true);
+    const compressed = await Promise.all(list.map(compressImage));
     const okFiles: File[] = [];
     const oversized: File[] = [];
-    for (const file of list) {
+    for (const file of compressed) {
       (isOversizedFile(file) ? oversized : okFiles).push(file);
     }
     if (oversized.length > 0) setOversizeQueue((q) => [...q, ...oversized]);
     if (okFiles.length === 0) {
       if (inputRef.current) inputRef.current.value = "";
+      setBusy(false);
       return;
     }
-    setBusy(true);
     try {
       for (const file of okFiles) {
         const base64 = await fileToBase64(file);

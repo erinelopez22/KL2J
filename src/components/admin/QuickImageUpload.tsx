@@ -4,7 +4,10 @@ import { toast } from "sonner";
 import { Camera } from "lucide-react";
 import { uploadSiteMedia } from "@/lib/admin/media.functions";
 import { fileToBase64 } from "@/lib/admin/fileToBase64";
-import { isOversizedFile } from "@/lib/uploadLimits";
+import { compressImage } from "@/lib/compressImage";
+import { isOversizedFile, MAX_UPLOAD_BYTES } from "@/lib/uploadLimits";
+
+const MAX_UPLOAD_MB = Math.round(MAX_UPLOAD_BYTES / 1024 / 1024);
 
 /** Compact hover-to-reveal "change photo" overlay, Facebook cover/profile-photo style. */
 export function QuickImageUpload({
@@ -24,12 +27,14 @@ export function QuickImageUpload({
   const inputRef = useRef<HTMLInputElement>(null);
   const upload = useServerFn(uploadSiteMedia);
 
-  async function handleFile(file: File) {
+  async function handleFile(rawFile: File) {
+    setBusy(true);
+    const file = await compressImage(rawFile);
     if (isOversizedFile(file)) {
-      toast.error(`"${file.name}" is over 50MB. Please choose a smaller image.`);
+      toast.error(`"${file.name}" is over ${MAX_UPLOAD_MB}MB. Please choose a smaller image.`);
+      setBusy(false);
       return;
     }
-    setBusy(true);
     try {
       const base64 = await fileToBase64(file);
       const result = await upload({

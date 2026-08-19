@@ -4,7 +4,9 @@ import { toast } from "sonner";
 import { Images } from "lucide-react";
 import { uploadSiteMedia } from "@/lib/admin/media.functions";
 import { fileToBase64 } from "@/lib/admin/fileToBase64";
-import { isOversizedFile } from "@/lib/uploadLimits";
+import { isOversizedFile, MAX_UPLOAD_BYTES } from "@/lib/uploadLimits";
+
+const MAX_UPLOAD_MB = Math.round(MAX_UPLOAD_BYTES / 1024 / 1024);
 
 function loadImage(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -64,7 +66,7 @@ export function CombinePhotoUpload({
     const files = all.slice(0, 2);
     const oversized = files.find(isOversizedFile);
     if (oversized) {
-      toast.error(`"${oversized.name}" is over 50MB. Please choose smaller images.`);
+      toast.error(`"${oversized.name}" is over ${MAX_UPLOAD_MB}MB. Please choose smaller images.`);
       return;
     }
     setBusy(true);

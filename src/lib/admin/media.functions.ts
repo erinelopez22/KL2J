@@ -20,15 +20,23 @@ const OFFICE_TYPES = [
   "application/zip",
 ];
 
+// Kept in sync with MAX_UPLOAD_BYTES in src/lib/uploadLimits.ts — the
+// client-side "oversized" check that routes big files to the "paste a
+// link" flow instead of a direct upload. This ceiling isn't just an app
+// preference: Firebase App Hosting (Cloud Run) rejects request bodies over
+// ~32MB outright with a bare 500, and this base64-encodes the file into a
+// single POST body first, so it needs real margin under that.
+const MAX_DIRECT_UPLOAD_BYTES = 20 * 1024 * 1024;
+
 const FOLDER_RULES: Record<string, { types: string[]; maxBytes: number }> = {
   branding: { types: IMAGE_TYPES, maxBytes: 5 * 1024 * 1024 },
-  gallery: { types: [...IMAGE_TYPES, ...VIDEO_TYPES], maxBytes: 50 * 1024 * 1024 },
+  gallery: { types: [...IMAGE_TYPES, ...VIDEO_TYPES], maxBytes: MAX_DIRECT_UPLOAD_BYTES },
   documents: { types: [...IMAGE_TYPES, ...DOC_TYPES], maxBytes: 10 * 1024 * 1024 },
-  projects: { types: [...IMAGE_TYPES, ...DOC_TYPES, ...VIDEO_TYPES], maxBytes: 50 * 1024 * 1024 },
+  projects: { types: [...IMAGE_TYPES, ...DOC_TYPES, ...VIDEO_TYPES], maxBytes: MAX_DIRECT_UPLOAD_BYTES },
   companies: { types: IMAGE_TYPES, maxBytes: 5 * 1024 * 1024 },
   posts: {
     types: [...IMAGE_TYPES, ...VIDEO_TYPES, ...DOC_TYPES, ...OFFICE_TYPES],
-    maxBytes: 50 * 1024 * 1024,
+    maxBytes: MAX_DIRECT_UPLOAD_BYTES,
   },
 };
 
@@ -73,7 +81,7 @@ export const uploadSiteMedia = createServerFn({ method: "POST" })
   });
 
 const CONFIDENTIAL_TYPES = [...IMAGE_TYPES, ...DOC_TYPES, ...VIDEO_TYPES];
-const CONFIDENTIAL_MAX_BYTES = 50 * 1024 * 1024;
+const CONFIDENTIAL_MAX_BYTES = MAX_DIRECT_UPLOAD_BYTES;
 
 const ConfidentialUploadSchema = z.object({
   filename: z.string().min(1).max(200),

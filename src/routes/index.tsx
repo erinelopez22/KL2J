@@ -973,10 +973,11 @@ function RelatedProjects({ services }: { services: string[] }) {
   const navigate = useNavigate();
   if (!data || data.length === 0) return null;
 
-  const projects =
-    services.length > 0
-      ? data.filter((p) => p.services?.some((s) => services.includes(s)))
-      : data;
+  const projects = (
+    services.length > 0 ? data.filter((p) => p.services?.some((s) => services.includes(s))) : data
+  )
+    .slice()
+    .sort((a, b) => (a.size === "major" ? 0 : 1) - (b.size === "major" ? 0 : 1));
   if (projects.length === 0) return null;
 
   function openProject(id: string) {
@@ -1679,6 +1680,14 @@ function ProjectCard({
 }
 
 const PROJECT_VIEW_ALL_SORT_OPTIONS = {
+  size: {
+    label: "Major projects first",
+    cmp: (a: PublicProject, b: PublicProject) => {
+      const rank = (p: PublicProject) => (p.size === "major" ? 0 : 1);
+      const diff = rank(a) - rank(b);
+      return diff !== 0 ? diff : (b.start_date ?? "").localeCompare(a.start_date ?? "");
+    },
+  },
   newest: {
     label: "Newest first",
     cmp: (a: PublicProject, b: PublicProject) =>
@@ -1712,7 +1721,7 @@ function Projects() {
   const [allServiceFilter, setAllServiceFilter] = useState("");
   const [allStatusFilter, setAllStatusFilter] = useState("");
   const [allSizeFilter, setAllSizeFilter] = useState<"" | "major" | "small">("");
-  const [allSortKey, setAllSortKey] = useState<ProjectViewAllSortKey>("newest");
+  const [allSortKey, setAllSortKey] = useState<ProjectViewAllSortKey>("size");
 
   useEffect(() => {
     if (!search.project || !data || search.project === lastDeepLinkId.current) return;
@@ -1804,14 +1813,17 @@ function Projects() {
 
       <div className="-mx-4 mt-8 overflow-x-auto px-4">
         <div className="flex gap-5 pb-2">
-          {data.map((p) => (
-            <ProjectCard
-              key={p.id}
-              project={p}
-              onClick={() => openProject(p.id)}
-              className="w-[300px] shrink-0"
-            />
-          ))}
+          {data
+            .slice()
+            .sort((a, b) => (a.size === "major" ? 0 : 1) - (b.size === "major" ? 0 : 1))
+            .map((p) => (
+              <ProjectCard
+                key={p.id}
+                project={p}
+                onClick={() => openProject(p.id)}
+                className="w-[300px] shrink-0"
+              />
+            ))}
         </div>
       </div>
 
@@ -1917,7 +1929,7 @@ function Projects() {
           onClick={closeProject}
         >
           <div
-            className={`flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-card shadow-2xl transition-[max-height] duration-200 ${
+            className={`flex w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-card shadow-2xl transition-[max-height] duration-200 ${
               expanded ? "max-h-[95vh]" : "max-h-[85vh]"
             }`}
             onClick={(e) => e.stopPropagation()}
@@ -1936,30 +1948,33 @@ function Projects() {
               </div>
             )}
             <div className="flex min-h-0 flex-1 flex-col p-6">
-              <div className="shrink-0">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <h3 className="text-xl font-bold">{selected.title}</h3>
-                    <ProjectStatusBadge status={selected.inquiry_status} />
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <button
-                      onClick={() => setExpanded((v) => !v)}
-                      className="rounded-md p-1 text-muted-foreground hover:bg-muted"
-                      aria-label={expanded ? "Shrink" : "Expand"}
-                      title={expanded ? "Shrink" : "Expand"}
-                    >
-                      {expanded ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
-                    </button>
-                    <button
-                      onClick={closeProject}
-                      className="rounded-md p-1 text-muted-foreground hover:bg-muted"
-                      aria-label="Close"
-                    >
-                      <X className="h-5 w-5" />
-                    </button>
-                  </div>
+              <div className="flex shrink-0 items-start justify-between gap-4">
+                <div className="flex min-w-0 items-center gap-2">
+                  <h3 className="text-xl font-bold">{selected.title}</h3>
+                  <ProjectStatusBadge status={selected.inquiry_status} />
                 </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    onClick={() => setExpanded((v) => !v)}
+                    className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+                    aria-label={expanded ? "Shrink" : "Expand"}
+                    title={expanded ? "Shrink" : "Expand"}
+                  >
+                    {expanded ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+                  </button>
+                  <button
+                    onClick={closeProject}
+                    className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+                    aria-label="Close"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+              {/* Capped with its own scroll — a long description/services list
+                  must never be able to squeeze the photos section below down
+                  to nothing (it used to, before this cap was added). */}
+              <div className="max-h-72 shrink-0 overflow-y-auto pr-1">
                 {selected.location && (
                   <div className="text-sm text-muted-foreground">{selected.location}</div>
                 )}

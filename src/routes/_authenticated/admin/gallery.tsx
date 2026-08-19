@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -73,6 +73,8 @@ type ProjectOption = { id: string; title: string };
 
 const UNSORTED_DROP_ID = "folder:unsorted";
 const FOLDER_DROP_PREFIX = "folder:";
+const SIDEBAR_MIN_WIDTH = 180;
+const SIDEBAR_MAX_WIDTH = 560;
 
 const SORT_OPTIONS = {
   newest: {
@@ -283,6 +285,38 @@ function AdminGallery() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [moveTarget, setMoveTarget] = useState<string>(UNSORTED_DROP_ID);
 
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = Number(localStorage.getItem("gallery-sidebar-width"));
+    return saved >= SIDEBAR_MIN_WIDTH && saved <= SIDEBAR_MAX_WIDTH ? saved : 240;
+  });
+  const resizingRef = useRef(false);
+
+  function startSidebarResize(e: React.PointerEvent) {
+    e.preventDefault();
+    resizingRef.current = true;
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+    function onMove(ev: PointerEvent) {
+      if (!resizingRef.current) return;
+      const next = Math.min(
+        SIDEBAR_MAX_WIDTH,
+        Math.max(SIDEBAR_MIN_WIDTH, startWidth + (ev.clientX - startX)),
+      );
+      setSidebarWidth(next);
+    }
+    function onUp() {
+      resizingRef.current = false;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      setSidebarWidth((w) => {
+        localStorage.setItem("gallery-sidebar-width", String(w));
+        return w;
+      });
+    }
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
+
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const { data: photos, isLoading } = useQuery({
@@ -318,6 +352,13 @@ function AdminGallery() {
   });
   const linkedProjectIds = new Set((folders ?? []).map((f) => f.project_id).filter(Boolean));
   const linkableProjects = (projects ?? []).filter((p) => !linkedProjectIds.has(p.id));
+  const selectedFolder =
+    selected !== "all" && selected !== "unsorted"
+      ? (folders ?? []).find((f) => f.id === selected)
+      : undefined;
+  const selectedFolderProject = selectedFolder?.project_id
+    ? (projects ?? []).find((p) => p.id === selectedFolder.project_id)
+    : undefined;
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ["admin-gallery"] });
@@ -409,12 +450,12 @@ function AdminGallery() {
       toast.error("Folder name is required");
       return;
     }
-    // The server overwrites the name to match the project's title whenever
-    // project_id is set, but the schema still requires a non-empty name up
-    // front — fall back to the picked project's title so that validation
-    // passes even if the admin left the name field blank.
+    // The server only falls back to the linked project's title when the
+    // name is left blank (see resolveFolderName) — fall back the same way
+    // here so validation still passes if the admin left it empty, but a
+    // typed name (including for a project-linked folder) is respected.
     const linkedProjectTitle = form.project_id
-      ? (linkableProjects.find((p) => p.id === form.project_id)?.title ?? "Untitled")
+      ? (projects?.find((p) => p.id === form.project_id)?.title ?? "Untitled")
       : "";
     const payload = {
       name: form.name.trim() || linkedProjectTitle,
@@ -426,12 +467,7 @@ function AdminGallery() {
     };
     try {
       if (editing) {
-        // Project-linked folders keep their name in sync with the project
-        // title (see syncProjectGallery) — never send an edited name for them.
-        const { name: _name, ...rest } = payload;
-        await doUpdateFolder({
-          data: { id: editing.id, ...(editing.project_id ? rest : payload) },
-        });
+        await doUpdateFolder({ data: { id: editing.id, ...payload } });
       } else {
         await doCreateFolder({ data: { ...payload, sort_order: (folders?.length ?? 0) + 1 } });
       }
@@ -576,8 +612,11 @@ function AdminGallery() {
           and drag tiles onto a folder to move them.
         </p>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-[240px_1fr]">
-          <div className="min-w-0 space-y-1">
+        <div className="mt-6 flex flex-col gap-6 lg:flex-row">
+          <div
+            className="shrink-0 space-y-1 lg:w-[var(--sidebar-w)]"
+            style={{ "--sidebar-w": `${sidebarWidth}px` } as React.CSSProperties}
+          >
             <FolderDropZone
               id="folder:__all__"
               active={selected === "all"}
@@ -595,20 +634,22 @@ function AdminGallery() {
               Unsorted
             </FolderDropZone>
             <div className="my-2 border-t border-border" />
-            {(folders ?? []).map((f) => (
-              <FolderDropZone
-                key={f.id}
-                id={`${FOLDER_DROP_PREFIX}${f.id}`}
-                active={selected === f.id}
-                count={(photos ?? []).filter((p) => p.folder_id === f.id).length}
-                linked={!!f.project_id}
-                onClick={() => setSelected(f.id)}
-                onEdit={() => openEditFolder(f)}
-                onDelete={() => deleteFolderWithConfirm(f)}
-              >
-                {f.name}
-              </FolderDropZone>
-            ))}
+            <div className="max-h-[600px] space-y-1 overflow-y-auto pr-1">
+              {(folders ?? []).map((f) => (
+                <FolderDropZone
+                  key={f.id}
+                  id={`${FOLDER_DROP_PREFIX}${f.id}`}
+                  active={selected === f.id}
+                  count={(photos ?? []).filter((p) => p.folder_id === f.id).length}
+                  linked={!!f.project_id}
+                  onClick={() => setSelected(f.id)}
+                  onEdit={() => openEditFolder(f)}
+                  onDelete={() => deleteFolderWithConfirm(f)}
+                >
+                  {f.name}
+                </FolderDropZone>
+              ))}
+            </div>
             <button
               onClick={openNewFolder}
               className="mt-2 w-full rounded-md border border-dashed border-border px-3 py-2 text-sm text-muted-foreground hover:border-primary hover:text-primary"
@@ -617,7 +658,33 @@ function AdminGallery() {
             </button>
           </div>
 
-          <div className="min-w-0">
+          <div
+            onPointerDown={startSidebarResize}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize folder sidebar"
+            title="Drag to resize"
+            className="hidden w-1.5 shrink-0 cursor-col-resize rounded-full bg-border transition hover:bg-primary/40 active:bg-primary/60 lg:block"
+          />
+
+          <div className="min-w-0 flex-1">
+            {selectedFolder && (
+              <div className="mb-4 rounded-lg border border-border bg-muted/30 px-3 py-2.5">
+                <p className="break-words text-sm font-semibold">{selectedFolder.name}</p>
+                {selectedFolderProject && (
+                  <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                    <Link2 className="h-3 w-3 shrink-0" />
+                    Linked to project: <span className="font-medium">{selectedFolderProject.title}</span>
+                  </p>
+                )}
+                {selectedFolder.location && (
+                  <p className="mt-0.5 text-xs text-muted-foreground">{selectedFolder.location}</p>
+                )}
+                {selectedFolder.description && (
+                  <p className="mt-0.5 text-xs text-muted-foreground">{selectedFolder.description}</p>
+                )}
+              </div>
+            )}
             <div className="max-w-sm">
               <FileDrop
                 folder="gallery"
@@ -786,9 +853,10 @@ function AdminGallery() {
               {folderModal.editing?.project_id && (
                 <div className="mt-3 flex items-start gap-1.5 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
                   <Link2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-                  Linked to a project — its name follows the project title. Edit the project to
-                  rename it, or use "Delete folder" below to remove it and its photos/videos
-                  everywhere, including from that project's attachments.
+                  Linked to a project — its photos/videos stay in sync with that project, but the
+                  folder name is independent, so you can rename it freely. Use "Delete folder"
+                  below to remove it and its photos/videos everywhere, including from that
+                  project's attachments.
                 </div>
               )}
               <div className="mt-4 space-y-3">
@@ -797,20 +865,20 @@ function AdminGallery() {
                     Name
                   </span>
                   <input
-                    value={
+                    value={folderModal.form.name}
+                    placeholder={
                       folderModal.form.project_id
-                        ? (linkableProjects.find((p) => p.id === folderModal.form.project_id)
-                            ?.title ?? folderModal.form.name)
-                        : folderModal.form.name
+                        ? (projects?.find((p) => p.id === folderModal.form.project_id)?.title ??
+                          "")
+                        : ""
                     }
-                    disabled={!!folderModal.editing?.project_id || !!folderModal.form.project_id}
                     onChange={(e) =>
                       setFolderModal({
                         ...folderModal,
                         form: { ...folderModal.form, name: e.target.value },
                       })
                     }
-                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                   />
                 </label>
                 <label className="block text-sm">

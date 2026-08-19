@@ -35,10 +35,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { createPostDraft, updatePostDraft } from "@/lib/admin/posts.functions";
 import { SendProgress, type SendablePost } from "@/components/admin/SendProgress";
 import { useConfirm } from "@/components/ConfirmDialogProvider";
-import { uploadSiteMedia } from "@/lib/admin/media.functions";
+import { uploadSiteMedia, deleteSiteMedia } from "@/lib/admin/media.functions";
 import { fileToBase64 } from "@/lib/admin/fileToBase64";
+import { storagePathFromUrl } from "@/lib/storagePathFromUrl";
 import { dedupeContactsByEmail } from "@/lib/admin/dedupeEmailContacts";
 import { ctaForPost, type PostType } from "@/lib/postCta";
+import { compressImage } from "@/lib/compressImage";
 import { isOversizedFile } from "@/lib/uploadLimits";
 import { OversizeFileLinkPrompt } from "@/components/OversizeFileLinkPrompt";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
@@ -954,13 +956,16 @@ export function PostEditor({
   }
 
   async function handleAddAttachments(files: FileList) {
-    const list = Array.from(files);
-    const okFiles = list.filter((f) => !isOversizedFile(f));
-    const oversized = list.filter((f) => isOversizedFile(f));
-    if (oversized.length > 0) setOversizeQueue((q) => [...q, ...oversized]);
-    if (okFiles.length === 0) return;
-
     setUploadingAttachments(true);
+    const compressed = await Promise.all(Array.from(files).map(compressImage));
+    const okFiles = compressed.filter((f) => !isOversizedFile(f));
+    const oversized = compressed.filter((f) => isOversizedFile(f));
+    if (oversized.length > 0) setOversizeQueue((q) => [...q, ...oversized]);
+    if (okFiles.length === 0) {
+      setUploadingAttachments(false);
+      return;
+    }
+
     try {
       for (const file of okFiles) {
         const base64 = await fileToBase64(file);
@@ -994,7 +999,12 @@ export function PostEditor({
   }
 
   function removeAttachment(index: number) {
+    const attachment = attachments[index];
     setAttachments((prev) => prev.filter((_, i) => i !== index));
+    if (!attachment || attachment.isExternalLink) return;
+    const path = storagePathFromUrl(attachment.url, "site-media");
+    if (!path) return;
+    deleteSiteMedia({ data: { path } }).catch((err) => console.error(err));
   }
 
   async function save(action: "draft" | "send") {

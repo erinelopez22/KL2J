@@ -86,8 +86,11 @@ const FolderSchema = z.object({
   project_id: z.string().uuid().nullable().optional(),
 });
 
-// A project-linked folder's name always mirrors its project's title, so a
-// manual link always overrides whatever name was typed.
+// Default name for a project-linked folder when none was typed — used both
+// when first linking a folder to a project and as a fallback if an admin
+// clears the name field entirely. A folder that already has a custom name
+// keeps it; linking to a project no longer forces the name to follow the
+// project's title.
 async function resolveFolderName(
   supabaseAdmin: typeof SupabaseAdmin,
   projectId: string,
@@ -120,7 +123,7 @@ export const createGalleryFolder = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const payload = { ...data };
-    if (payload.project_id) {
+    if (payload.project_id && !payload.name?.trim()) {
       payload.name = await resolveFolderName(supabaseAdmin, payload.project_id);
     }
 
@@ -143,7 +146,7 @@ export const updateGalleryFolder = createServerFn({ method: "POST" })
     await assertRole(context.userId, "admin");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { id, ...patch } = data;
-    if (patch.project_id) {
+    if (patch.project_id && !patch.name?.trim()) {
       patch.name = await resolveFolderName(supabaseAdmin, patch.project_id);
     }
     const { error } = await supabaseAdmin.from("gallery_folders").update(patch).eq("id", id);

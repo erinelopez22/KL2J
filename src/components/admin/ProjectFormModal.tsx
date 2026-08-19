@@ -21,6 +21,7 @@ import {
   getConfidentialFileUrl,
 } from "@/lib/admin/media.functions";
 import { fileToBase64 } from "@/lib/admin/fileToBase64";
+import { storagePathFromUrl } from "@/lib/storagePathFromUrl";
 import { FileDrop } from "@/components/admin/FileDrop";
 import { ConfidentialFileDrop } from "@/components/admin/ConfidentialFileDrop";
 import { LocationAutosuggest } from "@/components/LocationAutosuggest";
@@ -451,6 +452,15 @@ export function ProjectFormModal({
   // reload loses the source images, same as any other unsaved form state).
   const [combinedSources, setCombinedSources] = useState<Record<string, [File, File]>>({});
   const [swappingUrl, setSwappingUrl] = useState<string | null>(null);
+  // Lets an admin start uploading photos/videos for a brand-new project
+  // before doing a final Save — we silently create the project row in the
+  // background the first time they ask to upload, then treat it as a
+  // normal edit from then on. If they close the modal without ever hitting
+  // the real Save button, that draft (and anything uploaded to it) gets
+  // discarded on close rather than left behind as orphaned data.
+  const [draftProjectId, setDraftProjectId] = useState<string | null>(null);
+  const [draftUnconfirmed, setDraftUnconfirmed] = useState(false);
+  const [creatingDraft, setCreatingDraft] = useState(false);
   const confirm = useConfirm();
   const doCreateInquiry = useServerFn(createInquiry);
   const [presetChannel, setPresetChannel] = useState<"referral" | "facebook" | null>(null);
@@ -699,6 +709,28 @@ export function ProjectFormModal({
     setForm({ ...form, personnel: form.personnel.filter((p) => p !== name) });
   }
 
+  async function removeCoverPhoto(url: string) {
+    setForm((f) => {
+      const { [url]: _removed, ...rest } = f.photo_positions;
+      return {
+        ...f,
+        photo_urls: f.photo_urls.filter((u) => u !== url),
+        photo_positions: rest,
+      };
+    });
+    setCombinedSources((s) => {
+      const { [url]: _removed, ...rest } = s;
+      return rest;
+    });
+    const path = storagePathFromUrl(url, "site-media");
+    if (!path) return;
+    try {
+      await doDeleteMedia({ data: { path } });
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
   async function swapCombinedPhoto(url: string) {
     const sources = combinedSources[url];
     if (!sources) return;
@@ -739,20 +771,8 @@ export function ProjectFormModal({
     }
   }
 
-  async function submit() {
-    if (!form.title.trim()) {
-      toast.error("Title is required");
-      return;
-    }
-    if (!form.location.trim()) {
-      toast.error("Location is required");
-      return;
-    }
-    if (requiredInquiryMissing) {
-      toast.error("Every project must be linked to an inquiry — select one first");
-      return;
-    }
-    const payload = {
+  function buildPayload() {
+    return {
       title: form.title.trim(),
       location: form.location.trim(),
       description: form.description.trim() || undefined,
@@ -769,15 +789,54 @@ export function ProjectFormModal({
       inquiry_id: defaultInquiry?.id || form.inquiry_id || undefined,
       sort_order: project?.sort_order ?? 0,
     };
+  }
+
+  // Enables the Photos & videos tab for a not-yet-saved project by quietly
+  // creating it now instead of waiting for the real Save — the required
+  // fields (title, location, inquiry) still have to be filled in first, so
+  // this never creates a genuinely empty row.
+  const canStartUploading =
+    !!form.title.trim() && !!form.location.trim() && !!(defaultInquiry?.id || form.inquiry_id);
+  const activeProjectId = project?.id ?? draftProjectId;
+
+  async function startUploadingPhotos() {
+    if (!canStartUploading || creatingDraft) return;
+    setCreatingDraft(true);
+    try {
+      const result = await doCreate({ data: buildPayload() });
+      setDraftProjectId(result.id);
+      setDraftUnconfirmed(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to prepare project for uploads");
+    } finally {
+      setCreatingDraft(false);
+    }
+  }
+
+  async function submit() {
+    if (!form.title.trim()) {
+      toast.error("Title is required");
+      return;
+    }
+    if (!form.location.trim()) {
+      toast.error("Location is required");
+      return;
+    }
+    if (requiredInquiryMissing) {
+      toast.error("Every project must be linked to an inquiry — select one first");
+      return;
+    }
+    const payload = buildPayload();
     setSaving(true);
     try {
-      if (project) {
-        await doUpdate({ data: { id: project.id, ...payload } });
-        toast.success("Project updated");
+      if (activeProjectId) {
+        await doUpdate({ data: { id: activeProjectId, ...payload } });
+        toast.success(project ? "Project updated" : "Project created");
       } else {
         await doCreate({ data: payload });
         toast.success("Project created");
       }
+      setDraftUnconfirmed(false);
       onSaved();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save");
@@ -799,11 +858,34 @@ export function ProjectFormModal({
     }
   }
 
+  // Routes every way of closing the modal (X, backdrop, Cancel) through
+  // here so an unconfirmed draft — created just to unlock photo/video
+  // uploads before a real Save — never gets left behind as an orphaned
+  // project when the admin backs out instead of saving.
+  async function handleClose() {
+    if (draftProjectId && draftUnconfirmed) {
+      if (
+        !(await confirm(
+          "Discard this project and anything uploaded to it so far? This cannot be undone.",
+          { destructive: true },
+        ))
+      ) {
+        return;
+      }
+      try {
+        await doDelete({ data: { id: draftProjectId } });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    onClose();
+  }
+
   return (
     <>
       <div
         className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"
-        onClick={onClose}
+        onClick={handleClose}
       >
         <div
           className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-2xl sm:p-6"
@@ -812,7 +894,7 @@ export function ProjectFormModal({
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold">{project ? "Edit project" : "New project"}</h2>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="rounded-md p-1 text-muted-foreground hover:bg-muted"
               aria-label="Close"
             >
@@ -861,20 +943,7 @@ export function ProjectFormModal({
                         )}
                         <button
                           type="button"
-                          onClick={() => {
-                            setForm((f) => {
-                              const { [url]: _removed, ...rest } = f.photo_positions;
-                              return {
-                                ...f,
-                                photo_urls: f.photo_urls.filter((u) => u !== url),
-                                photo_positions: rest,
-                              };
-                            });
-                            setCombinedSources((s) => {
-                              const { [url]: _removed, ...rest } = s;
-                              return rest;
-                            });
-                          }}
+                          onClick={() => removeCoverPhoto(url)}
                           className="absolute right-1 top-1 rounded-md bg-black/60 p-1 text-white hover:bg-black/80"
                           aria-label={`Remove cover photo ${i + 1}`}
                         >
@@ -1246,11 +1315,28 @@ export function ProjectFormModal({
                   </div>
                 ) : mediaTab === "photos" ? (
                   <div className="pt-3">
-                    {project ? (
-                      <ProjectPhotosTab projectId={project.id} />
+                    {activeProjectId ? (
+                      <ProjectPhotosTab projectId={activeProjectId} />
+                    ) : canStartUploading ? (
+                      <div className="rounded-md border border-dashed border-border p-4 text-center">
+                        <p className="mb-2 text-sm text-muted-foreground">
+                          You can start uploading photos and videos now — the project is created
+                          in the background, and you can keep editing everything else before doing
+                          a final save.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={startUploadingPhotos}
+                          disabled={creatingDraft}
+                          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                        >
+                          {creatingDraft ? "Preparing…" : "Start uploading photos & videos"}
+                        </button>
+                      </div>
                     ) : (
                       <p className="text-sm text-muted-foreground">
-                        Save the project first, then come back here to add photos and videos.
+                        Fill in the title, location, and linked inquiry above first, then come
+                        back here to add photos and videos before doing a final save.
                       </p>
                     )}
                   </div>
@@ -1318,7 +1404,7 @@ export function ProjectFormModal({
               {saving ? "Saving…" : "Save"}
             </button>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="rounded-md border border-border px-4 py-2 text-sm hover:bg-muted"
             >
               Cancel
