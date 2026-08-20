@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { LinkIcon, X } from "lucide-react";
-import { isValidExternalLink, MAX_UPLOAD_BYTES } from "@/lib/uploadLimits";
-
-const MAX_UPLOAD_MB = Math.round(MAX_UPLOAD_BYTES / 1024 / 1024);
+import { isValidExternalLink } from "@/lib/uploadLimits";
 
 export function OversizeFileLinkPrompt({
   fileName,
+  maxMB,
   onSave,
   onCancel,
 }: {
   fileName: string;
+  maxMB: number;
   onSave: (link: string) => void;
   onCancel: () => void;
 }) {
@@ -19,7 +19,7 @@ export function OversizeFileLinkPrompt({
     <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">
       <div className="flex items-start justify-between gap-2">
         <p className="text-amber-900">
-          <strong className="block">"{fileName}" is over {MAX_UPLOAD_MB}MB.</strong>
+          <strong className="block">"{fileName}" is over {maxMB}MB.</strong>
           Upload it to Google Drive, OneDrive, or a similar service, then paste the shareable link below.
         </p>
         <button type="button" onClick={onCancel} aria-label="Cancel" className="shrink-0 text-amber-700 hover:text-amber-900">

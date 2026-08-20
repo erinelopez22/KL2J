@@ -5,7 +5,7 @@ import { Upload, FileText, X, LinkIcon } from "lucide-react";
 import { uploadInquiryDocument } from "@/lib/public-media.functions";
 import { fileToBase64 } from "@/lib/admin/fileToBase64";
 import { compressImage } from "@/lib/compressImage";
-import { isOversizedFile } from "@/lib/uploadLimits";
+import { isOversizedFile, MAX_PUBLIC_UPLOAD_BYTES } from "@/lib/uploadLimits";
 import { OversizeFileLinkPrompt } from "@/components/OversizeFileLinkPrompt";
 
 export type UploadedDocument = { path: string; name: string; contentType: string; isExternalLink?: boolean };
@@ -62,7 +62,7 @@ export function PublicDocumentUpload({
     const okFiles: File[] = [];
     const oversized: File[] = [];
     for (const file of compressed) {
-      (isOversizedFile(file) ? oversized : okFiles).push(file);
+      (isOversizedFile(file, MAX_PUBLIC_UPLOAD_BYTES) ? oversized : okFiles).push(file);
     }
     if (oversized.length > 0) setOversizeQueue((q) => [...q, ...oversized]);
     if (okFiles.length === 0) {
@@ -128,6 +128,7 @@ export function PublicDocumentUpload({
         {oversizeQueue.length > 0 && (
           <OversizeFileLinkPrompt
             fileName={oversizeQueue[0].name}
+            maxMB={Math.round(MAX_PUBLIC_UPLOAD_BYTES / 1024 / 1024)}
             onCancel={() => setOversizeQueue((q) => q.slice(1))}
             onSave={saveOversizeLink}
           />

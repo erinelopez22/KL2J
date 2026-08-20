@@ -35,13 +35,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { createPostDraft, updatePostDraft } from "@/lib/admin/posts.functions";
 import { SendProgress, type SendablePost } from "@/components/admin/SendProgress";
 import { useConfirm } from "@/components/ConfirmDialogProvider";
-import { uploadSiteMedia, deleteSiteMedia } from "@/lib/admin/media.functions";
-import { fileToBase64 } from "@/lib/admin/fileToBase64";
+import { createSiteMediaUploadUrl, deleteSiteMedia } from "@/lib/admin/media.functions";
+import { uploadFileDirect } from "@/lib/adminDirectUpload";
 import { storagePathFromUrl } from "@/lib/storagePathFromUrl";
 import { dedupeContactsByEmail } from "@/lib/admin/dedupeEmailContacts";
 import { ctaForPost, type PostType } from "@/lib/postCta";
 import { compressImage } from "@/lib/compressImage";
-import { isOversizedFile } from "@/lib/uploadLimits";
+import { isOversizedFile, MAX_ADMIN_UPLOAD_BYTES } from "@/lib/uploadLimits";
 import { OversizeFileLinkPrompt } from "@/components/OversizeFileLinkPrompt";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import {
@@ -958,8 +958,8 @@ export function PostEditor({
   async function handleAddAttachments(files: FileList) {
     setUploadingAttachments(true);
     const compressed = await Promise.all(Array.from(files).map(compressImage));
-    const okFiles = compressed.filter((f) => !isOversizedFile(f));
-    const oversized = compressed.filter((f) => isOversizedFile(f));
+    const okFiles = compressed.filter((f) => !isOversizedFile(f, MAX_ADMIN_UPLOAD_BYTES));
+    const oversized = compressed.filter((f) => isOversizedFile(f, MAX_ADMIN_UPLOAD_BYTES));
     if (oversized.length > 0) setOversizeQueue((q) => [...q, ...oversized]);
     if (okFiles.length === 0) {
       setUploadingAttachments(false);
@@ -968,9 +968,8 @@ export function PostEditor({
 
     try {
       for (const file of okFiles) {
-        const base64 = await fileToBase64(file);
-        const result = await uploadSiteMedia({
-          data: { folder: "posts", filename: file.name, contentType: file.type, base64 },
+        const result = await uploadFileDirect(createSiteMediaUploadUrl, "site-media", file, {
+          folder: "posts",
         });
         const kind: PostAttachment["kind"] = file.type.startsWith("image/")
           ? "image"
@@ -979,7 +978,7 @@ export function PostEditor({
             : "document";
         setAttachments((prev) => [
           ...prev,
-          { url: result.url, name: file.name, contentType: result.contentType, kind },
+          { url: result.url!, name: file.name, contentType: result.contentType, kind },
         ]);
       }
     } catch (err) {
@@ -1170,6 +1169,7 @@ export function PostEditor({
           {oversizeQueue.length > 0 && (
             <OversizeFileLinkPrompt
               fileName={oversizeQueue[0].name}
+              maxMB={Math.round(MAX_ADMIN_UPLOAD_BYTES / 1024 / 1024)}
               onCancel={() => setOversizeQueue((q) => q.slice(1))}
               onSave={(link) => addAttachmentLink(oversizeQueue[0], link)}
             />

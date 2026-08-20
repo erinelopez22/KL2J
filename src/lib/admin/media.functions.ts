@@ -20,18 +20,16 @@ const OFFICE_TYPES = [
   "application/zip",
 ];
 
-// Kept in sync with MAX_UPLOAD_BYTES in src/lib/uploadLimits.ts — the
-// client-side "oversized" check that routes big files to the "paste a
-// link" flow instead of a direct upload. This ceiling isn't just an app
-// preference: Firebase App Hosting (Cloud Run) rejects request bodies over
-// ~32MB outright with a bare 500, and this base64-encodes the file into a
-// single POST body first, so it needs real margin under that.
-const MAX_DIRECT_UPLOAD_BYTES = 20 * 1024 * 1024;
+// Kept in sync with MAX_ADMIN_UPLOAD_BYTES in src/lib/uploadLimits.ts. File
+// bytes never pass through this server — the browser uploads straight to
+// Supabase Storage using a token minted here, so this is just an app-level
+// sanity ceiling, not a Cloud Run request-body constraint.
+const MAX_DIRECT_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 const FOLDER_RULES: Record<string, { types: string[]; maxBytes: number }> = {
   branding: { types: IMAGE_TYPES, maxBytes: 5 * 1024 * 1024 },
   gallery: { types: [...IMAGE_TYPES, ...VIDEO_TYPES], maxBytes: MAX_DIRECT_UPLOAD_BYTES },
-  documents: { types: [...IMAGE_TYPES, ...DOC_TYPES], maxBytes: 10 * 1024 * 1024 },
+  documents: { types: [...IMAGE_TYPES, ...DOC_TYPES], maxBytes: MAX_DIRECT_UPLOAD_BYTES },
   projects: { types: [...IMAGE_TYPES, ...DOC_TYPES, ...VIDEO_TYPES], maxBytes: MAX_DIRECT_UPLOAD_BYTES },
   companies: { types: IMAGE_TYPES, maxBytes: 5 * 1024 * 1024 },
   posts: {
@@ -40,16 +38,20 @@ const FOLDER_RULES: Record<string, { types: string[]; maxBytes: number }> = {
   },
 };
 
-const UploadSchema = z.object({
+const CreateUploadSchema = z.object({
   folder: z.enum(["branding", "gallery", "documents", "projects", "companies", "posts"]),
   filename: z.string().min(1).max(200),
   contentType: z.string().min(1),
-  base64: z.string().min(1),
+  size: z.number().int().positive(),
 });
 
-export const uploadSiteMedia = createServerFn({ method: "POST" })
+// Mints a signed upload URL/token instead of receiving file bytes — the
+// browser then uploads directly to Supabase Storage with
+// `uploadToSignedUrl`, bypassing the app server (and its Cloud Run request
+// body limit) entirely.
+export const createSiteMediaUploadUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => UploadSchema.parse(data))
+  .inputValidator((data: unknown) => CreateUploadSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { assertRole } = await import("@/lib/admin/roles.server");
     await assertRole(context.userId, "admin");
@@ -58,9 +60,7 @@ export const uploadSiteMedia = createServerFn({ method: "POST" })
     if (!rule.types.includes(data.contentType)) {
       throw new Error(`Unsupported file type: ${data.contentType}`);
     }
-
-    const buffer = Buffer.from(data.base64, "base64");
-    if (buffer.byteLength > rule.maxBytes) {
+    if (data.size > rule.maxBytes) {
       throw new Error(`File too large (max ${Math.round(rule.maxBytes / 1024 / 1024)}MB)`);
     }
 
@@ -68,33 +68,31 @@ export const uploadSiteMedia = createServerFn({ method: "POST" })
     const safeName = data.filename.replace(/[^a-zA-Z0-9._-]/g, "_");
     const path = `${data.folder}/${Date.now()}-${safeName}`;
 
-    const { error: uploadErr } = await supabaseAdmin.storage
-      .from("site-media")
-      .upload(path, buffer, { contentType: data.contentType, upsert: false });
-    if (uploadErr) {
-      console.error("uploadSiteMedia failed", uploadErr);
-      throw new Error(`Upload failed: ${uploadErr.message}`);
+    const { data: signed, error } = await supabaseAdmin.storage.from("site-media").createSignedUploadUrl(path);
+    if (error) {
+      console.error("createSiteMediaUploadUrl failed", error);
+      throw new Error(`Failed to prepare upload: ${error.message}`);
     }
 
     const { data: pub } = supabaseAdmin.storage.from("site-media").getPublicUrl(path);
-    return { url: pub.publicUrl, path, contentType: data.contentType };
+    return { path, token: signed.token, contentType: data.contentType, url: pub.publicUrl };
   });
 
 const CONFIDENTIAL_TYPES = [...IMAGE_TYPES, ...DOC_TYPES, ...VIDEO_TYPES];
 const CONFIDENTIAL_MAX_BYTES = MAX_DIRECT_UPLOAD_BYTES;
 
-const ConfidentialUploadSchema = z.object({
+const CreateConfidentialUploadSchema = z.object({
   filename: z.string().min(1).max(200),
   contentType: z.string().min(1),
-  base64: z.string().min(1),
+  size: z.number().int().positive(),
 });
 
 // Confidential files live in a PRIVATE bucket (never publicly readable) and
 // are never returned by the public projects query — only accessible here,
 // admin-role-gated, and viewed via short-lived signed URLs.
-export const uploadConfidentialMedia = createServerFn({ method: "POST" })
+export const createConfidentialUploadUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => ConfidentialUploadSchema.parse(data))
+  .inputValidator((data: unknown) => CreateConfidentialUploadSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { assertRole } = await import("@/lib/admin/roles.server");
     await assertRole(context.userId, "admin");
@@ -102,8 +100,7 @@ export const uploadConfidentialMedia = createServerFn({ method: "POST" })
     if (!CONFIDENTIAL_TYPES.includes(data.contentType)) {
       throw new Error(`Unsupported file type: ${data.contentType}`);
     }
-    const buffer = Buffer.from(data.base64, "base64");
-    if (buffer.byteLength > CONFIDENTIAL_MAX_BYTES) {
+    if (data.size > CONFIDENTIAL_MAX_BYTES) {
       throw new Error(`File too large (max ${Math.round(CONFIDENTIAL_MAX_BYTES / 1024 / 1024)}MB)`);
     }
 
@@ -111,15 +108,15 @@ export const uploadConfidentialMedia = createServerFn({ method: "POST" })
     const safeName = data.filename.replace(/[^a-zA-Z0-9._-]/g, "_");
     const path = `projects/${Date.now()}-${safeName}`;
 
-    const { error } = await supabaseAdmin.storage
+    const { data: signed, error } = await supabaseAdmin.storage
       .from("confidential-media")
-      .upload(path, buffer, { contentType: data.contentType, upsert: false });
+      .createSignedUploadUrl(path);
     if (error) {
-      console.error("uploadConfidentialMedia failed", error);
-      throw new Error(`Upload failed: ${error.message}`);
+      console.error("createConfidentialUploadUrl failed", error);
+      throw new Error(`Failed to prepare upload: ${error.message}`);
     }
 
-    return { path, contentType: data.contentType };
+    return { path, token: signed.token, contentType: data.contentType };
   });
 
 export const getConfidentialFileUrl = createServerFn({ method: "POST" })

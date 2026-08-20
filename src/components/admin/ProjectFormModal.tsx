@@ -15,12 +15,12 @@ import {
   updateGalleryPhoto,
 } from "@/lib/admin/gallery.functions";
 import {
-  uploadSiteMedia,
+  createSiteMediaUploadUrl,
   deleteSiteMedia,
   deleteConfidentialMedia,
   getConfidentialFileUrl,
 } from "@/lib/admin/media.functions";
-import { fileToBase64 } from "@/lib/admin/fileToBase64";
+import { uploadFileDirect } from "@/lib/adminDirectUpload";
 import { storagePathFromUrl } from "@/lib/storagePathFromUrl";
 import { FileDrop } from "@/components/admin/FileDrop";
 import { ConfidentialFileDrop } from "@/components/admin/ConfidentialFileDrop";
@@ -445,7 +445,7 @@ export function ProjectFormModal({
   const doDelete = useServerFn(deleteProject);
   const doDeleteMedia = useServerFn(deleteSiteMedia);
   const doDeleteConfidential = useServerFn(deleteConfidentialMedia);
-  const doUploadMedia = useServerFn(uploadSiteMedia);
+  const mintSiteMediaUpload = useServerFn(createSiteMediaUploadUrl);
   // Only combined (side-by-side merged) cover photos get a swap button —
   // the source files live here in memory only, so swapping is only
   // available for photos combined during this editing session (a page
@@ -473,7 +473,7 @@ export function ProjectFormModal({
       const [inquiriesRes, linkedRes] = await Promise.all([
         supabase
           .from("inquiries")
-          .select("id, name, contact, services, created_at, checklist_responses")
+          .select("id, name, contact, services, created_at, checklist_responses, status")
           .order("created_at", { ascending: false })
           .limit(200),
         supabase.from("projects").select("inquiry_id").not("inquiry_id", "is", null),
@@ -485,13 +485,21 @@ export function ProjectFormModal({
           .map((p) => p.inquiry_id)
           .filter((id) => id !== null && id !== project?.inquiry_id),
       );
-      return inquiriesRes.data.filter((i) => !linkedIds.has(i.id)) as {
+      // Rejected/cancelled inquiries never turn into projects — except the
+      // one already linked to this project, so an existing link stays
+      // selectable/visible even if its status changed after the fact.
+      return inquiriesRes.data.filter(
+        (i) =>
+          !linkedIds.has(i.id) &&
+          (i.id === project?.inquiry_id || (i.status !== "Rejected" && i.status !== "Cancelled")),
+      ) as {
         id: string;
         name: string;
         contact: string;
         services: string[];
         created_at: string;
         checklist_responses: InquiryChecklistItem[];
+        status: string;
       }[];
     },
     enabled: !defaultInquiry,
@@ -737,32 +745,27 @@ export function ProjectFormModal({
     setSwappingUrl(url);
     try {
       const swappedFile = await mergeSideBySide([sources[1], sources[0]]);
-      const base64 = await fileToBase64(swappedFile);
-      const result = await doUploadMedia({
-        data: {
-          folder: "projects",
-          filename: swappedFile.name,
-          contentType: swappedFile.type,
-          base64,
-        },
+      const result = await uploadFileDirect(mintSiteMediaUpload, "site-media", swappedFile, {
+        folder: "projects",
       });
+      const newUrl = result.url!;
       setForm((f) => {
         const idx = f.photo_urls.indexOf(url);
         if (idx === -1) return f;
         const nextUrls = [...f.photo_urls];
-        nextUrls[idx] = result.url;
+        nextUrls[idx] = newUrl;
         const { [url]: oldPosition, ...restPositions } = f.photo_positions;
         return {
           ...f,
           photo_urls: nextUrls,
           photo_positions: oldPosition
-            ? { ...restPositions, [result.url]: oldPosition }
+            ? { ...restPositions, [newUrl]: oldPosition }
             : restPositions,
         };
       });
       setCombinedSources((s) => {
         const { [url]: _old, ...rest } = s;
-        return { ...rest, [result.url]: [sources[1], sources[0]] };
+        return { ...rest, [newUrl]: [sources[1], sources[0]] };
       });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to swap photo positions");

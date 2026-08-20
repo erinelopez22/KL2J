@@ -5,7 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { ProjectFormModal } from "@/components/admin/ProjectFormModal";
-import { getConfidentialFileUrl, uploadConfidentialMedia } from "@/lib/admin/media.functions";
+import { getConfidentialFileUrl, createConfidentialUploadUrl } from "@/lib/admin/media.functions";
 import {
   updateInquiryStatus,
   createInquiry,
@@ -20,9 +20,9 @@ import { mergeChecklists } from "@/lib/serviceChecklist";
 import { useRealtimeInvalidate } from "@/lib/useRealtimeInvalidate";
 import { LocationAutosuggest } from "@/components/LocationAutosuggest";
 import { PublicDocumentUpload, type UploadedDocument } from "@/components/PublicDocumentUpload";
-import { fileToBase64 } from "@/lib/admin/fileToBase64";
+import { uploadFileDirect } from "@/lib/adminDirectUpload";
 import { useConfirm } from "@/components/ConfirmDialogProvider";
-import { isOversizedFile } from "@/lib/uploadLimits";
+import { isOversizedFile, MAX_ADMIN_UPLOAD_BYTES } from "@/lib/uploadLimits";
 import { OversizeFileLinkPrompt } from "@/components/OversizeFileLinkPrompt";
 import { AttachmentLightbox, kindFromContentType, type LightboxItem } from "@/components/AttachmentLightbox";
 import {
@@ -341,6 +341,14 @@ function LinkedProjectSection({ inquiry }: { inquiry: Inquiry }) {
     );
   }
 
+  if (inquiry.status === "Rejected" || inquiry.status === "Cancelled") {
+    return (
+      <p className="rounded-md border border-border bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground">
+        {inquiry.status} inquiries can't be linked to a project.
+      </p>
+    );
+  }
+
   return (
     <>
       <button
@@ -404,13 +412,13 @@ function AttachButton({ onUploaded }: { onUploaded: (result: CommentAttachment) 
   const [busy, setBusy] = useState(false);
   const [oversizeQueue, setOversizeQueue] = useState<File[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
-  const upload = useServerFn(uploadConfidentialMedia);
+  const mint = useServerFn(createConfidentialUploadUrl);
 
   async function handleFiles(files: FileList) {
     const okFiles: File[] = [];
     const oversized: File[] = [];
     for (const file of Array.from(files)) {
-      (isOversizedFile(file) ? oversized : okFiles).push(file);
+      (isOversizedFile(file, MAX_ADMIN_UPLOAD_BYTES) ? oversized : okFiles).push(file);
     }
     if (oversized.length > 0) setOversizeQueue((q) => [...q, ...oversized]);
     if (okFiles.length === 0) {
@@ -420,9 +428,8 @@ function AttachButton({ onUploaded }: { onUploaded: (result: CommentAttachment) 
     setBusy(true);
     try {
       for (const file of okFiles) {
-        const base64 = await fileToBase64(file);
-        const result = await upload({ data: { filename: file.name, contentType: file.type, base64 } });
-        onUploaded({ ...result, name: file.name });
+        const result = await uploadFileDirect(mint, "confidential-media", file);
+        onUploaded({ path: result.path, contentType: result.contentType, name: file.name });
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");
@@ -436,6 +443,7 @@ function AttachButton({ onUploaded }: { onUploaded: (result: CommentAttachment) 
     return (
       <OversizeFileLinkPrompt
         fileName={oversizeQueue[0].name}
+        maxMB={Math.round(MAX_ADMIN_UPLOAD_BYTES / 1024 / 1024)}
         onCancel={() => setOversizeQueue((q) => q.slice(1))}
         onSave={(link) => {
           const file = oversizeQueue[0];

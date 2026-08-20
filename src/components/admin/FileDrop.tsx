@@ -2,13 +2,13 @@ import { useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Upload } from "lucide-react";
-import { uploadSiteMedia } from "@/lib/admin/media.functions";
-import { fileToBase64 } from "@/lib/admin/fileToBase64";
+import { createSiteMediaUploadUrl } from "@/lib/admin/media.functions";
+import { uploadFileDirect } from "@/lib/adminDirectUpload";
 import { compressImage } from "@/lib/compressImage";
-import { isOversizedFile, MAX_UPLOAD_BYTES } from "@/lib/uploadLimits";
+import { isOversizedFile, MAX_ADMIN_UPLOAD_BYTES } from "@/lib/uploadLimits";
 import { OversizeFileLinkPrompt } from "@/components/OversizeFileLinkPrompt";
 
-const MAX_UPLOAD_MB = Math.round(MAX_UPLOAD_BYTES / 1024 / 1024);
+const MAX_UPLOAD_MB = Math.round(MAX_ADMIN_UPLOAD_BYTES / 1024 / 1024);
 
 type Folder = "branding" | "gallery" | "documents" | "projects" | "companies";
 
@@ -31,7 +31,7 @@ export function FileDrop({
   const [dragOver, setDragOver] = useState(false);
   const [oversizeQueue, setOversizeQueue] = useState<File[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
-  const upload = useServerFn(uploadSiteMedia);
+  const mint = useServerFn(createSiteMediaUploadUrl);
 
   async function handleFiles(files: FileList | File[]) {
     const list = multiple ? Array.from(files) : Array.from(files).slice(0, 1);
@@ -43,7 +43,7 @@ export function FileDrop({
     const okFiles: File[] = [];
     const oversized: File[] = [];
     for (const file of compressed) {
-      (isOversizedFile(file) ? oversized : okFiles).push(file);
+      (isOversizedFile(file, MAX_ADMIN_UPLOAD_BYTES) ? oversized : okFiles).push(file);
     }
     if (oversized.length > 0) {
       if (allowExternalLink) {
@@ -63,11 +63,8 @@ export function FileDrop({
     }
     try {
       for (const file of okFiles) {
-        const base64 = await fileToBase64(file);
-        const result = await upload({
-          data: { folder, filename: file.name, contentType: file.type, base64 },
-        });
-        onUploaded({ ...result, name: file.name });
+        const result = await uploadFileDirect(mint, "site-media", file, { folder });
+        onUploaded({ url: result.url!, path: result.path, contentType: result.contentType, name: file.name });
       }
       toast.success(okFiles.length > 1 ? `Uploaded ${okFiles.length} files` : "Uploaded");
     } catch (err) {
@@ -82,6 +79,7 @@ export function FileDrop({
     return (
       <OversizeFileLinkPrompt
         fileName={oversizeQueue[0].name}
+        maxMB={MAX_UPLOAD_MB}
         onCancel={() => setOversizeQueue((q) => q.slice(1))}
         onSave={(link) => {
           const file = oversizeQueue[0];

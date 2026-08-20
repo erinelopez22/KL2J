@@ -54,6 +54,17 @@ export const createProject = createServerFn({ method: "POST" })
     const { assertRole } = await import("@/lib/admin/roles.server");
     await assertRole(context.userId, "admin");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: inquiry, error: inquiryErr } = await supabaseAdmin
+      .from("inquiries")
+      .select("status")
+      .eq("id", data.inquiry_id)
+      .single();
+    if (inquiryErr || !inquiry) {
+      throw new Error(`Failed to look up inquiry: ${inquiryErr?.message}`);
+    }
+    if (inquiry.status === "Rejected" || inquiry.status === "Cancelled") {
+      throw new Error(`Can't link a project to a ${inquiry.status.toLowerCase()} inquiry.`);
+    }
     const { data: created, error } = await supabaseAdmin
       .from("projects")
       .insert(data)
@@ -80,6 +91,29 @@ export const updateProject = createServerFn({ method: "POST" })
     await assertRole(context.userId, "admin");
     const { id, ...rest } = data;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    if (rest.inquiry_id) {
+      const { data: current } = await supabaseAdmin
+        .from("projects")
+        .select("inquiry_id")
+        .eq("id", id)
+        .single();
+      // Only validate when the link is actually changing — an already-linked
+      // inquiry that later gets rejected/cancelled shouldn't block unrelated
+      // edits to a project that's already keeping that link.
+      if (rest.inquiry_id !== current?.inquiry_id) {
+        const { data: inquiry, error: inquiryErr } = await supabaseAdmin
+          .from("inquiries")
+          .select("status")
+          .eq("id", rest.inquiry_id)
+          .single();
+        if (inquiryErr || !inquiry) {
+          throw new Error(`Failed to look up inquiry: ${inquiryErr?.message}`);
+        }
+        if (inquiry.status === "Rejected" || inquiry.status === "Cancelled") {
+          throw new Error(`Can't link a project to a ${inquiry.status.toLowerCase()} inquiry.`);
+        }
+      }
+    }
     const { error } = await supabaseAdmin.from("projects").update(rest).eq("id", id);
     if (error) {
       console.error("updateProject failed", error);
