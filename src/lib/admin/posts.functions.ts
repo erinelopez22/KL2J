@@ -231,6 +231,23 @@ export const deletePost = createServerFn({ method: "POST" })
     const { assertRole } = await import("@/lib/admin/roles.server");
     await assertRole(context.userId, "admin");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: row } = await supabaseAdmin
+      .from("posts")
+      .select("attachments")
+      .eq("id", data.id)
+      .single();
+    if (row?.attachments) {
+      const { storagePathFromUrl } = await import("@/lib/storagePathFromUrl");
+      const { removeStoragePaths } = await import("@/lib/storageCleanup.server");
+      const attachments = row.attachments as unknown as z.infer<typeof PostAttachmentSchema>[];
+      const paths = attachments
+        .filter((a) => !a.isExternalLink)
+        .map((a) => storagePathFromUrl(a.url, "site-media"))
+        .filter((p): p is string => !!p);
+      await removeStoragePaths("site-media", paths);
+    }
+
     const { error } = await supabaseAdmin.from("posts").delete().eq("id", data.id);
     if (error) {
       console.error("deletePost failed", error);

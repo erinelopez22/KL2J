@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Images } from "lucide-react";
 import { createSiteMediaUploadUrl } from "@/lib/admin/media.functions";
 import { uploadFileDirect } from "@/lib/adminDirectUpload";
+import { compressImage } from "@/lib/compressImage";
 import { isOversizedFile, MAX_ADMIN_UPLOAD_BYTES } from "@/lib/uploadLimits";
 
 const MAX_UPLOAD_MB = Math.round(MAX_ADMIN_UPLOAD_BYTES / 1024 / 1024);
@@ -71,7 +72,8 @@ export function CombinePhotoUpload({
     }
     setBusy(true);
     try {
-      const finalFile = files.length === 2 ? await mergeSideBySide(files) : files[0];
+      const merged = files.length === 2 ? await mergeSideBySide(files) : files[0];
+      const finalFile = await compressImage(merged);
       const result = await uploadFileDirect(mint, "site-media", finalFile, { folder: "projects" });
       onUploaded({
         url: result.url!,

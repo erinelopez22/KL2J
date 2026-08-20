@@ -58,6 +58,21 @@ export const deleteEquipment = createServerFn({ method: "POST" })
     const { assertRole } = await import("@/lib/admin/roles.server");
     await assertRole(context.userId, "admin");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: row } = await supabaseAdmin
+      .from("equipment")
+      .select("media")
+      .eq("id", data.id)
+      .single();
+    if (row?.media) {
+      const { removeStoragePaths } = await import("@/lib/storageCleanup.server");
+      const media = row.media as unknown as z.infer<typeof EquipmentMediaSchema>[];
+      const paths = media
+        .filter((m) => !m.isExternalLink && m.path)
+        .map((m) => m.path as string);
+      await removeStoragePaths("site-media", paths);
+    }
+
     const { error } = await supabaseAdmin.from("equipment").delete().eq("id", data.id);
     if (error) {
       console.error("deleteEquipment failed", error);

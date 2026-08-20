@@ -23,6 +23,7 @@ import { PublicDocumentUpload, type UploadedDocument } from "@/components/Public
 import { uploadFileDirect } from "@/lib/adminDirectUpload";
 import { useConfirm } from "@/components/ConfirmDialogProvider";
 import { isOversizedFile, MAX_ADMIN_UPLOAD_BYTES } from "@/lib/uploadLimits";
+import { compressImage } from "@/lib/compressImage";
 import { OversizeFileLinkPrompt } from "@/components/OversizeFileLinkPrompt";
 import { AttachmentLightbox, kindFromContentType, type LightboxItem } from "@/components/AttachmentLightbox";
 import {
@@ -415,9 +416,10 @@ function AttachButton({ onUploaded }: { onUploaded: (result: CommentAttachment) 
   const mint = useServerFn(createConfidentialUploadUrl);
 
   async function handleFiles(files: FileList) {
+    const compressed = await Promise.all(Array.from(files).map(compressImage));
     const okFiles: File[] = [];
     const oversized: File[] = [];
-    for (const file of Array.from(files)) {
+    for (const file of compressed) {
       (isOversizedFile(file, MAX_ADMIN_UPLOAD_BYTES) ? oversized : okFiles).push(file);
     }
     if (oversized.length > 0) setOversizeQueue((q) => [...q, ...oversized]);

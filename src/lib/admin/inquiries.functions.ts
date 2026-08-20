@@ -48,9 +48,12 @@ export const createInquiry = createServerFn({ method: "POST" })
     });
   });
 
+type InquiryAttachment = { path: string; name: string; contentType: string; isExternalLink?: boolean };
+type LinkedProjectConfidentialAttachment = { path: string; isExternalLink?: boolean };
+
 // inquiry_comments cascades on delete (ON DELETE CASCADE), and
 // projects.inquiry_id / posts.inquiry_id both fall back to null
-// (ON DELETE SET NULL) — no extra cleanup needed beyond the row itself.
+// (ON DELETE SET NULL).
 export const deleteInquiry = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => z.object({ id: z.string().uuid() }).parse(data))
@@ -58,6 +61,41 @@ export const deleteInquiry = createServerFn({ method: "POST" })
     const { assertRole } = await import("@/lib/admin/roles.server");
     await assertRole(context.userId, "admin");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const [{ data: row }, { data: linkedProject }] = await Promise.all([
+      supabaseAdmin
+        .from("inquiries")
+        .select("checklist_responses, attachments")
+        .eq("id", data.id)
+        .single(),
+      supabaseAdmin
+        .from("projects")
+        .select("confidential_attachments")
+        .eq("inquiry_id", data.id)
+        .maybeSingle(),
+    ]);
+    if (row) {
+      const { removeStoragePaths } = await import("@/lib/storageCleanup.server");
+      const checklistResponses = (row.checklist_responses as unknown as z.infer<typeof ChecklistResponseSchema>[]) ?? [];
+      const checklistPaths = checklistResponses.flatMap((c) =>
+        (c.documents ?? []).filter((d) => !d.isExternalLink).map((d) => d.path),
+      );
+
+      const attachments = (row.attachments as unknown as InquiryAttachment[]) ?? [];
+      // Comment-thread attachments get copied BY REFERENCE (same storage
+      // path, not a duplicate file) onto a linked project's
+      // confidential_attachments — never delete a path the linked project
+      // still references, or its attachments become dead links.
+      const linkedConfidential =
+        (linkedProject?.confidential_attachments as unknown as LinkedProjectConfidentialAttachment[]) ?? [];
+      const stillNeededByProject = new Set(linkedConfidential.map((a) => a.path));
+      const attachmentPaths = attachments
+        .filter((a) => !a.isExternalLink && !stillNeededByProject.has(a.path))
+        .map((a) => a.path);
+
+      await removeStoragePaths("confidential-media", [...checklistPaths, ...attachmentPaths]);
+    }
+
     const { error } = await supabaseAdmin.from("inquiries").delete().eq("id", data.id);
     if (error) {
       console.error("deleteInquiry failed", error);

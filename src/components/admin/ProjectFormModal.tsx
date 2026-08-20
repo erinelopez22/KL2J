@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { createProject, updateProject, deleteProject } from "@/lib/admin/projects.functions";
 import { PhotoPositionEditor } from "@/components/admin/PhotoPositionEditor";
 import { CombinePhotoUpload, mergeSideBySide } from "@/components/admin/CombinePhotoUpload";
+import { compressImage } from "@/lib/compressImage";
 import { CoverImage, DEFAULT_IMAGE_POSITION, type ImagePosition } from "@/components/CoverImage";
 import { createInquiry } from "@/lib/admin/inquiries.functions";
 import {
@@ -744,7 +745,8 @@ export function ProjectFormModal({
     if (!sources) return;
     setSwappingUrl(url);
     try {
-      const swappedFile = await mergeSideBySide([sources[1], sources[0]]);
+      const merged = await mergeSideBySide([sources[1], sources[0]]);
+      const swappedFile = await compressImage(merged);
       const result = await uploadFileDirect(mintSiteMediaUpload, "site-media", swappedFile, {
         folder: "projects",
       });

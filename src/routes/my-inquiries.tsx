@@ -13,6 +13,7 @@ import { uploadInquiryDocument } from "@/lib/public-media.functions";
 import { fileToBase64 } from "@/lib/admin/fileToBase64";
 import { DraggableReviewPrompt } from "@/components/DraggableReviewPrompt";
 import { isOversizedFile, MAX_PUBLIC_UPLOAD_BYTES } from "@/lib/uploadLimits";
+import { compressImage } from "@/lib/compressImage";
 import { OversizeFileLinkPrompt } from "@/components/OversizeFileLinkPrompt";
 import { AttachmentLightbox, kindFromContentType, type LightboxItem } from "@/components/AttachmentLightbox";
 import logoUrl from "@/assets/kl2j-logo.jpg";
@@ -143,9 +144,10 @@ function CommentsThread({
   const doLookup = useServerFn(lookupInquiryByCode);
 
   async function handleFiles(files: FileList) {
+    const compressed = await Promise.all(Array.from(files).map(compressImage));
     const okFiles: File[] = [];
     const oversized: File[] = [];
-    for (const file of Array.from(files)) {
+    for (const file of compressed) {
       (isOversizedFile(file, MAX_PUBLIC_UPLOAD_BYTES) ? oversized : okFiles).push(file);
     }
     if (oversized.length > 0) setOversizeQueue((q) => [...q, ...oversized]);

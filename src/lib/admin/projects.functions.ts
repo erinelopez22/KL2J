@@ -163,6 +163,30 @@ export const deleteProject = createServerFn({ method: "POST" })
       await deleteGalleryFolderContents(folder.id);
     }
 
+    const { data: row } = await supabaseAdmin
+      .from("projects")
+      .select("photo_urls, attachments, confidential_attachments")
+      .eq("id", data.id)
+      .single();
+    if (row) {
+      const { storagePathFromUrl } = await import("@/lib/storagePathFromUrl");
+      const { removeStoragePaths } = await import("@/lib/storageCleanup.server");
+      const photoUrls = (row.photo_urls as unknown as string[]) ?? [];
+      const attachments = (row.attachments as unknown as z.infer<typeof AttachmentSchema>[]) ?? [];
+      const confidential =
+        (row.confidential_attachments as unknown as z.infer<typeof ConfidentialAttachmentSchema>[]) ?? [];
+      const siteMediaPaths = [
+        ...photoUrls.map((url) => storagePathFromUrl(url, "site-media")),
+        ...attachments.filter((a) => !a.isExternalLink).map((a) => a.path),
+      ].filter((p): p is string => !!p);
+      const confidentialPaths = confidential
+        .filter((a) => !a.isExternalLink)
+        .map((a) => a.path)
+        .filter((p): p is string => !!p);
+      await removeStoragePaths("site-media", siteMediaPaths);
+      await removeStoragePaths("confidential-media", confidentialPaths);
+    }
+
     const { error } = await supabaseAdmin.from("projects").delete().eq("id", data.id);
     if (error) {
       console.error("deleteProject failed", error);
