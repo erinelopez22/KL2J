@@ -274,6 +274,10 @@ function AdminGallery() {
   const confirm = useConfirm();
   const [lightbox, setLightbox] = useState<{ items: LightboxItem[]; index: number } | null>(null);
   const [selected, setSelected] = useState<"all" | "unsorted" | string>("all");
+  // Mobile (<lg) shows only the folder list in-flow; tapping a folder opens
+  // this full-screen popup with that folder's content instead. No-op on
+  // desktop, where the popup markup is `lg:hidden`.
+  const [mobilePopupOpen, setMobilePopupOpen] = useState(false);
   const [folderModal, setFolderModal] = useState<{
     editing: GalleryFolder | null;
     form: ReturnType<typeof emptyFolderForm>;
@@ -603,6 +607,171 @@ function AdminGallery() {
 
   const allVisibleSelected = visible.length > 0 && visible.every((p) => selectedIds.has(p.id));
 
+  // Rendered both in-flow on desktop and inside the mobile full-screen
+  // popup — defined once here so the two render sites below stay in sync.
+  const mainPaneContent = (
+    <>
+      {selectedFolder && (
+        <div className="mb-4 rounded-lg border border-border bg-muted/30 px-3 py-2.5">
+          <p className="break-words text-sm font-semibold">{selectedFolder.name}</p>
+          {selectedFolderProject && (
+            <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+              <Link2 className="h-3 w-3 shrink-0" />
+              Linked to project: <span className="font-medium">{selectedFolderProject.title}</span>
+            </p>
+          )}
+          {selectedFolder.location && (
+            <p className="mt-0.5 text-xs text-muted-foreground">{selectedFolder.location}</p>
+          )}
+          {selectedFolder.description && (
+            <p className="mt-0.5 text-xs text-muted-foreground">{selectedFolder.description}</p>
+          )}
+        </div>
+      )}
+      <div className="max-w-sm">
+        <FileDrop
+          folder="gallery"
+          accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime"
+          label="Upload a photo or video"
+          allowExternalLink={false}
+          onUploaded={onUploaded}
+        />
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[200px] flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search filename or caption…"
+            className="h-10 w-full rounded-md border border-border bg-card pl-9 pr-3 text-sm"
+          />
+        </div>
+        <select
+          value={mediaFilter}
+          onChange={(e) => setMediaFilter(e.target.value as "all" | "photo" | "video")}
+          className="h-10 rounded-md border border-border bg-card px-3 text-sm"
+        >
+          <option value="all">Photos + videos</option>
+          <option value="photo">Photos only</option>
+          <option value="video">Videos only</option>
+        </select>
+        <select
+          value={sortKey}
+          onChange={(e) => setSortKey(e.target.value as SortKey)}
+          className="h-10 rounded-md border border-border bg-card px-3 text-sm"
+        >
+          {Object.entries(SORT_OPTIONS).map(([key, opt]) => (
+            <option key={key} value={key}>
+              Sort: {opt.label}
+            </option>
+          ))}
+        </select>
+        {(search || mediaFilter !== "all") && (
+          <button
+            type="button"
+            onClick={() => {
+              setSearch("");
+              setMediaFilter("all");
+            }}
+            className="rounded-md border border-border px-3 h-10 text-sm hover:bg-muted"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
+      {visible.length > 0 && (
+        <label className="mt-3 flex w-fit items-center gap-2 text-sm text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={allVisibleSelected}
+            onChange={toggleSelectAll}
+            className="h-4 w-4 rounded border-border"
+          />
+          Select all ({visible.length})
+        </label>
+      )}
+
+      {selectedIds.size > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2">
+          <span className="text-sm font-medium">{selectedIds.size} selected</span>
+          <select
+            value={moveTarget}
+            onChange={(e) => setMoveTarget(e.target.value)}
+            className="h-9 rounded-md border border-border bg-card px-2 text-sm"
+          >
+            <option value={UNSORTED_DROP_ID}>Unsorted</option>
+            {(folders ?? []).map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={handleCopySelected}
+            className="flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted"
+          >
+            <Copy className="h-3.5 w-3.5" /> Copy
+          </button>
+          <button
+            type="button"
+            onClick={handleMoveSelected}
+            className="flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted"
+          >
+            <FolderInput className="h-3.5 w-3.5" /> Move
+          </button>
+          <button
+            type="button"
+            onClick={handleDeleteSelected}
+            className="flex items-center gap-1.5 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-1.5 text-sm text-destructive hover:bg-destructive/10"
+          >
+            <Trash2 className="h-3.5 w-3.5" /> Delete
+          </button>
+          <button
+            type="button"
+            onClick={clearSelection}
+            className="ml-auto rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
+      {isLoading && <p className="mt-6 text-sm text-muted-foreground">Loading…</p>}
+
+      {!isLoading && visible.length === 0 && (
+        <p className="mt-6 text-sm text-muted-foreground">
+          {inFolder.length === 0 ? "Nothing here yet." : "No items match your search or filter."}
+        </p>
+      )}
+
+      <div className="mt-3 grid max-h-[calc(100vh-400px)] grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3 md:grid-cols-4">
+        {visible.map((p, i) => (
+          <DraggablePhoto
+            key={p.id}
+            photo={p}
+            selected={selectedIds.has(p.id)}
+            onToggleSelect={() => toggleSelect(p.id)}
+            onOpen={() =>
+              setLightbox({
+                items: visible.map((s) => ({
+                  name: s.caption ?? "Gallery item",
+                  kind: s.media_type === "video" ? "video" : "image",
+                  resolveUrl: () => s.url,
+                })),
+                index: i,
+              })
+            }
+            onDelete={() => remove(p)}
+          />
+        ))}
+      </div>
+    </>
+  );
+
   return (
     <DndContext sensors={sensors} onDragEnd={onDragEnd}>
       <div>
@@ -621,7 +790,10 @@ function AdminGallery() {
               id="folder:__all__"
               active={selected === "all"}
               count={photos?.length ?? 0}
-              onClick={() => setSelected("all")}
+              onClick={() => {
+                setSelected("all");
+                setMobilePopupOpen(true);
+              }}
             >
               All
             </FolderDropZone>
@@ -629,7 +801,10 @@ function AdminGallery() {
               id={UNSORTED_DROP_ID}
               active={selected === "unsorted"}
               count={unsortedCount}
-              onClick={() => setSelected("unsorted")}
+              onClick={() => {
+                setSelected("unsorted");
+                setMobilePopupOpen(true);
+              }}
             >
               Unsorted
             </FolderDropZone>
@@ -642,7 +817,10 @@ function AdminGallery() {
                   active={selected === f.id}
                   count={(photos ?? []).filter((p) => p.folder_id === f.id).length}
                   linked={!!f.project_id}
-                  onClick={() => setSelected(f.id)}
+                  onClick={() => {
+                    setSelected(f.id);
+                    setMobilePopupOpen(true);
+                  }}
                   onEdit={() => openEditFolder(f)}
                   onDelete={() => deleteFolderWithConfirm(f)}
                 >
@@ -667,169 +845,26 @@ function AdminGallery() {
             className="hidden w-1.5 shrink-0 cursor-col-resize rounded-full bg-border transition hover:bg-primary/40 active:bg-primary/60 lg:block"
           />
 
-          <div className="min-w-0 flex-1">
-            {selectedFolder && (
-              <div className="mb-4 rounded-lg border border-border bg-muted/30 px-3 py-2.5">
-                <p className="break-words text-sm font-semibold">{selectedFolder.name}</p>
-                {selectedFolderProject && (
-                  <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-                    <Link2 className="h-3 w-3 shrink-0" />
-                    Linked to project: <span className="font-medium">{selectedFolderProject.title}</span>
-                  </p>
-                )}
-                {selectedFolder.location && (
-                  <p className="mt-0.5 text-xs text-muted-foreground">{selectedFolder.location}</p>
-                )}
-                {selectedFolder.description && (
-                  <p className="mt-0.5 text-xs text-muted-foreground">{selectedFolder.description}</p>
-                )}
-              </div>
-            )}
-            <div className="max-w-sm">
-              <FileDrop
-                folder="gallery"
-                accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime"
-                label="Upload a photo or video"
-                allowExternalLink={false}
-                onUploaded={onUploaded}
-              />
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <div className="relative min-w-[200px] flex-1">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search filename or caption…"
-                  className="h-10 w-full rounded-md border border-border bg-card pl-9 pr-3 text-sm"
-                />
-              </div>
-              <select
-                value={mediaFilter}
-                onChange={(e) => setMediaFilter(e.target.value as "all" | "photo" | "video")}
-                className="h-10 rounded-md border border-border bg-card px-3 text-sm"
-              >
-                <option value="all">Photos + videos</option>
-                <option value="photo">Photos only</option>
-                <option value="video">Videos only</option>
-              </select>
-              <select
-                value={sortKey}
-                onChange={(e) => setSortKey(e.target.value as SortKey)}
-                className="h-10 rounded-md border border-border bg-card px-3 text-sm"
-              >
-                {Object.entries(SORT_OPTIONS).map(([key, opt]) => (
-                  <option key={key} value={key}>
-                    Sort: {opt.label}
-                  </option>
-                ))}
-              </select>
-              {(search || mediaFilter !== "all") && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearch("");
-                    setMediaFilter("all");
-                  }}
-                  className="rounded-md border border-border px-3 h-10 text-sm hover:bg-muted"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-
-            {visible.length > 0 && (
-              <label className="mt-3 flex w-fit items-center gap-2 text-sm text-muted-foreground">
-                <input
-                  type="checkbox"
-                  checked={allVisibleSelected}
-                  onChange={toggleSelectAll}
-                  className="h-4 w-4 rounded border-border"
-                />
-                Select all ({visible.length})
-              </label>
-            )}
-
-            {selectedIds.size > 0 && (
-              <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2">
-                <span className="text-sm font-medium">{selectedIds.size} selected</span>
-                <select
-                  value={moveTarget}
-                  onChange={(e) => setMoveTarget(e.target.value)}
-                  className="h-9 rounded-md border border-border bg-card px-2 text-sm"
-                >
-                  <option value={UNSORTED_DROP_ID}>Unsorted</option>
-                  {(folders ?? []).map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.name}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={handleCopySelected}
-                  className="flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted"
-                >
-                  <Copy className="h-3.5 w-3.5" /> Copy
-                </button>
-                <button
-                  type="button"
-                  onClick={handleMoveSelected}
-                  className="flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted"
-                >
-                  <FolderInput className="h-3.5 w-3.5" /> Move
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDeleteSelected}
-                  className="flex items-center gap-1.5 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-1.5 text-sm text-destructive hover:bg-destructive/10"
-                >
-                  <Trash2 className="h-3.5 w-3.5" /> Delete
-                </button>
-                <button
-                  type="button"
-                  onClick={clearSelection}
-                  className="ml-auto rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted"
-                >
-                  Clear
-                </button>
-              </div>
-            )}
-
-            {isLoading && <p className="mt-6 text-sm text-muted-foreground">Loading…</p>}
-
-            {!isLoading && visible.length === 0 && (
-              <p className="mt-6 text-sm text-muted-foreground">
-                {inFolder.length === 0
-                  ? "Nothing here yet."
-                  : "No items match your search or filter."}
-              </p>
-            )}
-
-            <div className="mt-3 grid max-h-[calc(100vh-400px)] grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3 md:grid-cols-4">
-              {visible.map((p, i) => (
-                <DraggablePhoto
-                  key={p.id}
-                  photo={p}
-                  selected={selectedIds.has(p.id)}
-                  onToggleSelect={() => toggleSelect(p.id)}
-                  onOpen={() =>
-                    setLightbox({
-                      items: visible.map((s) => ({
-                        name: s.caption ?? "Gallery item",
-                        kind: s.media_type === "video" ? "video" : "image",
-                        resolveUrl: () => s.url,
-                      })),
-                      index: i,
-                    })
-                  }
-                  onDelete={() => remove(p)}
-                />
-              ))}
-            </div>
-          </div>
+          <div className="hidden min-w-0 flex-1 lg:block">{mainPaneContent}</div>
         </div>
+
+        {mobilePopupOpen && (
+          <div className="fixed inset-0 z-50 flex flex-col bg-background lg:hidden">
+            <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
+              <p className="truncate text-sm font-semibold">
+                {selected === "all" ? "All" : selected === "unsorted" ? "Unsorted" : selectedFolder?.name}
+              </p>
+              <button
+                onClick={() => setMobilePopupOpen(false)}
+                className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+                aria-label="Back to folders"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">{mainPaneContent}</div>
+          </div>
+        )}
 
         {lightbox && (
           <AttachmentLightbox

@@ -905,6 +905,7 @@ export type Database = {
           description: string;
           icon: string;
           id: string;
+          media: Json;
           sort_order: number;
           title: string;
         };
@@ -914,6 +915,7 @@ export type Database = {
           description: string;
           icon?: string;
           id?: string;
+          media?: Json;
           sort_order?: number;
           title: string;
         };
@@ -923,6 +925,7 @@ export type Database = {
           description?: string;
           icon?: string;
           id?: string;
+          media?: Json;
           sort_order?: number;
           title?: string;
         };

@@ -2,12 +2,22 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
+const EquipmentMediaSchema = z.object({
+  url: z.string().url(),
+  path: z.string().optional(),
+  contentType: z.string().min(1),
+  kind: z.enum(["image", "video", "document"]),
+  name: z.string().min(1).max(200),
+  isExternalLink: z.boolean().optional(),
+});
+
 const EquipmentSchema = z.object({
   icon: z.string().min(1).max(50),
   title: z.string().min(1).max(200),
   description: z.string().min(1).max(1000),
   sort_order: z.number().int().default(0),
   active: z.boolean().default(true),
+  media: z.array(EquipmentMediaSchema).default([]),
 });
 
 export const createEquipment = createServerFn({ method: "POST" })

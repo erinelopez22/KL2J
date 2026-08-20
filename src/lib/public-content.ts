@@ -13,12 +13,21 @@ export type PublicService = {
   checklist: ChecklistItem[];
   sort_order: number;
 };
+export type PublicEquipmentMedia = {
+  url: string;
+  path?: string;
+  contentType: string;
+  kind: "image" | "video" | "document";
+  name: string;
+  isExternalLink?: boolean;
+};
 export type PublicEquipment = {
   id: string;
   icon: string;
   title: string;
   description: string;
   sort_order: number;
+  media: PublicEquipmentMedia[];
 };
 export type PublicPhoto = {
   id: string;
@@ -101,7 +110,7 @@ export function usePublicEquipment() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("equipment")
-        .select("id,icon,title,description,sort_order")
+        .select("id,icon,title,description,sort_order,media")
         .eq("active", true)
         .order("sort_order");
       if (error) throw error;

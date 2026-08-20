@@ -32,6 +32,7 @@ const FOLDER_RULES: Record<string, { types: string[]; maxBytes: number }> = {
   documents: { types: [...IMAGE_TYPES, ...DOC_TYPES], maxBytes: MAX_DIRECT_UPLOAD_BYTES },
   projects: { types: [...IMAGE_TYPES, ...DOC_TYPES, ...VIDEO_TYPES], maxBytes: MAX_DIRECT_UPLOAD_BYTES },
   companies: { types: IMAGE_TYPES, maxBytes: 5 * 1024 * 1024 },
+  equipment: { types: [...IMAGE_TYPES, ...DOC_TYPES, ...VIDEO_TYPES], maxBytes: MAX_DIRECT_UPLOAD_BYTES },
   posts: {
     types: [...IMAGE_TYPES, ...VIDEO_TYPES, ...DOC_TYPES, ...OFFICE_TYPES],
     maxBytes: MAX_DIRECT_UPLOAD_BYTES,
@@ -39,7 +40,7 @@ const FOLDER_RULES: Record<string, { types: string[]; maxBytes: number }> = {
 };
 
 const CreateUploadSchema = z.object({
-  folder: z.enum(["branding", "gallery", "documents", "projects", "companies", "posts"]),
+  folder: z.enum(["branding", "gallery", "documents", "projects", "companies", "equipment", "posts"]),
   filename: z.string().min(1).max(200),
   contentType: z.string().min(1),
   size: z.number().int().positive(),

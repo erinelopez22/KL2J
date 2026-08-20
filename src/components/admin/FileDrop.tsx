@@ -10,7 +10,7 @@ import { OversizeFileLinkPrompt } from "@/components/OversizeFileLinkPrompt";
 
 const MAX_UPLOAD_MB = Math.round(MAX_ADMIN_UPLOAD_BYTES / 1024 / 1024);
 
-type Folder = "branding" | "gallery" | "documents" | "projects" | "companies";
+type Folder = "branding" | "gallery" | "documents" | "projects" | "companies" | "equipment";
 
 export function FileDrop({
   folder,

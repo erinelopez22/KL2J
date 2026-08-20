@@ -3,15 +3,27 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Plus, Trash2, Pencil, X, Search } from "lucide-react";
+import { Plus, Trash2, Pencil, X, Search, FileText, Play } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { createEquipment, updateEquipment, deleteEquipment } from "@/lib/admin/equipment.functions";
+import { deleteSiteMedia } from "@/lib/admin/media.functions";
 import { SERVICE_ICON_NAMES, getServiceIcon } from "@/lib/admin/iconMap";
 import { useConfirm } from "@/components/ConfirmDialogProvider";
+import { FileDrop } from "@/components/admin/FileDrop";
+import { AttachmentLightbox, type LightboxItem } from "@/components/AttachmentLightbox";
 
 export const Route = createFileRoute("/_authenticated/admin/equipment")({
   component: AdminEquipment,
 });
+
+export type EquipmentMediaItem = {
+  url: string;
+  path?: string;
+  contentType: string;
+  kind: "image" | "video" | "document";
+  name: string;
+  isExternalLink?: boolean;
+};
 
 type Equipment = {
   id: string;
@@ -20,6 +32,7 @@ type Equipment = {
   description: string;
   sort_order: number;
   active: boolean;
+  media: EquipmentMediaItem[];
 };
 
 type FormState = {
@@ -28,6 +41,7 @@ type FormState = {
   description: string;
   sort_order: number;
   active: boolean;
+  media: EquipmentMediaItem[];
 };
 
 const emptyForm: FormState = {
@@ -36,7 +50,14 @@ const emptyForm: FormState = {
   description: "",
   sort_order: 0,
   active: true,
+  media: [],
 };
+
+function kindFromMediaContentType(contentType: string): EquipmentMediaItem["kind"] {
+  if (contentType.startsWith("image/")) return "image";
+  if (contentType.startsWith("video/")) return "video";
+  return "document";
+}
 
 const EQUIPMENT_SORT_OPTIONS = {
   sort_order: { label: "Sort order", cmp: (a: Equipment, b: Equipment) => a.sort_order - b.sort_order },
@@ -58,7 +79,9 @@ function AdminEquipment() {
   const doCreate = useServerFn(createEquipment);
   const doUpdate = useServerFn(updateEquipment);
   const doDelete = useServerFn(deleteEquipment);
+  const doDeleteMedia = useServerFn(deleteSiteMedia);
   const confirm = useConfirm();
+  const [lightbox, setLightbox] = useState<{ items: LightboxItem[]; index: number } | null>(null);
 
   const { data: equipment, isLoading } = useQuery({
     queryKey: ["admin-equipment"],
@@ -83,7 +106,27 @@ function AdminEquipment() {
       description: e.description,
       sort_order: e.sort_order,
       active: e.active,
+      media: e.media ?? [],
     });
+  }
+
+  async function removeMedia(item: EquipmentMediaItem) {
+    setForm((f) => ({ ...f, media: f.media.filter((m) => m.url !== item.url) }));
+    if (item.isExternalLink || !item.path) return;
+    try {
+      await doDeleteMedia({ data: { path: item.path } });
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  function openMediaLightbox(list: EquipmentMediaItem[], startIndex: number) {
+    const items: LightboxItem[] = list.map((m) => ({
+      name: m.name,
+      kind: m.isExternalLink ? "external" : m.kind,
+      resolveUrl: () => m.url,
+    }));
+    setLightbox({ items, index: startIndex });
   }
 
   function startCreate() {
@@ -211,6 +254,87 @@ function AdminEquipment() {
                 />
                 Active (shown publicly)
               </label>
+              <div className="sm:col-span-2">
+                <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
+                  Photos, videos & documents
+                </span>
+                <p className="mb-2 text-[11px] text-muted-foreground/70">
+                  Shown to visitors when they click this instrument on the public site.
+                </p>
+                {form.media.length > 0 && (
+                  <div className="mb-2 flex flex-wrap gap-2">
+                    {form.media.map((m, i) => (
+                      <div
+                        key={m.url}
+                        className="group relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-border bg-muted"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => openMediaLightbox(form.media, i)}
+                          className="block h-full w-full"
+                        >
+                          {m.kind === "image" ? (
+                            <img src={m.url} alt={m.name} className="h-full w-full object-cover" />
+                          ) : m.kind === "video" ? (
+                            <>
+                              <video
+                                src={m.url}
+                                muted
+                                playsInline
+                                preload="metadata"
+                                className="h-full w-full object-cover"
+                              />
+                              <div className="absolute inset-0 flex items-center justify-center bg-slate-950/25">
+                                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/90">
+                                  <Play className="h-3 w-3 fill-slate-900 text-slate-900" />
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="flex h-full w-full flex-col items-center justify-center gap-1 p-1 text-center">
+                              <FileText className="h-5 w-5 text-muted-foreground" />
+                              <span className="w-full truncate text-[9px] text-muted-foreground">
+                                {m.name}
+                              </span>
+                            </div>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeMedia(m)}
+                          className="absolute right-1 top-1 rounded-md bg-black/60 p-1 text-white opacity-0 transition group-hover:opacity-100"
+                          aria-label={`Remove ${m.name}`}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="max-w-sm">
+                  <FileDrop
+                    folder="equipment"
+                    accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,application/pdf"
+                    label="Upload a photo, video, or document"
+                    onUploaded={(result) =>
+                      setForm((f) => ({
+                        ...f,
+                        media: [
+                          ...f.media,
+                          {
+                            url: result.url,
+                            path: result.path,
+                            contentType: result.contentType,
+                            kind: kindFromMediaContentType(result.contentType),
+                            name: result.name,
+                            isExternalLink: result.isExternalLink,
+                          },
+                        ],
+                      }))
+                    }
+                  />
+                </div>
+              </div>
             </div>
             <div className="mt-4 flex gap-2">
               <button
@@ -326,6 +450,13 @@ function AdminEquipment() {
           );
         })}
       </div>
+      {lightbox && (
+        <AttachmentLightbox
+          items={lightbox.items}
+          startIndex={lightbox.index}
+          onClose={() => setLightbox(null)}
+        />
+      )}
     </div>
   );
 }

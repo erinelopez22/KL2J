@@ -41,6 +41,7 @@ import { ChatWidget } from "@/components/ChatWidget";
 import {
   usePublicServices,
   usePublicEquipment,
+  type PublicEquipment,
   usePublicGalleryPhotos,
   usePublicGalleryFolders,
   type PublicGalleryFolder,
@@ -158,7 +159,7 @@ export function LandingPage() {
       if (!(await confirm(`Add "${title}" to your inquiry?`, { confirmLabel: "Yes, add it" }))) return;
       setSelectedServices((prev) => [...prev, title]);
     }
-    document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
+    document.getElementById("quote-form")?.scrollIntoView({ behavior: "smooth" });
   }
 
   // This route is ssr:false, so a fresh load at e.g. "/#services" arrives
@@ -307,7 +308,7 @@ function NavBar() {
             My Inquiries
           </Link>
           <a
-            href="#contact"
+            href="#quote-form"
             onClick={() => setOpen(false)}
             className="inline-flex items-center justify-center h-10 rounded-md bg-primary text-primary-foreground font-semibold"
           >
@@ -526,7 +527,7 @@ function Hero() {
             My Inquiries
           </Link>
           <a
-            href="#contact"
+            href="#quote-form"
             className="inline-flex items-center gap-2 h-12 px-5 rounded-md bg-primary text-primary-foreground font-semibold whitespace-nowrap hover:bg-primary/90"
           >
             Request a quote <ArrowRight className="h-4 w-4" />
@@ -650,9 +651,95 @@ function Process() {
   );
 }
 
+function EquipmentDetailModal({
+  item,
+  onClose,
+}: {
+  item: PublicEquipment;
+  onClose: () => void;
+}) {
+  const [lightbox, setLightbox] = useState<{ items: LightboxItem[]; index: number } | null>(null);
+  const media = item.media ?? [];
+  const visualMedia = media.filter((m) => m.kind !== "document");
+
+  function openLightbox(startIndex: number) {
+    const items: LightboxItem[] = media.map((m) => ({
+      name: m.name,
+      kind: m.isExternalLink ? "external" : m.kind,
+      resolveUrl: () => m.url,
+    }));
+    setLightbox({ items, index: startIndex });
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[55] flex items-center justify-center bg-slate-950/70 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-card p-5 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-start justify-between gap-2">
+          <h3 className="font-semibold">{item.title}</h3>
+          <button
+            onClick={onClose}
+            className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        {item.description && (
+          <p className="text-sm text-muted-foreground leading-relaxed">{item.description}</p>
+        )}
+        {visualMedia.length > 0 && (
+          <div className="mt-3">
+            <MediaRow
+              media={visualMedia.map((m) => ({ url: m.url, type: m.kind === "video" ? "video" : "image" }))}
+              altText={item.title}
+              heightClass="h-24"
+              onItemClick={(i) => openLightbox(media.indexOf(visualMedia[i]))}
+            />
+          </div>
+        )}
+        {media.some((m) => m.kind === "document") && (
+          <div className="mt-3 space-y-1.5">
+            {media
+              .map((m, i) => ({ m, i }))
+              .filter(({ m }) => m.kind === "document")
+              .map(({ m, i }) => (
+                <button
+                  key={m.url}
+                  type="button"
+                  onClick={() => openLightbox(i)}
+                  className="flex w-full items-center gap-2 rounded-md border border-border px-2.5 py-1.5 text-left text-sm hover:bg-muted"
+                >
+                  <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{m.name}</span>
+                </button>
+              ))}
+          </div>
+        )}
+        {media.length === 0 && (
+          <p className="mt-3 text-sm text-muted-foreground">No photos, videos, or documents yet.</p>
+        )}
+      </div>
+      {lightbox && (
+        <AttachmentLightbox
+          items={lightbox.items}
+          startIndex={lightbox.index}
+          onClose={() => setLightbox(null)}
+        />
+      )}
+    </div>
+  );
+}
+
 function WhyUs() {
   const { data: equipment } = usePublicEquipment();
   const [showAllEquipment, setShowAllEquipment] = useState(false);
+  const [activeEquipment, setActiveEquipment] = useState<PublicEquipment | null>(null);
   const EQUIPMENT_PREVIEW_LIMIT = 4;
   const equipmentPreview = equipment?.slice(0, EQUIPMENT_PREVIEW_LIMIT) ?? [];
   const hasMoreEquipment = (equipment?.length ?? 0) > EQUIPMENT_PREVIEW_LIMIT;
@@ -701,16 +788,20 @@ function WhyUs() {
               <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">{p.desc}</p>
               {p.title === "Modern instrumentation" && equipmentPreview.length > 0 && (
                 <>
-                
+                  <ul>
                     {equipmentPreview.map((item) => (
-                      <li
-                        key={item.id}
-                        className="flex items-start gap-2 text-sm text-muted-foreground leading-relaxed"
-                      >
-                        <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-primary" />
-                        {item.title}
+                      <li key={item.id}>
+                        <button
+                          type="button"
+                          onClick={() => setActiveEquipment(item)}
+                          className="flex w-full items-start gap-2 py-0.5 text-left text-sm text-muted-foreground leading-relaxed hover:text-foreground"
+                        >
+                          <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-primary" />
+                          {item.title}
+                        </button>
                       </li>
                     ))}
+                  </ul>
                   {hasMoreEquipment && (
                     <button
                       type="button"
@@ -746,16 +837,36 @@ function WhyUs() {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <ul className="space-y-2">
+            <ul className="space-y-1">
               {(equipment ?? []).map((item) => (
-                <li key={item.id} className="flex items-start gap-2 text-sm text-muted-foreground">
-                  <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-primary" />
-                  {item.title}
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAllEquipment(false);
+                      setActiveEquipment(item);
+                    }}
+                    className="flex w-full items-start gap-2 rounded-md p-1.5 text-left text-sm hover:bg-muted"
+                  >
+                    <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-primary" />
+                    <span>
+                      <span className="block text-foreground">{item.title}</span>
+                      {item.description && (
+                        <span className="mt-0.5 block text-xs text-muted-foreground">
+                          {item.description}
+                        </span>
+                      )}
+                    </span>
+                  </button>
                 </li>
               ))}
             </ul>
           </div>
         </div>
+      )}
+
+      {activeEquipment && (
+        <EquipmentDetailModal item={activeEquipment} onClose={() => setActiveEquipment(null)} />
       )}
     </section>
   );
@@ -825,7 +936,7 @@ function CTA({
             </div>
             <RelatedProjects services={selectedServices} />
           </div>
-          <div ref={formWrapperRef} className="self-start">
+          <div ref={formWrapperRef} id="quote-form" className="self-start">
             <ContactForm services={selectedServices} onServicesChange={onSelectedServicesChange} />
           </div>
         </div>
