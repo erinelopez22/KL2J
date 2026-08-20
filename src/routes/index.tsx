@@ -677,7 +677,7 @@ function EquipmentDetailModal({
       onClick={onClose}
     >
       <div
-        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-card p-5 shadow-2xl"
+        className="max-h-[95vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-card p-5 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-start justify-between gap-2">
@@ -698,7 +698,8 @@ function EquipmentDetailModal({
             <MediaRow
               media={visualMedia.map((m) => ({ url: m.url, type: m.kind === "video" ? "video" : "image" }))}
               altText={item.title}
-              heightClass="h-24"
+              heightClass="h-[28rem]"
+              maxVisible={visualMedia.length > 1 ? 2 : 1}
               onItemClick={(i) => openLightbox(media.indexOf(visualMedia[i]))}
             />
           </div>
