@@ -966,6 +966,10 @@ export type Database = {
       };
       site_settings: {
         Row: {
+          contact_email: string | null;
+          contact_phones: string[];
+          email_cover_photo_by_type: Json;
+          email_cover_photo_url: string | null;
           favicon_url: string | null;
           hero_banner_position: Json;
           hero_banner_url: string | null;
@@ -973,9 +977,14 @@ export type Database = {
           hero_subtitle: string | null;
           id: number;
           logo_url: string | null;
+          service_area_text: string | null;
           updated_at: string;
         };
         Insert: {
+          contact_email?: string | null;
+          contact_phones?: string[];
+          email_cover_photo_by_type?: Json;
+          email_cover_photo_url?: string | null;
           favicon_url?: string | null;
           hero_banner_position?: Json;
           hero_banner_url?: string | null;
@@ -983,9 +992,14 @@ export type Database = {
           hero_subtitle?: string | null;
           id?: number;
           logo_url?: string | null;
+          service_area_text?: string | null;
           updated_at?: string;
         };
         Update: {
+          contact_email?: string | null;
+          contact_phones?: string[];
+          email_cover_photo_by_type?: Json;
+          email_cover_photo_url?: string | null;
           favicon_url?: string | null;
           hero_banner_position?: Json;
           hero_banner_url?: string | null;
@@ -993,6 +1007,7 @@ export type Database = {
           hero_subtitle?: string | null;
           id?: number;
           logo_url?: string | null;
+          service_area_text?: string | null;
           updated_at?: string;
         };
         Relationships: [];

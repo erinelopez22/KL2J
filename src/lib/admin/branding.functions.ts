@@ -15,6 +15,11 @@ const BrandingSchema = z.object({
   hero_banner_position: HeroPositionSchema.optional(),
   hero_headline: z.string().max(200).optional(),
   hero_subtitle: z.string().max(500).optional(),
+  email_cover_photo_url: z.string().url().nullable().optional(),
+  email_cover_photo_by_type: z.record(z.string(), z.string().url()).optional(),
+  contact_phones: z.array(z.string().min(1).max(50)).optional(),
+  contact_email: z.string().email().nullable().optional(),
+  service_area_text: z.string().max(200).nullable().optional(),
 });
 
 export const updateBranding = createServerFn({ method: "POST" })

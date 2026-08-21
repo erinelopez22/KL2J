@@ -271,11 +271,18 @@ export const sendPostBatch = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { sendPostToRecipient, sleep } = await import("@/lib/posts-mailer.server");
 
-    const { data: post, error: postErr } = await supabaseAdmin
-      .from("posts")
-      .select("id, type, title, subject, body_html, status, project_ids, attachments")
-      .eq("id", data.id)
-      .single();
+    const [{ data: post, error: postErr }, { data: siteSettings }] = await Promise.all([
+      supabaseAdmin
+        .from("posts")
+        .select("id, type, title, subject, body_html, status, project_ids, attachments")
+        .eq("id", data.id)
+        .single(),
+      supabaseAdmin
+        .from("site_settings")
+        .select("email_cover_photo_url, email_cover_photo_by_type")
+        .eq("id", 1)
+        .single(),
+    ]);
     if (postErr || !post) throw new Error("Post not found");
 
     if (post.status === "draft") {
@@ -302,6 +309,7 @@ export const sendPostBatch = createServerFn({ method: "POST" })
 
     let sentThisBatch = 0;
     let failedThisBatch = 0;
+    const coverPhotoByType = (siteSettings?.email_cover_photo_by_type as Record<string, string>) ?? {};
     const postForEmail = {
       type: post.type as PostType,
       title: post.title,
@@ -314,6 +322,7 @@ export const sendPostBatch = createServerFn({ method: "POST" })
         contentType: string;
         kind: "image" | "video" | "document";
       }[],
+      coverPhotoUrl: coverPhotoByType[post.type] ?? siteSettings?.email_cover_photo_url ?? null,
     };
 
     for (let i = 0; i < (batch ?? []).length; i++) {
@@ -367,4 +376,55 @@ export const sendPostBatch = createServerFn({ method: "POST" })
       .eq("id", data.id);
 
     return { sentThisBatch, failedThisBatch, remainingPending, remainingFailed, done };
+  });
+
+const PreviewPostEmailSchema = z.object({
+  type: z.enum([
+    "project",
+    "service",
+    "profile",
+    "update",
+    "promotion",
+    "testimonial",
+    "credentials",
+    "team",
+    "event",
+    "deadline",
+    "partnership",
+  ]),
+});
+
+// Renders a sample email using the currently-saved email cover photo
+// settings (default + per-type override), so an admin can check how a
+// cover photo will actually look before sending a real post — no post row
+// involved, just canned sample copy for the given type.
+export const previewPostEmail = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => PreviewPostEmailSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { assertRole } = await import("@/lib/admin/roles.server");
+    await assertRole(context.userId, "admin");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { buildPostEmailHtml, POST_TYPE_META } = await import("@/lib/posts-mailer.server");
+
+    const { data: siteSettings } = await supabaseAdmin
+      .from("site_settings")
+      .select("email_cover_photo_url, email_cover_photo_by_type")
+      .eq("id", 1)
+      .single();
+
+    const coverPhotoByType = (siteSettings?.email_cover_photo_by_type as Record<string, string>) ?? {};
+    const meta = POST_TYPE_META[data.type as PostType];
+    const html = buildPostEmailHtml({
+      type: data.type as PostType,
+      title: `Sample ${meta.label.toLowerCase()}`,
+      subject: "Preview",
+      body_html:
+        "<p>This is sample text so you can see how the cover photo looks in an actual email. Your real post's title and content will appear here instead.</p>",
+      project_ids: [],
+      attachments: [],
+      coverPhotoUrl: coverPhotoByType[data.type] ?? siteSettings?.email_cover_photo_url ?? null,
+    });
+
+    return { html };
   });

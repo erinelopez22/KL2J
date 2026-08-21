@@ -670,7 +670,7 @@ function InquiryDetail({
   const platform = platformLabel(inquiry.channel);
   const doGetConfidentialUrl = useServerFn(getConfidentialFileUrl);
   const doDeleteInquiry = useServerFn(deleteInquiry);
-  const [tab, setTab] = useState<"details" | "comments" | "attachments">("details");
+  const [tab, setTab] = useState<"comments" | "attachments" | "details">("comments");
   const [lightbox, setLightbox] = useState<{ items: LightboxItem[]; index: number } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const confirm = useConfirm();
@@ -771,17 +771,6 @@ function InquiryDetail({
         <div className="mt-3 flex gap-1 border-b border-border">
           <button
             type="button"
-            onClick={() => setTab("details")}
-            className={`border-b-2 px-3 py-2 text-sm font-medium ${
-              tab === "details"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Details
-          </button>
-          <button
-            type="button"
             onClick={() => setTab("comments")}
             className={`border-b-2 px-3 py-2 text-sm font-medium ${
               tab === "comments"
@@ -801,6 +790,17 @@ function InquiryDetail({
             }`}
           >
             Attachments
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("details")}
+            className={`border-b-2 px-3 py-2 text-sm font-medium ${
+              tab === "details"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Details
           </button>
         </div>
 

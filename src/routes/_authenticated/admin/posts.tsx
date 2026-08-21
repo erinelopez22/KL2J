@@ -16,9 +16,11 @@ import {
   Search,
   Users2,
   Upload,
+  Image as ImageIcon,
+  Eye,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { deletePost } from "@/lib/admin/posts.functions";
+import { deletePost, previewPostEmail } from "@/lib/admin/posts.functions";
 import { SendProgress } from "@/components/admin/SendProgress";
 import {
   addEmailContact,
@@ -34,6 +36,9 @@ import {
   type PostRecord,
   type PostType,
 } from "@/components/admin/PostEditor";
+import { QuickImageUpload } from "@/components/admin/QuickImageUpload";
+import { updateBranding } from "@/lib/admin/branding.functions";
+import { usePublicSiteSettings } from "@/lib/public-content";
 
 export const Route = createFileRoute("/_authenticated/admin/posts")({
   component: AdminPosts,
@@ -68,6 +73,88 @@ const STATUS_STYLES: Record<PostRow["status"], string> = {
   sent: "bg-emerald-100 text-emerald-700",
 };
 
+type PostRecipientRow = {
+  id: string;
+  email: string;
+  name: string | null;
+  source: "inquiry" | "custom";
+  status: "pending" | "sent" | "failed";
+  error: string | null;
+  sent_at: string | null;
+  created_at: string;
+};
+
+const RECIPIENT_STATUS_STYLES: Record<PostRecipientRow["status"], string> = {
+  pending: "bg-muted text-muted-foreground",
+  sent: "bg-emerald-100 text-emerald-700",
+  failed: "bg-destructive/10 text-destructive",
+};
+
+function RecipientsModal({ postId, onClose }: { postId: string; onClose: () => void }) {
+  const { data: recipients, isLoading } = useQuery({
+    queryKey: ["post-recipients", postId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("post_recipients")
+        .select("id, email, name, source, status, error, sent_at, created_at")
+        .eq("post_id", postId)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data as unknown as PostRecipientRow[];
+    },
+  });
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/70 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-2xl sm:p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="font-semibold">Recipients{recipients ? ` (${recipients.length})` : ""}</h3>
+          <button
+            onClick={onClose}
+            className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+        {!isLoading && recipients && recipients.length === 0 && (
+          <p className="text-sm text-muted-foreground">No recipients yet.</p>
+        )}
+        {!isLoading && recipients && recipients.length > 0 && (
+          <div className="divide-y divide-border overflow-hidden rounded-lg border border-border text-sm">
+            {recipients.map((r) => (
+              <div key={r.id} className="flex items-start justify-between gap-3 px-3 py-2.5">
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{r.name || r.email}</p>
+                  {r.name && <p className="truncate text-xs text-muted-foreground">{r.email}</p>}
+                  <p className="mt-0.5 text-[10px] uppercase text-muted-foreground/60">
+                    {r.source === "inquiry" ? "From inquiry" : "Custom"}
+                  </p>
+                  {r.status === "failed" && r.error && (
+                    <p className="mt-1 text-xs text-destructive">{r.error}</p>
+                  )}
+                </div>
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase ${RECIPIENT_STATUS_STYLES[r.status]}`}
+                >
+                  {r.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function PostViewer({
   post,
   onClose,
@@ -88,6 +175,7 @@ function PostViewer({
   const [sendActive, setSendActive] = useState<{ retryFailed: boolean } | null>(
     post.status === "sending" ? { retryFailed: false } : null,
   );
+  const [showRecipients, setShowRecipients] = useState(false);
   const cta = ctaForPost(post.type, post.project_ids);
 
   async function handleDelete() {
@@ -189,12 +277,23 @@ function PostViewer({
             </span>
           </a>
 
-          <div className="rounded-xl border border-border bg-muted/10 p-3 text-sm">
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-muted/10 p-3 text-sm">
             <p className="font-medium">
               {post.sent_count}/{post.total_count} sent
               {post.failed_count > 0 ? `, ${post.failed_count} failed` : ""}
             </p>
+            <button
+              type="button"
+              onClick={() => setShowRecipients(true)}
+              className="flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
+            >
+              <Users2 className="h-3.5 w-3.5" /> Recipients ({post.total_count})
+            </button>
           </div>
+
+          {showRecipients && (
+            <RecipientsModal postId={post.id} onClose={() => setShowRecipients(false)} />
+          )}
 
           {sendActive && (
             <SendProgress
@@ -462,6 +561,200 @@ const POST_SORT_OPTIONS = {
 } as const;
 type PostSortKey = keyof typeof POST_SORT_OPTIONS;
 
+function EmailPreviewModal({ html, onClose }: { html: string; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="flex h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex shrink-0 items-center justify-between border-b border-border p-3">
+          <h3 className="text-sm font-semibold">Email preview</h3>
+          <button
+            onClick={onClose}
+            className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <iframe title="Email preview" srcDoc={html} className="min-h-0 flex-1 bg-muted/30" />
+      </div>
+    </div>
+  );
+}
+
+function EmailCoverPhotoModal({ onClose }: { onClose: () => void }) {
+  const { data: settings } = usePublicSiteSettings();
+  const queryClient = useQueryClient();
+  const doUpdateBranding = useServerFn(updateBranding);
+  const doPreviewEmail = useServerFn(previewPostEmail);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [previewingType, setPreviewingType] = useState<PostType | null>(null);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+
+  async function preview(type: PostType) {
+    setPreviewingType(type);
+    try {
+      const result = await doPreviewEmail({ data: { type } });
+      setPreviewHtml(result.html);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to load preview");
+    } finally {
+      setPreviewingType(null);
+    }
+  }
+
+  async function save(patch: Record<string, unknown>, key: string) {
+    setSaving(key);
+    try {
+      await doUpdateBranding({ data: patch });
+      queryClient.invalidateQueries({ queryKey: ["site-settings"] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  function setDefault(url: string | null) {
+    return save({ email_cover_photo_url: url }, "default");
+  }
+
+  function setForType(type: PostType, url: string | null) {
+    const current = { ...(settings?.email_cover_photo_by_type ?? {}) };
+    if (url) current[type] = url;
+    else delete current[type];
+    return save({ email_cover_photo_by_type: current }, type);
+  }
+
+  function PhotoRow({
+    label,
+    url,
+    fallbackNote,
+    onUpload,
+    onRemove,
+    onPreview,
+    busy,
+    previewing,
+  }: {
+    label: string;
+    url: string | null | undefined;
+    fallbackNote?: string;
+    onUpload: (url: string) => void;
+    onRemove: () => void;
+    onPreview: () => void;
+    busy: boolean;
+    previewing: boolean;
+  }) {
+    return (
+      <div className="flex items-center gap-3 rounded-lg border border-border p-2.5">
+        <div className="group/cover relative h-14 w-24 shrink-0 overflow-hidden rounded-md bg-muted">
+          {url ? (
+            <img src={url} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-muted-foreground/50">
+              <ImageIcon className="h-5 w-5" />
+            </div>
+          )}
+          <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover/cover:bg-black/50 group-hover/cover:opacity-100">
+            <QuickImageUpload
+              folder="branding"
+              label="Change"
+              iconOnly
+              onUploaded={onUpload}
+            />
+          </div>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium">{label}</p>
+          {!url && fallbackNote && <p className="text-xs text-muted-foreground">{fallbackNote}</p>}
+        </div>
+        <button
+          type="button"
+          disabled={previewing}
+          onClick={onPreview}
+          className="flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
+        >
+          {previewing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
+          Preview
+        </button>
+        {url && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onRemove}
+            className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+            aria-label={`Remove ${label} cover photo`}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-2xl sm:p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-1 flex items-center justify-between">
+          <h3 className="font-semibold">Email cover photo</h3>
+          <button
+            onClick={onClose}
+            className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <p className="mb-3 text-xs text-muted-foreground">
+          Shown at the top of every post email. Set a default that applies to all post types, or
+          override it for specific types below.
+        </p>
+
+        <PhotoRow
+          label="Default (all types)"
+          url={settings?.email_cover_photo_url}
+          onUpload={(url) => setDefault(url)}
+          onRemove={() => setDefault(null)}
+          onPreview={() => preview("update")}
+          busy={saving === "default"}
+          previewing={previewingType === "update"}
+        />
+
+        <div className="mt-4 space-y-2">
+          <p className="text-xs font-semibold uppercase text-muted-foreground">Per-type overrides</p>
+          {(Object.keys(TYPE_LABELS) as PostType[]).map((type) => (
+            <PhotoRow
+              key={type}
+              label={TYPE_LABELS[type]}
+              url={settings?.email_cover_photo_by_type?.[type]}
+              fallbackNote="Using default"
+              onUpload={(url) => setForType(type, url)}
+              onRemove={() => setForType(type, null)}
+              onPreview={() => preview(type)}
+              busy={saving === type}
+              previewing={previewingType === type}
+            />
+          ))}
+        </div>
+      </div>
+      {previewHtml && (
+        <EmailPreviewModal html={previewHtml} onClose={() => setPreviewHtml(null)} />
+      )}
+    </div>
+  );
+}
+
 function AdminPosts() {
   const queryClient = useQueryClient();
   const confirm = useConfirm();
@@ -471,6 +764,7 @@ function AdminPosts() {
   const [duplicating, setDuplicating] = useState<PostRow | null>(null);
   const [viewing, setViewing] = useState<PostRow | null>(null);
   const [showEmailList, setShowEmailList] = useState(false);
+  const [showCoverPhoto, setShowCoverPhoto] = useState(false);
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<PostSortKey>("newest");
 
@@ -532,6 +826,13 @@ function AdminPosts() {
         <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
+            onClick={() => setShowCoverPhoto(true)}
+            className="flex items-center gap-1.5 rounded-md border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted"
+          >
+            <ImageIcon className="h-4 w-4" /> Email cover photo
+          </button>
+          <button
+            type="button"
             onClick={() => setShowEmailList(true)}
             className="flex items-center gap-1.5 rounded-md border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted"
           >
@@ -547,6 +848,7 @@ function AdminPosts() {
         </div>
       </div>
       {showEmailList && <EmailListModal onClose={() => setShowEmailList(false)} />}
+      {showCoverPhoto && <EmailCoverPhotoModal onClose={() => setShowCoverPhoto(false)} />}
 
       <div className="mt-4 flex flex-wrap gap-2">
         {(["all", "draft", "sending", "sent"] as const).map((f) => (

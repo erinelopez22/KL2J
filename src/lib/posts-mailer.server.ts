@@ -114,13 +114,31 @@ export type PostForEmail = {
   body_html: string; // already sanitized before this point — inserted verbatim
   project_ids: string[];
   attachments: PostAttachment[];
+  coverPhotoUrl?: string | null;
 };
 
 // A gradient banner with a big emoji badge, a small uppercase kicker label,
 // the post title, and a short type-flavored tagline. `background-color` is
 // set alongside `background-image` so clients that don't render gradients
 // (older Outlook) still get a solid, on-brand color instead of white.
-function heroHtml(meta: TypeMeta, title: string): string {
+//
+// When a cover photo is set, it REPLACES this solid-color banner — the
+// photo becomes the background and the same badge/kicker/title/tagline
+// render on top of it in white, instead of on a flat accent-colored
+// background. `background-size:cover` fills the header edge-to-edge (no
+// letterboxing); `background-position:left top` anchors the crop to the
+// top-left corner instead of centering it, since that's where cover photos
+// tend to have a logo baked in — cropping trims the right/bottom instead.
+function heroHtml(meta: TypeMeta, title: string, coverPhotoUrl?: string | null): string {
+  if (coverPhotoUrl) {
+    return `
+    <div style="background-color:${meta.accentColor};background-image:url('${esc(coverPhotoUrl)}');background-size:cover;background-repeat:no-repeat;background-position:left top;padding:40px 28px 32px;text-align:center;">
+      <div style="display:inline-block;width:60px;height:60px;line-height:60px;border-radius:50%;background:rgba(255,255,255,0.18);font-size:30px;">${meta.emoji}</div>
+      <div style="margin-top:14px;color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;opacity:0.9;text-shadow:0 1px 3px rgba(0,0,0,0.5);">${esc(meta.label)}</div>
+      <h1 style="margin:10px 0 0;color:#ffffff;font-size:23px;font-weight:800;line-height:1.35;text-shadow:0 1px 4px rgba(0,0,0,0.5);">${esc(title)}</h1>
+      <p style="margin:10px 0 0;color:rgba(255,255,255,0.92);font-size:13px;text-shadow:0 1px 3px rgba(0,0,0,0.5);">${esc(meta.tagline)}</p>
+    </div>`;
+  }
   return `
   <div style="background-color:${meta.accentColor};background-image:linear-gradient(135deg, ${meta.accentColor}, ${meta.accentColorSoft});padding:40px 28px 32px;text-align:center;">
     <div style="display:inline-block;width:60px;height:60px;line-height:60px;border-radius:50%;background:rgba(255,255,255,0.18);font-size:30px;">${meta.emoji}</div>
@@ -201,7 +219,7 @@ export function buildPostEmailHtml(post: PostForEmail): string {
   return `
 <div style="background:#f4f4f5;padding:32px 12px;font-family:system-ui,-apple-system,'Segoe UI',Arial,sans-serif;">
   <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
-    ${heroHtml(meta, post.title)}
+    ${heroHtml(meta, post.title, post.coverPhotoUrl)}
     <div style="padding:6px 28px 30px;">
       ${bodyCardHtml(post.type, post.body_html, meta)}
       ${attachmentsHtml(post.attachments)}

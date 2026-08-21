@@ -76,8 +76,9 @@ function AdminServices() {
   const [itemLabel, setItemLabel] = useState("");
   const [itemType, setItemType] = useState<ChecklistItemType>("text");
   const [itemUnit, setItemUnit] = useState("");
-  const [itemRequired, setItemRequired] = useState(true);
+  const [itemRequired, setItemRequired] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [showChecklistModal, setShowChecklistModal] = useState(false);
   const doCreate = useServerFn(createService);
   const doUpdate = useServerFn(updateService);
   const doDelete = useServerFn(deleteService);
@@ -87,13 +88,13 @@ function AdminServices() {
     setItemLabel("");
     setItemType("text");
     setItemUnit("");
-    setItemRequired(true);
+    setItemRequired(false);
     setEditingItemId(null);
   }
 
-  function addOrUpdateChecklistItem() {
+  function addOrUpdateChecklistItem(): boolean {
     const label = itemLabel.trim();
-    if (!label) return;
+    if (!label) return false;
     const unit = itemType === "number" ? itemUnit.trim() || undefined : undefined;
     if (editingItemId) {
       setForm((f) => ({
@@ -114,6 +115,7 @@ function AdminServices() {
       }));
     }
     resetItemForm();
+    return true;
   }
 
   function editChecklistItem(item: ChecklistItem) {
@@ -121,7 +123,7 @@ function AdminServices() {
     setItemLabel(item.label);
     setItemType(item.type);
     setItemUnit(item.unit ?? "");
-    setItemRequired(item.required ?? true);
+    setItemRequired(item.required ?? false);
   }
 
   function removeChecklistItem(id: string) {
@@ -316,67 +318,16 @@ function AdminServices() {
                   Shown to inquirers once they pick this service. Each item can ask a question,
                   request a document, or be a simple yes/no.
                 </p>
-                <div className="flex flex-wrap gap-2">
-                  <input
-                    value={itemLabel}
-                    onChange={(e) => setItemLabel(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        addOrUpdateChecklistItem();
-                      }
-                    }}
-                    placeholder="e.g. Location of Lot"
-                    className="h-10 min-w-[160px] flex-1 rounded-md border border-border bg-background px-3 text-sm"
-                  />
-                  <select
-                    value={itemType}
-                    onChange={(e) => setItemType(e.target.value as ChecklistItemType)}
-                    className="h-10 rounded-md border border-border bg-background px-2 text-sm"
-                  >
-                    {CHECKLIST_ITEM_TYPES.map((t) => (
-                      <option key={t} value={t}>
-                        {TYPE_LABELS[t]}
-                      </option>
-                    ))}
-                  </select>
-                  {itemType === "number" && (
-                    <input
-                      value={itemUnit}
-                      onChange={(e) => setItemUnit(e.target.value)}
-                      placeholder="Unit (e.g. sqm)"
-                      className="h-10 w-28 rounded-md border border-border bg-background px-2 text-sm"
-                    />
-                  )}
-                  {itemType !== "checkbox" && itemType !== "document" && (
-                    <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                      <input
-                        type="checkbox"
-                        checked={itemRequired}
-                        onChange={(e) => setItemRequired(e.target.checked)}
-                      />
-                      Required
-                    </label>
-                  )}
-                  <button
-                    type="button"
-                    onClick={addOrUpdateChecklistItem}
-                    className="rounded-md border border-border px-3 text-sm hover:bg-muted"
-                  >
-                    {editingItemId ? "Update" : "Add"}
-                  </button>
-                  {editingItemId && (
-                    <button
-                      type="button"
-                      onClick={resetItemForm}
-                      className="rounded-md border border-border px-3 text-sm hover:bg-muted"
-                    >
-                      Cancel
-                    </button>
-                  )}
-                </div>
                 {form.checklist.length > 0 && (
-                  <div className="mt-2 space-y-1.5">
+                  <div className="mb-2 space-y-1.5">
+                    <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                      <span className="flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full bg-destructive" /> Required
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full bg-sky-500" /> Optional
+                      </span>
+                    </div>
                     {form.checklist.map((item) => (
                       <div
                         key={item.id}
@@ -385,13 +336,21 @@ function AdminServices() {
                         <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase text-muted-foreground">
                           {item.type}
                         </span>
+                        <span
+                          className={`h-2 w-2 shrink-0 rounded-full ${item.required ? "bg-destructive" : "bg-sky-500"}`}
+                          title={item.required ? "Required" : "Optional"}
+                          aria-label={item.required ? "Required" : "Optional"}
+                        />
                         <span className="min-w-0 flex-1">
                           {item.label}
                           {item.unit ? ` (${item.unit})` : ""}
                         </span>
                         <button
                           type="button"
-                          onClick={() => editChecklistItem(item)}
+                          onClick={() => {
+                            editChecklistItem(item);
+                            setShowChecklistModal(true);
+                          }}
                           className="shrink-0 text-muted-foreground hover:text-foreground"
                           aria-label={`Edit ${item.label}`}
                         >
@@ -409,6 +368,16 @@ function AdminServices() {
                     ))}
                   </div>
                 )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetItemForm();
+                    setShowChecklistModal(true);
+                  }}
+                  className="flex items-center gap-1.5 rounded-md border border-dashed border-border px-3 py-2 text-sm text-muted-foreground hover:border-primary hover:text-primary"
+                >
+                  <Plus className="h-4 w-4" /> Add item
+                </button>
               </div>
             </div>
             <div className="mt-4 flex gap-2">
@@ -420,6 +389,119 @@ function AdminServices() {
               </button>
               <button
                 onClick={cancel}
+                className="rounded-md border border-border px-4 py-2 text-sm hover:bg-muted"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showChecklistModal && (
+        <div
+          className="fixed inset-0 z-[55] flex items-center justify-center bg-slate-950/70 p-4"
+          onClick={() => {
+            resetItemForm();
+            setShowChecklistModal(false);
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border border-border bg-card p-4 shadow-2xl sm:p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="flex items-center gap-1.5 text-lg font-semibold">
+                <ListChecks className="h-4 w-4" /> {editingItemId ? "Edit item" : "Add item"}
+              </h2>
+              <button
+                onClick={() => {
+                  resetItemForm();
+                  setShowChecklistModal(false);
+                }}
+                className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
+                  Label
+                </span>
+                <input
+                  value={itemLabel}
+                  onChange={(e) => setItemLabel(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (addOrUpdateChecklistItem()) setShowChecklistModal(false);
+                    }
+                  }}
+                  placeholder="e.g. Location of Lot"
+                  autoFocus
+                  className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                />
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
+                    Type
+                  </span>
+                  <select
+                    value={itemType}
+                    onChange={(e) => setItemType(e.target.value as ChecklistItemType)}
+                    className="h-10 rounded-md border border-border bg-background px-2 text-sm"
+                  >
+                    {CHECKLIST_ITEM_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {TYPE_LABELS[t]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {itemType === "number" && (
+                  <label className="block text-sm">
+                    <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
+                      Unit
+                    </span>
+                    <input
+                      value={itemUnit}
+                      onChange={(e) => setItemUnit(e.target.value)}
+                      placeholder="e.g. sqm"
+                      className="h-10 w-28 rounded-md border border-border bg-background px-2 text-sm"
+                    />
+                  </label>
+                )}
+              </div>
+              {itemType !== "checkbox" && itemType !== "document" && (
+                <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={itemRequired}
+                    onChange={(e) => setItemRequired(e.target.checked)}
+                  />
+                  Required
+                </label>
+              )}
+            </div>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (addOrUpdateChecklistItem()) setShowChecklistModal(false);
+                }}
+                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                {editingItemId ? "Update" : "Add"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  resetItemForm();
+                  setShowChecklistModal(false);
+                }}
                 className="rounded-md border border-border px-4 py-2 text-sm hover:bg-muted"
               >
                 Cancel

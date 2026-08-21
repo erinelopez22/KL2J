@@ -315,7 +315,7 @@ function InquiryPanel({
   const doLookup = useServerFn(lookupInquiryByCode);
   const [refreshing, setRefreshing] = useState(false);
   const [lightbox, setLightbox] = useState<{ items: LightboxItem[]; index: number } | null>(null);
-  const [tab, setTab] = useState<"details" | "messages" | "attachments">("details");
+  const [tab, setTab] = useState<"messages" | "attachments" | "details">("messages");
 
   function openAttachments(docs: Attachment[], startIndex: number) {
     const items: LightboxItem[] = docs.map((d) => ({
@@ -370,7 +370,7 @@ function InquiryPanel({
       </div>
 
       <div className="flex gap-1 border-b border-border">
-        {(["details", "messages", "attachments"] as const).map((t) => (
+        {(["messages", "attachments", "details"] as const).map((t) => (
           <button
             key={t}
             type="button"

@@ -36,6 +36,7 @@ import {
   Search,
   Move,
   Pencil,
+  Plus,
 } from "lucide-react";
 import { ChatWidget } from "@/components/ChatWidget";
 import {
@@ -61,7 +62,6 @@ import { getServiceIcon } from "@/lib/admin/iconMap";
 import { splitAreaAnswer, joinAreaAnswer } from "@/lib/areaUnit";
 import { WriteReviewModal } from "@/components/WriteReviewModal";
 import { AttachmentLightbox, type LightboxItem } from "@/components/AttachmentLightbox";
-import { useConfirm } from "@/components/ConfirmDialogProvider";
 import { YesNoToggle } from "@/components/YesNoToggle";
 import { mergeChecklists } from "@/lib/serviceChecklist";
 import { useEditMode } from "@/lib/editMode";
@@ -151,14 +151,15 @@ const FALLBACK_SERVICES = [
 ];
 
 export function LandingPage() {
-  const confirm = useConfirm();
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
 
-  async function goToServiceForm(title: string) {
-    if (!selectedServices.includes(title)) {
-      if (!(await confirm(`Add "${title}" to your inquiry?`, { confirmLabel: "Yes, add it" }))) return;
-      setSelectedServices((prev) => [...prev, title]);
-    }
+  function goToServiceForm(title: string) {
+    // Clicking a service card is a "start over with just this service"
+    // action, not an add — it replaces whatever was selected in the quote
+    // form so the form and "Projects we've completed" both reflect only
+    // this service. Multi-select still works, but only via the form's own
+    // service picker.
+    setSelectedServices([title]);
     document.getElementById("quote-form")?.scrollIntoView({ behavior: "smooth" });
   }
 
@@ -873,6 +874,18 @@ function WhyUs() {
   );
 }
 
+// Admin-entered phone numbers are typed in local PH format ("0929 641
+// 0776"); tel: links need E.164 ("+639296410776") — strip everything but
+// digits and swap the leading trunk 0 for the +63 country code.
+function phoneToTelHref(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  return `tel:+63${digits.replace(/^0/, "")}`;
+}
+
+const DEFAULT_CONTACT_PHONES = ["0929 641 0776", "0995 460 8248"];
+const DEFAULT_CONTACT_EMAIL = "kl2j.engineering@gmail.com";
+const DEFAULT_SERVICE_AREA_TEXT = "Serving clients nationwide";
+
 function CTA({
   selectedServices,
   onSelectedServicesChange,
@@ -882,6 +895,53 @@ function CTA({
 }) {
   const formWrapperRef = useRef<HTMLDivElement>(null);
   const [formHeight, setFormHeight] = useState<number | null>(null);
+  const { data: settings } = usePublicSiteSettings();
+  const editable = useEditMode();
+  const queryClient = useQueryClient();
+  const doUpdateBranding = useServerFn(updateBranding);
+
+  const phones = settings?.contact_phones?.length ? settings.contact_phones : DEFAULT_CONTACT_PHONES;
+  const contactEmail = settings?.contact_email || DEFAULT_CONTACT_EMAIL;
+  const serviceAreaText = settings?.service_area_text || DEFAULT_SERVICE_AREA_TEXT;
+
+  const [editingContact, setEditingContact] = useState(false);
+  const [phonesDraft, setPhonesDraft] = useState<string[]>([]);
+  const [phoneInput, setPhoneInput] = useState("");
+  const [emailDraft, setEmailDraft] = useState("");
+  const [serviceAreaDraft, setServiceAreaDraft] = useState("");
+  const [savingContact, setSavingContact] = useState(false);
+
+  function startEditingContact() {
+    setPhonesDraft(phones);
+    setPhoneInput("");
+    setEmailDraft(contactEmail);
+    setServiceAreaDraft(serviceAreaText);
+    setEditingContact(true);
+  }
+
+  function addDraftPhone() {
+    const trimmed = phoneInput.trim();
+    if (!trimmed || phonesDraft.includes(trimmed)) return;
+    setPhonesDraft((p) => [...p, trimmed]);
+    setPhoneInput("");
+  }
+
+  async function saveContact() {
+    setSavingContact(true);
+    try {
+      await doUpdateBranding({
+        data: {
+          contact_phones: phonesDraft,
+          contact_email: emailDraft.trim() || null,
+          service_area_text: serviceAreaDraft.trim() || null,
+        },
+      });
+      queryClient.invalidateQueries({ queryKey: ["site-settings"] });
+      setEditingContact(false);
+    } finally {
+      setSavingContact(false);
+    }
+  }
 
   useEffect(() => {
     const el = formWrapperRef.current;
@@ -912,29 +972,117 @@ function CTA({
               Tell us about your parcel or project. We'll get back within one business day with a
               scoped quote and estimated timeline.
             </p>
-            <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-primary-foreground/85">
-              <a
-                href="tel:+639296410776"
-                className="inline-flex items-center gap-1.5 hover:underline"
+            {editable && editingContact ? (
+              <div className="mt-5 max-w-lg space-y-2.5 rounded-xl bg-black/40 p-3">
+                <div>
+                  <span className="mb-1 block text-xs text-white/70">Phone numbers</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {phonesDraft.map((phone) => (
+                      <span
+                        key={phone}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-xs"
+                      >
+                        {phone}
+                        <button
+                          type="button"
+                          onClick={() => setPhonesDraft((p) => p.filter((v) => v !== phone))}
+                          aria-label={`Remove ${phone}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="mt-1.5 flex gap-1.5">
+                    <input
+                      value={phoneInput}
+                      onChange={(e) => setPhoneInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addDraftPhone();
+                        }
+                      }}
+                      placeholder="0929 641 0776"
+                      className="h-8 flex-1 rounded-md border border-white/30 bg-white/10 px-2 text-xs text-white placeholder:text-white/50 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={addDraftPhone}
+                      className="flex items-center gap-1 rounded-md border border-white/30 px-2 text-xs hover:bg-white/10"
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Add
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <span className="mb-1 block text-xs text-white/70">Email</span>
+                  <input
+                    value={emailDraft}
+                    onChange={(e) => setEmailDraft(e.target.value)}
+                    placeholder={DEFAULT_CONTACT_EMAIL}
+                    className="h-8 w-full rounded-md border border-white/30 bg-white/10 px-2 text-xs text-white placeholder:text-white/50 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <span className="mb-1 block text-xs text-white/70">Service area text</span>
+                  <input
+                    value={serviceAreaDraft}
+                    onChange={(e) => setServiceAreaDraft(e.target.value)}
+                    placeholder={DEFAULT_SERVICE_AREA_TEXT}
+                    className="h-8 w-full rounded-md border border-white/30 bg-white/10 px-2 text-xs text-white placeholder:text-white/50 focus:outline-none"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={savingContact}
+                    onClick={saveContact}
+                    className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-primary hover:bg-white/90 disabled:opacity-60"
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingContact(false)}
+                    className="rounded-md border border-white/30 px-3 py-1.5 text-xs hover:bg-white/10"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div
+                onClick={editable ? startEditingContact : undefined}
+                className={`group/contact mt-5 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg text-xs text-primary-foreground/85 ${
+                  editable ? "cursor-pointer p-1.5 hover:bg-white/5" : ""
+                }`}
               >
-                <Phone className="h-3.5 w-3.5" /> 0929 641 0776
-              </a>
-              <a
-                href="tel:+639954608248"
-                className="inline-flex items-center gap-1.5 hover:underline"
-              >
-                <Phone className="h-3.5 w-3.5" /> 0995 460 8248
-              </a>
-              <a
-                href="mailto:kl2j.engineering@gmail.com"
-                className="inline-flex items-center gap-1.5 hover:underline"
-              >
-                <Mail className="h-3.5 w-3.5" /> kl2j.engineering@gmail.com
-              </a>
-              <span className="inline-flex items-center gap-1.5">
-                <MapPin className="h-3.5 w-3.5" /> Serving clients nationwide
-              </span>
-            </div>
+                {phones.map((phone) => (
+                  <a
+                    key={phone}
+                    href={phoneToTelHref(phone)}
+                    onClick={(e) => editable && e.preventDefault()}
+                    className="inline-flex items-center gap-1.5 hover:underline"
+                  >
+                    <Phone className="h-3.5 w-3.5" /> {phone}
+                  </a>
+                ))}
+                <a
+                  href={`mailto:${contactEmail}`}
+                  onClick={(e) => editable && e.preventDefault()}
+                  className="inline-flex items-center gap-1.5 hover:underline"
+                >
+                  <Mail className="h-3.5 w-3.5" /> {contactEmail}
+                </a>
+                <span className="inline-flex items-center gap-1.5">
+                  <MapPin className="h-3.5 w-3.5" /> {serviceAreaText}
+                </span>
+                {editable && (
+                  <Pencil className="h-3.5 w-3.5 opacity-0 group-hover/contact:opacity-70" />
+                )}
+              </div>
+            )}
             <RelatedProjects services={selectedServices} />
           </div>
           <div ref={formWrapperRef} id="quote-form" className="self-start">
@@ -969,7 +1117,7 @@ function RelatedProjects({ services }: { services: string[] }) {
           ? `Projects we've completed for ${services.join(", ")}`
           : "Projects we've completed"}
       </p>
-      <div className="scrollbar-on-dark mt-3 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+      <div className="scrollbar-on-dark mt-3 max-h-[420px] min-h-0 flex-1 space-y-3 overflow-y-auto pr-1 lg:max-h-none">
         {projects.map((p) => {
           const coverPhoto = p.photo_urls?.[0] ?? null;
           const coverPosition = coverPhoto ? p.photo_positions?.[coverPhoto] : undefined;
@@ -1077,7 +1225,6 @@ function ContactForm({
     if (!email.trim()) return "Enter your email";
     if (!phone.trim()) return "Enter your phone number";
     if (services.length === 0) return "Select at least one service";
-    if (!message.trim()) return "Tell us about your property";
     for (const item of selectedServiceChecklist) {
       if (item.type === "document") continue;
       if (item.required === false) continue;
@@ -1386,7 +1533,7 @@ function ContactForm({
             <Field
               label={
                 <>
-                  Tell us about your property <RequiredMark />
+                  Tell us about your property <RequiredMark required={false} />
                 </>
               }
             >

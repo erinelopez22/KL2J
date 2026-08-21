@@ -164,7 +164,7 @@ export function ChatWidget() {
   }
 
   function detailsValid(): boolean {
-    if (!name.trim() || !email.trim() || !phone.trim() || !note.trim()) return false;
+    if (!name.trim() || !email.trim() || !phone.trim()) return false;
     return serviceChecklist.every((item) => {
       if (item.type === "document") return true;
       if (item.required === false) return true;
@@ -440,29 +440,35 @@ export function ChatWidget() {
           {step === "details" && (
             <div className="border-t border-border bg-card p-3">
               <div className="max-h-[45vh] space-y-2 overflow-y-auto pr-1">
-                <p className="text-[11px] text-muted-foreground">
-                  <span className="text-destructive">*</span> required (file uploads excepted)
-                </p>
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Your name *"
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
-                />
+                <div>
+                  <span className="mb-1 block text-xs text-muted-foreground">Your name *</span>
+                  <input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Your name"
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                  />
+                </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Email *"
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
-                  />
-                  <input
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="Phone *"
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
-                  />
+                  <div>
+                    <span className="mb-1 block text-xs text-muted-foreground">Email *</span>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="Email"
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                    />
+                  </div>
+                  <div>
+                    <span className="mb-1 block text-xs text-muted-foreground">Phone *</span>
+                    <input
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="Phone"
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                    />
+                  </div>
                 </div>
 
                 {serviceChecklist.length > 0 && (
@@ -574,13 +580,18 @@ export function ChatWidget() {
                   </div>
                 )}
 
-                <textarea
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  placeholder="Property location, lot size, or any details *"
-                  rows={2}
-                  className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
-                />
+                <div>
+                  <span className="mb-1 block text-xs text-muted-foreground">
+                    Tell us about your property (optional)
+                  </span>
+                  <textarea
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder="Property location, lot size, or any details"
+                    rows={2}
+                    className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                  />
+                </div>
               </div>
               <button
                 disabled={!detailsValid() || submitting}

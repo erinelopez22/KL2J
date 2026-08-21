@@ -83,6 +83,11 @@ export type PublicSiteSettings = {
   hero_banner_position: { x: number; y: number; zoom: number };
   hero_headline: string | null;
   hero_subtitle: string | null;
+  email_cover_photo_url: string | null;
+  email_cover_photo_by_type: Record<string, string>;
+  contact_phones: string[];
+  contact_email: string | null;
+  service_area_text: string | null;
 };
 
 export function usePublicServices() {

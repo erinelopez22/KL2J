@@ -17,7 +17,7 @@ const ChecklistItemSchema = z.object({
   label: z.string().min(1).max(200),
   type: z.enum(CHECKLIST_ITEM_TYPES),
   unit: z.string().max(20).optional(),
-  required: z.boolean().optional().default(true),
+  required: z.boolean().optional().default(false),
 });
 
 const ServiceSchema = z.object({
