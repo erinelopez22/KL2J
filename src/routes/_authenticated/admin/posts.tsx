@@ -272,7 +272,7 @@ function PostViewer({
             <span className="min-w-0 flex-1">
               <span className="block truncate font-medium">{cta.label}</span>
               <span className="block truncate text-xs text-muted-foreground">
-                Included in this post's email — kl2j-...hosted.app
+                Included in this post's email — {new URL(cta.url).hostname}
               </span>
             </span>
           </a>
