@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-const SITE_URL = "https://kl2j--kl2j-98e80.us-central1.hosted.app";
+const SITE_URL = "https://kl2jlandsurveying.com";
 
 const AttachmentSchema = z.object({
   path: z.string().min(1),

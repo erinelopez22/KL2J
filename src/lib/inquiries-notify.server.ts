@@ -2,9 +2,8 @@
 // never top-level import from *.functions.ts or route files (see the
 // warning in src/integrations/supabase/client.server.ts).
 
-const NOTIFY_TO = "erinelopez22@gmail.com";
-// TODO: swap to the custom domain once one is set up for the site.
-const SITE_URL = "https://kl2j--kl2j-98e80.us-central1.hosted.app";
+const NOTIFY_TO = "kl2j.engineering@gmail.com";
+const SITE_URL = "https://kl2jlandsurveying.com";
 const CODE_CHARS = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"; // no 0/O or 1/I
 
 function generateInquiryCode(): string {

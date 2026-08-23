@@ -2,7 +2,7 @@
 // never top-level import from *.functions.ts or route files (see the
 // warning in src/integrations/supabase/client.server.ts).
 
-const SITE_URL = "https://kl2j--kl2j-98e80.us-central1.hosted.app";
+const SITE_URL = "https://kl2jlandsurveying.com";
 
 type Attachment = { path: string; name: string; contentType: string };
 

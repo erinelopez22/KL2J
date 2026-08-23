@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { MessageCircle, X, Send, ArrowLeft, Facebook, Phone, Mail } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { submitInquiry } from "@/lib/inquiries.functions";
+import { addInquiryComment } from "@/lib/public-inquiry-access.functions";
 import { usePublicServices, usePublicSiteSettings } from "@/lib/public-content";
 import { LocationAutosuggest } from "@/components/LocationAutosuggest";
 import { PublicDocumentUpload, type UploadedDocument } from "@/components/PublicDocumentUpload";
@@ -22,7 +23,7 @@ const FB_PAGE_ID = "61581147040190";
 const MESSENGER_URL = `https://m.me/${FB_PAGE_ID}`;
 const SMART_NUMBER = "09296410776";
 const GLOBE_NUMBER = "09954608248";
-const STAFF_EMAIL = "erinelopez22@gmail.com";
+const STAFF_EMAIL = "kl2j.engineering@gmail.com";
 // PH E.164 for wa.me / viber (drop leading 0, prefix 63)
 const WA_NUMBER = "639296410776";
 const VIBER_NUMBER = "639296410776";
@@ -45,7 +46,7 @@ const INTENTS = [
 ];
 
 type Msg = { from: "bot" | "user"; text: string; options?: { label: string; value: string }[] };
-type Step = "intro" | "service" | "intent" | "details" | "channel" | "done";
+type Step = "intro" | "service" | "intent" | "details" | "channel";
 
 export function ChatWidget() {
   const [open, setOpen] = useState(false);
@@ -63,6 +64,7 @@ export function ChatWidget() {
   const [submittedCode, setSubmittedCode] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const sendInquiry = useServerFn(submitInquiry);
+  const addComment = useServerFn(addInquiryComment);
   const { data: servicesData } = usePublicServices();
   const { data: siteSettings } = usePublicSiteSettings();
   const logo = siteSettings?.logo_url || logoUrl;
@@ -231,21 +233,19 @@ export function ChatWidget() {
       url = `mailto:${STAFF_EMAIL}?subject=${encodeURIComponent(
         `Inquiry: ${servicesLabel || "KL2J Services"}`,
       )}&body=${text}`;
-    // fire-and-forget log + email notification
-    sendInquiry({
-      data: {
-        name: name.trim() || "Anonymous",
-        email: email.trim() || null,
-        phone: phone.trim() || (email.trim() ? null : channel),
-        services,
-        message: `Handoff → ${channel}\n${intent}${note ? "\n" + note : ""}`,
-        channel,
-        checklist_responses: buildChecklistResponses(),
-        status: "New",
-      },
-    }).catch((e) => console.error(e));
+    // Log the channel choice on the SAME inquiry instead of creating a
+    // second, duplicate one — only possible when the initial submission in
+    // submitDetails() actually succeeded and left us a code to target.
+    if (submittedCode) {
+      const channelLabel = channel === "call" ? "phone call" : channel === "email" ? "email" : channel;
+      addComment({
+        data: { code: submittedCode, message: `Continuing this inquiry via ${channelLabel}.` },
+      }).catch((e) => console.error(e));
+    }
     window.open(url, "_blank", "noopener,noreferrer");
-    goToStep("done");
+    // Stay on the "channel" step (don't navigate away) so all the options
+    // stay visible/clickable — a customer might want to try more than one
+    // channel, and shouldn't lose the buttons after picking just one.
     pushBot(`Opening ${channel === "call" ? "phone dialer" : channel}… We'll continue there.`);
   }
 
@@ -421,14 +421,9 @@ export function ChatWidget() {
                 <div className="col-span-2 mt-1 text-center text-[11px] text-muted-foreground">
                   Smart {SMART_NUMBER} · Globe {GLOBE_NUMBER}
                 </div>
-              </div>
-            )}
-
-            {step === "done" && (
-              <div className="pt-1">
                 <button
                   onClick={reset}
-                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm hover:bg-muted"
+                  className="col-span-2 mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm hover:bg-muted"
                 >
                   Start a new inquiry
                 </button>

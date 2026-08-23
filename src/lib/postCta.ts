@@ -2,9 +2,7 @@
 // and posts-mailer.server.ts (the actual email CTA button) — plain client
 // + server safe module, no secrets, so no .server.ts restriction here.
 
-// TODO: swap to the custom domain once one is set up for the site (same
-// placeholder used in src/lib/inquiries-notify.server.ts).
-const SITE_URL = "https://kl2j--kl2j-98e80.us-central1.hosted.app";
+const SITE_URL = "https://kl2jlandsurveying.com";
 
 export type PostType =
   | "project"

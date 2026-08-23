@@ -2,7 +2,7 @@
 // never top-level import from *.functions.ts or route files (see the
 // warning in src/integrations/supabase/client.server.ts).
 
-const NOTIFY_TO = "erinelopez22@gmail.com";
+const NOTIFY_TO = "kl2j.engineering@gmail.com";
 
 function esc(s: string) {
   return s.replace(/[&<>"']/g, (c) =>
