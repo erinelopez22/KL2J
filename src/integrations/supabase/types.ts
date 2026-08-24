@@ -658,6 +658,8 @@ export type Database = {
       };
       post_recipients: {
         Row: {
+          attempted_at: string | null;
+          attempts: number;
           created_at: string;
           email: string;
           error: string | null;
@@ -665,11 +667,15 @@ export type Database = {
           inquiry_id: string | null;
           name: string | null;
           post_id: string;
+          scheduled_at: string;
           sent_at: string | null;
+          smtp_response: string | null;
           source: string;
           status: string;
         };
         Insert: {
+          attempted_at?: string | null;
+          attempts?: number;
           created_at?: string;
           email: string;
           error?: string | null;
@@ -677,11 +683,15 @@ export type Database = {
           inquiry_id?: string | null;
           name?: string | null;
           post_id: string;
+          scheduled_at?: string;
           sent_at?: string | null;
+          smtp_response?: string | null;
           source: string;
           status?: string;
         };
         Update: {
+          attempted_at?: string | null;
+          attempts?: number;
           created_at?: string;
           email?: string;
           error?: string | null;
@@ -689,7 +699,9 @@ export type Database = {
           inquiry_id?: string | null;
           name?: string | null;
           post_id?: string;
+          scheduled_at?: string;
           sent_at?: string | null;
+          smtp_response?: string | null;
           source?: string;
           status?: string;
         };

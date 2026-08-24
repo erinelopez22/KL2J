@@ -24,17 +24,18 @@ export async function sendMail(opts: {
   subject: string;
   html: string;
   replyTo?: string;
-}) {
+}): Promise<{ response: string }> {
   const transporter = getTransporter();
   if (!transporter) {
     throw new Error("Email sender not configured (missing GMAIL_SMTP_USER or GMAIL_SMTP_APP_PASSWORD)");
   }
 
-  await transporter.sendMail({
+  const info = await transporter.sendMail({
     from: `KL2J Website <${process.env.GMAIL_SMTP_USER}>`,
     to: opts.to,
     subject: opts.subject,
     html: opts.html,
     replyTo: opts.replyTo,
   });
+  return { response: info.response };
 }

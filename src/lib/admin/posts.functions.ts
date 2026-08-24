@@ -4,8 +4,12 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { dedupeContactsByEmail } from "@/lib/admin/dedupeEmailContacts";
 import type { PostType } from "@/lib/postCta";
 
-const BATCH_SIZE_DEFAULT = 40;
-const SEND_DELAY_MS = 250;
+// Rolling 24h cap on sends across ALL posts combined, and the cadence the
+// background worker (see src/routes/api/cron/process-email-queue.ts) is
+// invoked at — used to spread same-day overflow into evenly-spaced slots
+// starting the next day rather than all landing on one cron tick.
+const DAILY_SEND_CAP = 75;
+const WORKER_INTERVAL_MS = 60_000;
 
 const RecipientSelectionSchema = z.object({
   mode: z.enum(["none", "all", "selected"]),
@@ -256,126 +260,186 @@ export const deletePost = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-const SendBatchInputSchema = z.object({
-  id: z.string().uuid(),
-  batchSize: z.number().int().min(1).max(200).optional(),
-  retryFailed: z.boolean().optional(),
-});
+// Sending is no longer a synchronous loop in the request handler — it's a
+// background cron worker (see src/lib/admin/email-queue-worker.server.ts)
+// polling post_recipients for rows whose post has status 'sending'. These
+// three functions only ever flip status/scheduling; the actual per-recipient
+// send lives exclusively in the worker.
 
-export const sendPostBatch = createServerFn({ method: "POST" })
+const PostIdInputSchema = z.object({ id: z.string().uuid() });
+
+// Assigns/reassigns scheduled_at for every currently-pending recipient of a
+// post against the rolling 24h send cap across ALL posts combined. Whatever
+// fits under the cap starting now gets scheduled immediately (picked up by
+// the worker in send-order); the rest is spread out starting a day from now,
+// one slot per worker interval, instead of being sent (or rejected) all at
+// once.
+async function scheduleRecipientsForSend(
+  supabaseAdmin: import("@supabase/supabase-js").SupabaseClient,
+  postId: string,
+): Promise<void> {
+  const { data: pendingRows, error: pendingErr } = await supabaseAdmin
+    .from("post_recipients")
+    .select("id")
+    .eq("post_id", postId)
+    .eq("status", "pending")
+    .order("created_at", { ascending: true });
+  if (pendingErr) throw new Error(`Failed to load recipients to schedule: ${pendingErr.message}`);
+  if (!pendingRows || pendingRows.length === 0) return;
+
+  const now = new Date();
+  const since = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+  const nextDay = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+  const [{ count: sentRecently }, { count: dueSoonElsewhere }] = await Promise.all([
+    supabaseAdmin
+      .from("post_recipients")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "sent")
+      .gte("sent_at", since),
+    supabaseAdmin
+      .from("post_recipients")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["pending", "sending"])
+      .lt("scheduled_at", nextDay.toISOString())
+      .neq("post_id", postId),
+  ]);
+
+  const committed = (sentRecently ?? 0) + (dueSoonElsewhere ?? 0);
+  const availableToday = Math.max(0, DAILY_SEND_CAP - committed);
+
+  for (let i = 0; i < pendingRows.length; i++) {
+    const scheduledAt =
+      i < availableToday
+        ? now
+        : new Date(nextDay.getTime() + (i - availableToday) * WORKER_INTERVAL_MS);
+    const { error } = await supabaseAdmin
+      .from("post_recipients")
+      .update({ scheduled_at: scheduledAt.toISOString() })
+      .eq("id", pendingRows[i].id);
+    if (error) throw new Error(`Failed to schedule recipient: ${error.message}`);
+  }
+}
+
+// Moves a draft to 'sending' — its post_recipients rows already exist
+// (created at save time) but are inert until now, since the worker only
+// picks up rows whose post is actually 'sending'.
+export const startPostSending = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => SendBatchInputSchema.parse(data))
+  .inputValidator((data: unknown) => PostIdInputSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { assertRole } = await import("@/lib/admin/roles.server");
     await assertRole(context.userId, "admin");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { sendPostToRecipient, sleep } = await import("@/lib/posts-mailer.server");
 
-    const [{ data: post, error: postErr }, { data: siteSettings }] = await Promise.all([
-      supabaseAdmin
-        .from("posts")
-        .select("id, type, title, subject, body_html, status, project_ids, attachments")
-        .eq("id", data.id)
-        .single(),
-      supabaseAdmin
-        .from("site_settings")
-        .select("email_cover_photo_url, email_cover_photo_by_type")
-        .eq("id", 1)
-        .single(),
-    ]);
-    if (postErr || !post) throw new Error("Post not found");
-
-    if (post.status === "draft") {
-      await supabaseAdmin.from("posts").update({ status: "sending" }).eq("id", data.id);
-    }
-
-    if (data.retryFailed) {
-      await supabaseAdmin
-        .from("post_recipients")
-        .update({ status: "pending", error: null })
-        .eq("post_id", data.id)
-        .eq("status", "failed");
-    }
-
-    const batchSize = data.batchSize ?? BATCH_SIZE_DEFAULT;
-    const { data: batch, error: batchErr } = await supabaseAdmin
-      .from("post_recipients")
-      .select("id, email, name")
-      .eq("post_id", data.id)
-      .eq("status", "pending")
-      .order("created_at", { ascending: true })
-      .limit(batchSize);
-    if (batchErr) throw new Error(`Failed to load recipients: ${batchErr.message}`);
-
-    let sentThisBatch = 0;
-    let failedThisBatch = 0;
-    const coverPhotoByType = (siteSettings?.email_cover_photo_by_type as Record<string, string>) ?? {};
-    const postForEmail = {
-      type: post.type as PostType,
-      title: post.title,
-      subject: post.subject,
-      body_html: post.body_html,
-      project_ids: post.project_ids,
-      attachments: post.attachments as {
-        url: string;
-        name: string;
-        contentType: string;
-        kind: "image" | "video" | "document";
-      }[],
-      coverPhotoUrl: coverPhotoByType[post.type] ?? siteSettings?.email_cover_photo_url ?? null,
-    };
-
-    for (let i = 0; i < (batch ?? []).length; i++) {
-      const recipient = batch![i];
-      try {
-        await sendPostToRecipient(postForEmail, recipient);
-        await supabaseAdmin
-          .from("post_recipients")
-          .update({ status: "sent", sent_at: new Date().toISOString() })
-          .eq("id", recipient.id);
-        sentThisBatch++;
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        console.error(`sendPostBatch: send failed for ${recipient.email}`, message);
-        await supabaseAdmin
-          .from("post_recipients")
-          .update({ status: "failed", error: message })
-          .eq("id", recipient.id);
-        failedThisBatch++;
-      }
-      if (i < (batch ?? []).length - 1) await sleep(SEND_DELAY_MS);
-    }
-
-    const { count: sentCount } = await supabaseAdmin
-      .from("post_recipients")
-      .select("id", { count: "exact", head: true })
-      .eq("post_id", data.id)
-      .eq("status", "sent");
-    const { count: failedCount } = await supabaseAdmin
-      .from("post_recipients")
-      .select("id", { count: "exact", head: true })
-      .eq("post_id", data.id)
-      .eq("status", "failed");
-    const { count: pendingCount } = await supabaseAdmin
-      .from("post_recipients")
-      .select("id", { count: "exact", head: true })
-      .eq("post_id", data.id)
-      .eq("status", "pending");
-
-    const remainingPending = pendingCount ?? 0;
-    const remainingFailed = failedCount ?? 0;
-    const done = remainingPending === 0;
-
-    await supabaseAdmin
+    const { data: post, error: fetchErr } = await supabaseAdmin
       .from("posts")
-      .update({
-        sent_count: sentCount ?? 0,
-        failed_count: remainingFailed,
-        ...(done ? { status: "sent", sent_at: new Date().toISOString() } : {}),
-      })
-      .eq("id", data.id);
+      .select("status, total_count")
+      .eq("id", data.id)
+      .single();
+    if (fetchErr || !post) throw new Error("Post not found");
+    if (post.status !== "draft") {
+      throw new Error("This post has already started sending");
+    }
+    if (post.total_count === 0) throw new Error("This post has no recipients");
 
-    return { sentThisBatch, failedThisBatch, remainingPending, remainingFailed, done };
+    await scheduleRecipientsForSend(supabaseAdmin, data.id);
+
+    const { error: updateErr } = await supabaseAdmin
+      .from("posts")
+      .update({ status: "sending" })
+      .eq("id", data.id);
+    if (updateErr) throw new Error(`Failed to start sending: ${updateErr.message}`);
+
+    return { ok: true };
+  });
+
+// Un-pauses a batch the circuit breaker stopped: its remaining recipients
+// go back to 'pending' and get fresh schedule slots under today's cap.
+export const resumePausedPost = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => PostIdInputSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { assertRole } = await import("@/lib/admin/roles.server");
+    await assertRole(context.userId, "admin");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: post, error: fetchErr } = await supabaseAdmin
+      .from("posts")
+      .select("status")
+      .eq("id", data.id)
+      .single();
+    if (fetchErr || !post) throw new Error("Post not found");
+    if (post.status !== "paused") throw new Error("This post isn't paused");
+
+    const { error: recErr } = await supabaseAdmin
+      .from("post_recipients")
+      .update({ status: "pending" })
+      .eq("post_id", data.id)
+      .eq("status", "paused");
+    if (recErr) throw new Error(`Failed to resume recipients: ${recErr.message}`);
+
+    await scheduleRecipientsForSend(supabaseAdmin, data.id);
+
+    const { error: updateErr } = await supabaseAdmin
+      .from("posts")
+      .update({ status: "sending" })
+      .eq("id", data.id);
+    if (updateErr) throw new Error(`Failed to resume sending: ${updateErr.message}`);
+
+    return { ok: true };
+  });
+
+// Requeues this post's failed recipients that haven't hit MAX_ATTEMPTS yet.
+// Never automatic — only ever admin-triggered from the Recipients modal.
+export const retryFailedRecipients = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => PostIdInputSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { assertRole } = await import("@/lib/admin/roles.server");
+    await assertRole(context.userId, "admin");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { MAX_ATTEMPTS } = await import("@/lib/admin/email-queue-worker.server");
+
+    const { data: post, error: fetchErr } = await supabaseAdmin
+      .from("posts")
+      .select("status")
+      .eq("id", data.id)
+      .single();
+    if (fetchErr || !post) throw new Error("Post not found");
+    if (post.status !== "sent" && post.status !== "paused") {
+      throw new Error("Nothing to retry for this post yet");
+    }
+
+    const { data: retryable, error: retryErr } = await supabaseAdmin
+      .from("post_recipients")
+      .select("id")
+      .eq("post_id", data.id)
+      .eq("status", "failed")
+      .lt("attempts", MAX_ATTEMPTS);
+    if (retryErr) throw new Error(`Failed to load failed recipients: ${retryErr.message}`);
+    if (!retryable || retryable.length === 0) {
+      throw new Error("No failed recipients are eligible for retry (max attempts reached)");
+    }
+
+    const { error: updateErr } = await supabaseAdmin
+      .from("post_recipients")
+      .update({ status: "pending", error: null })
+      .in(
+        "id",
+        retryable.map((r) => r.id),
+      );
+    if (updateErr) throw new Error(`Failed to reset recipients for retry: ${updateErr.message}`);
+
+    await scheduleRecipientsForSend(supabaseAdmin, data.id);
+
+    const { error: postUpdateErr } = await supabaseAdmin
+      .from("posts")
+      .update({ status: "sending" })
+      .eq("id", data.id);
+    if (postUpdateErr) throw new Error(`Failed to resume sending: ${postUpdateErr.message}`);
+
+    return { retried: retryable.length };
   });
 
 const PreviewPostEmailSchema = z.object({

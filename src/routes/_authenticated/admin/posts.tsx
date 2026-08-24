@@ -20,7 +20,13 @@ import {
   Eye,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { deletePost, previewPostEmail } from "@/lib/admin/posts.functions";
+import {
+  deletePost,
+  previewPostEmail,
+  startPostSending,
+  resumePausedPost,
+  retryFailedRecipients,
+} from "@/lib/admin/posts.functions";
 import { SendProgress } from "@/components/admin/SendProgress";
 import {
   addEmailContact,
@@ -47,7 +53,7 @@ export const Route = createFileRoute("/_authenticated/admin/posts")({
 });
 
 type PostRow = PostRecord & {
-  status: "draft" | "sending" | "sent";
+  status: "draft" | "sending" | "sent" | "paused";
   total_count: number;
   sent_count: number;
   failed_count: number;
@@ -73,6 +79,7 @@ const STATUS_STYLES: Record<PostRow["status"], string> = {
   draft: "bg-muted text-muted-foreground",
   sending: "bg-amber-100 text-amber-700",
   sent: "bg-emerald-100 text-emerald-700",
+  paused: "bg-destructive/10 text-destructive",
 };
 
 type PostRecipientRow = {
@@ -80,16 +87,20 @@ type PostRecipientRow = {
   email: string;
   name: string | null;
   source: "inquiry" | "custom";
-  status: "pending" | "sent" | "failed";
+  status: "pending" | "sending" | "sent" | "failed" | "paused";
   error: string | null;
+  attempts: number;
+  smtp_response: string | null;
   sent_at: string | null;
   created_at: string;
 };
 
 const RECIPIENT_STATUS_STYLES: Record<PostRecipientRow["status"], string> = {
   pending: "bg-muted text-muted-foreground",
+  sending: "bg-amber-100 text-amber-700",
   sent: "bg-emerald-100 text-emerald-700",
   failed: "bg-destructive/10 text-destructive",
+  paused: "bg-destructive/10 text-destructive",
 };
 
 function RecipientsModal({ postId, onClose }: { postId: string; onClose: () => void }) {
@@ -98,7 +109,7 @@ function RecipientsModal({ postId, onClose }: { postId: string; onClose: () => v
     queryFn: async () => {
       const { data, error } = await supabase
         .from("post_recipients")
-        .select("id, email, name, source, status, error, sent_at, created_at")
+        .select("id, email, name, source, status, error, attempts, smtp_response, sent_at, created_at")
         .eq("post_id", postId)
         .order("created_at", { ascending: true });
       if (error) throw error;
@@ -140,7 +151,15 @@ function RecipientsModal({ postId, onClose }: { postId: string; onClose: () => v
                     {r.source === "inquiry" ? "From inquiry" : "Custom"}
                   </p>
                   {r.status === "failed" && r.error && (
-                    <p className="mt-1 text-xs text-destructive">{r.error}</p>
+                    <p className="mt-1 text-xs text-destructive">
+                      {r.error}
+                      {r.attempts >= 3 ? " (max attempts reached)" : ` (attempt ${r.attempts})`}
+                    </p>
+                  )}
+                  {r.status === "paused" && (
+                    <p className="mt-1 text-xs text-destructive">
+                      Held — the send was paused for this post
+                    </p>
                   )}
                 </div>
                 <span
@@ -174,9 +193,10 @@ function PostViewer({
 }) {
   const confirm = useConfirm();
   const doDelete = useServerFn(deletePost);
-  const [sendActive, setSendActive] = useState<{ retryFailed: boolean } | null>(
-    post.status === "sending" ? { retryFailed: false } : null,
-  );
+  const doStartSending = useServerFn(startPostSending);
+  const doResumePaused = useServerFn(resumePausedPost);
+  const doRetryFailed = useServerFn(retryFailedRecipients);
+  const [sendActive, setSendActive] = useState(post.status === "sending");
   const [showRecipients, setShowRecipients] = useState(false);
   const cta = ctaForPost(post.type, post.project_ids);
 
@@ -200,8 +220,37 @@ function PostViewer({
       toast.error("This post has no recipients — edit it and choose who to send to first.");
       return;
     }
-    if (!(await confirm(`Send this post to ${post.total_count} recipient(s)?`))) return;
-    setSendActive({ retryFailed: false });
+    if (
+      !(await confirm(
+        `Queue this post to send to ${post.total_count} recipient(s)? It'll go out gradually in the background, not all at once.`,
+      ))
+    )
+      return;
+    try {
+      await doStartSending({ data: { id: post.id } });
+      setSendActive(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to start sending");
+    }
+  }
+
+  async function handleResume() {
+    try {
+      await doResumePaused({ data: { id: post.id } });
+      setSendActive(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to resume sending");
+    }
+  }
+
+  async function handleRetryFailed() {
+    try {
+      const result = await doRetryFailed({ data: { id: post.id } });
+      toast.success(`Retrying ${result.retried} recipient(s)`);
+      setSendActive(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to retry");
+    }
   }
 
   return (
@@ -300,12 +349,22 @@ function PostViewer({
           {sendActive && (
             <SendProgress
               post={post}
-              retryFailed={sendActive.retryFailed}
-              onDone={() => {
-                setSendActive(null);
+              onStatusChange={() => {
+                setSendActive(false);
                 onChanged();
               }}
             />
+          )}
+
+          {post.status === "paused" && !sendActive && (
+            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm">
+              <p className="font-medium text-destructive">Sending paused</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Gmail started rejecting sends, so the rest of this batch was held back instead of
+                continuing to send into a possible block. Review the recipients below, then resume
+                when ready.
+              </p>
+            </div>
           )}
 
           <div className="flex flex-wrap gap-2 border-t border-border pt-4">
@@ -325,17 +384,17 @@ function PostViewer({
                 </button>
               </>
             )}
-            {post.status === "sending" && !sendActive && (
+            {post.status === "paused" && !sendActive && (
               <button
-                onClick={() => setSendActive({ retryFailed: false })}
+                onClick={handleResume}
                 className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
               >
-                <Send className="h-3.5 w-3.5" /> Continue sending
+                <Send className="h-3.5 w-3.5" /> Resume sending
               </button>
             )}
             {post.status === "sent" && post.failed_count > 0 && !sendActive && (
               <button
-                onClick={() => setSendActive({ retryFailed: true })}
+                onClick={handleRetryFailed}
                 className="flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100"
               >
                 <RotateCcw className="h-3.5 w-3.5" /> Resend failed

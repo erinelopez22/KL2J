@@ -32,7 +32,7 @@ import {
   Minimize2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { createPostDraft, updatePostDraft } from "@/lib/admin/posts.functions";
+import { createPostDraft, updatePostDraft, startPostSending } from "@/lib/admin/posts.functions";
 import { SendProgress, type SendablePost } from "@/components/admin/SendProgress";
 import { useConfirm } from "@/components/ConfirmDialogProvider";
 import { createSiteMediaUploadUrl, deleteSiteMedia } from "@/lib/admin/media.functions";
@@ -732,7 +732,8 @@ function RecipientPicker({
                       disabled={!valid}
                       onSelect={() => {
                         if (!valid) return;
-                        checked ? onRemoveCustom(c.email) : onAddCustom(c.email);
+                        if (checked) onRemoveCustom(c.email);
+                        else onAddCustom(c.email);
                       }}
                       className={valid ? "cursor-pointer" : "cursor-not-allowed opacity-60"}
                       title={valid ? undefined : "Invalid email — fix it in the Email list first"}
@@ -882,6 +883,7 @@ export function PostEditor({
 
   const doCreate = useServerFn(createPostDraft);
   const doUpdate = useServerFn(updatePostDraft);
+  const doStartSending = useServerFn(startPostSending);
 
   const { data: existingRecipients } = useQuery({
     queryKey: ["admin-post-recipients", post?.id],
@@ -1111,7 +1113,11 @@ export function PostEditor({
         return;
       }
       const count = recipientSummaryCount;
-      if (!(await confirm(`Send this post to ${count} recipient${count === 1 ? "" : "s"}?`))) {
+      if (
+        !(await confirm(
+          `Queue this post to send to ${count} recipient${count === 1 ? "" : "s"}? It'll go out gradually in the background, not all at once.`,
+        ))
+      ) {
         return;
       }
     }
@@ -1139,6 +1145,7 @@ export function PostEditor({
         id = result.id;
       }
       if (action === "send") {
+        await doStartSending({ data: { id } });
         const { data, error } = await supabase
           .from("posts")
           .select("id, total_count, sent_count, failed_count")
@@ -1168,7 +1175,7 @@ export function PostEditor({
       >
         <div className="relative flex items-center justify-center border-b border-border px-4 py-3">
           <h2 className="text-base font-semibold">
-            {sendingPost ? "Sending…" : post ? "Edit post" : "Create post"}
+            {sendingPost ? "Queued…" : post ? "Edit post" : "Create post"}
           </h2>
           {!sendingPost && (
             <button
@@ -1394,8 +1401,7 @@ export function PostEditor({
           {sendingPost ? (
             <SendProgress
               post={sendingPost}
-              retryFailed={false}
-              onDone={() => {
+              onStatusChange={() => {
                 setSendingPost(null);
                 onSaved();
               }}

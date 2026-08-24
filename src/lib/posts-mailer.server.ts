@@ -240,9 +240,9 @@ export function buildPostEmailHtml(post: PostForEmail): string {
 export async function sendPostToRecipient(
   post: PostForEmail,
   recipient: { email: string; name?: string | null },
-): Promise<void> {
+): Promise<{ response: string }> {
   const { sendMail } = await import("@/lib/mailer.server");
-  await sendMail({
+  return sendMail({
     to: recipient.email,
     subject: post.subject,
     html: buildPostEmailHtml(post),
