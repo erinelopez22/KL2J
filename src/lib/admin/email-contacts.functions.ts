@@ -68,6 +68,33 @@ export const bulkImportEmailContacts = createServerFn({ method: "POST" })
     return { imported: toInsert.length, skipped: byEmail.size - toInsert.length };
   });
 
+export const updateEmailContact = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        email: z.string().email(),
+        name: z.string().max(200).optional(),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    const { assertRole } = await import("@/lib/admin/roles.server");
+    await assertRole(context.userId, "admin");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin
+      .from("email_contacts")
+      .update({ email: data.email.trim().toLowerCase(), name: data.name?.trim() || null })
+      .eq("id", data.id);
+    if (error) {
+      if (error.code === "23505") throw new Error("That email is already on the list");
+      console.error("updateEmailContact failed", error);
+      throw new Error(`Failed to update contact: ${error.message}`);
+    }
+    return { ok: true };
+  });
+
 export const deleteEmailContact = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => z.object({ id: z.string().uuid() }).parse(data))

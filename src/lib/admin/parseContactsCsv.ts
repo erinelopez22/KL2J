@@ -1,10 +1,15 @@
+import { isValidEmail } from "@/lib/email";
+
 // Minimal RFC4180-ish CSV parser for the bulk email-contact import — no
 // external dependency needed (avoids pulling in a spreadsheet-parsing
 // library just for this). Expects a header row with an "email" column and
 // an optional "name" column (case-insensitive).
-export function parseContactsCsv(text: string): { email: string; name?: string }[] {
+export function parseContactsCsv(text: string): {
+  contacts: { email: string; name?: string }[];
+  skipped: number;
+} {
   const rows = parseRows(text);
-  if (rows.length === 0) return [];
+  if (rows.length === 0) return { contacts: [], skipped: 0 };
 
   const header = rows[0].map((h) => h.trim().toLowerCase());
   const emailCol = header.indexOf("email");
@@ -14,13 +19,18 @@ export function parseContactsCsv(text: string): { email: string; name?: string }
   const nameCol = header.indexOf("name");
 
   const contacts: { email: string; name?: string }[] = [];
+  let skipped = 0;
   for (const row of rows.slice(1)) {
     const email = row[emailCol]?.trim();
-    if (!email || !email.includes("@")) continue;
+    if (!email) continue;
+    if (!isValidEmail(email)) {
+      skipped++;
+      continue;
+    }
     const name = nameCol !== -1 ? row[nameCol]?.trim() : undefined;
     contacts.push({ email, name: name || undefined });
   }
-  return contacts;
+  return { contacts, skipped };
 }
 
 function parseRows(text: string): string[][] {

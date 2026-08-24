@@ -39,6 +39,7 @@ import { createSiteMediaUploadUrl, deleteSiteMedia } from "@/lib/admin/media.fun
 import { uploadFileDirect } from "@/lib/adminDirectUpload";
 import { storagePathFromUrl } from "@/lib/storagePathFromUrl";
 import { dedupeContactsByEmail } from "@/lib/admin/dedupeEmailContacts";
+import { isValidEmail } from "@/lib/email";
 import { ctaForPost, type PostType } from "@/lib/postCta";
 import { compressImage } from "@/lib/compressImage";
 import { isOversizedFile, MAX_ADMIN_UPLOAD_BYTES } from "@/lib/uploadLimits";
@@ -433,6 +434,7 @@ function RecipientPicker({
   customEmails,
   onAddCustom,
   onRemoveCustom,
+  onUpdateCustom,
 }: {
   contacts: InquiryContact[];
   contactsLoading: boolean;
@@ -445,11 +447,14 @@ function RecipientPicker({
   customEmails: string[];
   onAddCustom: (email: string) => void;
   onRemoveCustom: (email: string) => void;
+  onUpdateCustom: (oldEmail: string, newEmail: string) => void;
 }) {
   const [customInput, setCustomInput] = useState("");
   const [showAllPreview, setShowAllPreview] = useState(false);
   const [showBulkAdd, setShowBulkAdd] = useState(false);
   const [bulkInput, setBulkInput] = useState("");
+  const [editingEmail, setEditingEmail] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
 
   const deduped = useMemo(() => dedupeContactsByEmail(contacts), [contacts]);
   const includedEmails = useMemo(
@@ -467,7 +472,7 @@ function RecipientPicker({
   function addCustomFromInput() {
     const email = customInput.trim();
     if (!email) return;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!isValidEmail(email)) {
       toast.error("Enter a valid email address");
       return;
     }
@@ -488,7 +493,7 @@ function RecipientPicker({
       const key = email.toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      if (!isValidEmail(email)) {
         invalid++;
         continue;
       }
@@ -498,6 +503,26 @@ function RecipientPicker({
     setBulkInput("");
     if (added > 0) toast.success(`Added ${added} recipient${added === 1 ? "" : "s"}`);
     if (invalid > 0) toast.error(`Skipped ${invalid} invalid email${invalid === 1 ? "" : "es"}`);
+  }
+
+  function startEditChip(email: string) {
+    setEditingEmail(email);
+    setEditValue(email);
+  }
+
+  function commitEditChip() {
+    if (!editingEmail) return;
+    const next = editValue.trim();
+    if (!next) {
+      onRemoveCustom(editingEmail);
+    } else if (!isValidEmail(next)) {
+      toast.error("Enter a valid email address");
+      return;
+    } else if (next.toLowerCase() !== editingEmail.toLowerCase()) {
+      onUpdateCustom(editingEmail, next);
+    }
+    setEditingEmail(null);
+    setEditValue("");
   }
 
   return (
@@ -604,21 +629,57 @@ function RecipientPicker({
         </div>
         {customEmails.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {customEmails.map((email) => (
-              <span
-                key={email}
-                className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs"
-              >
-                {email}
-                <button
-                  type="button"
-                  onClick={() => onRemoveCustom(email)}
-                  aria-label={`Remove ${email}`}
+            {customEmails.map((email) =>
+              editingEmail === email ? (
+                <span
+                  key={email}
+                  className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-background px-1.5 py-0.5 text-xs"
                 >
-                  <X className="h-3 w-3" />
-                </button>
-              </span>
-            ))}
+                  <input
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        commitEditChip();
+                      }
+                      if (e.key === "Escape") {
+                        setEditingEmail(null);
+                        setEditValue("");
+                      }
+                    }}
+                    onBlur={commitEditChip}
+                    autoFocus
+                    className="h-5 w-40 bg-transparent px-1 text-xs focus:outline-none"
+                  />
+                </span>
+              ) : (
+                <span
+                  key={email}
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ${
+                    isValidEmail(email)
+                      ? "bg-muted"
+                      : "bg-destructive/10 text-destructive"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => startEditChip(email)}
+                    title="Click to edit"
+                    className="max-w-[220px] truncate"
+                  >
+                    {email}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onRemoveCustom(email)}
+                    aria-label={`Remove ${email}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ),
+            )}
           </div>
         )}
         <button
@@ -663,12 +724,18 @@ function RecipientPicker({
                   const checked = customEmails.some(
                     (e) => e.trim().toLowerCase() === c.email.trim().toLowerCase(),
                   );
+                  const valid = isValidEmail(c.email);
                   return (
                     <CommandItem
                       key={c.id}
                       value={`${c.name ?? ""} ${c.email}`}
-                      onSelect={() => (checked ? onRemoveCustom(c.email) : onAddCustom(c.email))}
-                      className="cursor-pointer"
+                      disabled={!valid}
+                      onSelect={() => {
+                        if (!valid) return;
+                        checked ? onRemoveCustom(c.email) : onAddCustom(c.email);
+                      }}
+                      className={valid ? "cursor-pointer" : "cursor-not-allowed opacity-60"}
+                      title={valid ? undefined : "Invalid email — fix it in the Email list first"}
                     >
                       {checked ? (
                         <CheckSquare className="h-4 w-4 shrink-0 text-primary" />
@@ -679,6 +746,11 @@ function RecipientPicker({
                       {c.name && (
                         <span className="min-w-0 shrink truncate text-xs text-muted-foreground">
                           {c.email}
+                        </span>
+                      )}
+                      {!valid && (
+                        <span className="shrink-0 text-[10px] font-medium uppercase text-destructive">
+                          Invalid
                         </span>
                       )}
                     </CommandItem>
@@ -952,7 +1024,20 @@ export function PostEditor({
   }
 
   function removeCustomEmail(email: string) {
-    setCustomEmails((prev) => prev.filter((e) => e !== email));
+    setCustomEmails((prev) => prev.filter((e) => e.toLowerCase() !== email.toLowerCase()));
+  }
+
+  function updateCustomEmail(oldEmail: string, newEmail: string) {
+    setCustomEmails((prev) => {
+      const oldKey = oldEmail.toLowerCase();
+      const newKey = newEmail.toLowerCase();
+      // If the edited value collides with another entry already in the list,
+      // just drop the one being edited rather than creating a duplicate.
+      if (prev.some((e) => e.toLowerCase() === newKey && e.toLowerCase() !== oldKey)) {
+        return prev.filter((e) => e.toLowerCase() !== oldKey);
+      }
+      return prev.map((e) => (e.toLowerCase() === oldKey ? newEmail : e));
+    });
   }
 
   async function handleAddAttachments(files: FileList) {
@@ -1013,6 +1098,11 @@ export function PostEditor({
     }
     if (!editor || editor.isEmpty) {
       toast.error("Write something before posting");
+      return;
+    }
+    if (customEmails.some((e) => !isValidEmail(e))) {
+      toast.error("Fix or remove the invalid recipient email(s) before saving");
+      setShowRecipients(true);
       return;
     }
     if (action === "send") {
@@ -1288,6 +1378,7 @@ export function PostEditor({
                   customEmails={customEmails}
                   onAddCustom={addCustomEmail}
                   onRemoveCustom={removeCustomEmail}
+                  onUpdateCustom={updateCustomEmail}
                 />
                 <button
                   type="button"

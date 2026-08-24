@@ -26,8 +26,10 @@ import {
   addEmailContact,
   bulkImportEmailContacts,
   deleteEmailContact,
+  updateEmailContact,
 } from "@/lib/admin/email-contacts.functions";
 import { parseContactsCsv } from "@/lib/admin/parseContactsCsv";
+import { isValidEmail } from "@/lib/email";
 import { useConfirm } from "@/components/ConfirmDialogProvider";
 import { ctaForPost } from "@/lib/postCta";
 import {
@@ -369,11 +371,16 @@ function EmailListModal({ onClose }: { onClose: () => void }) {
   const doAdd = useServerFn(addEmailContact);
   const doBulkImport = useServerFn(bulkImportEmailContacts);
   const doDelete = useServerFn(deleteEmailContact);
+  const doUpdate = useServerFn(updateEmailContact);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [adding, setAdding] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editEmail, setEditEmail] = useState("");
+  const [editName, setEditName] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const { data: contacts, isLoading } = useQuery({
     queryKey: ["admin-email-contacts"],
@@ -392,13 +399,18 @@ function EmailListModal({ onClose }: { onClose: () => void }) {
   }
 
   async function addOne() {
-    if (!email.trim()) {
+    const trimmed = email.trim();
+    if (!trimmed) {
       toast.error("Enter an email address");
+      return;
+    }
+    if (!isValidEmail(trimmed)) {
+      toast.error("Enter a valid email address");
       return;
     }
     setAdding(true);
     try {
-      await doAdd({ data: { email: email.trim(), name: name.trim() || undefined } });
+      await doAdd({ data: { email: trimmed, name: name.trim() || undefined } });
       setEmail("");
       setName("");
       refresh();
@@ -414,16 +426,20 @@ function EmailListModal({ onClose }: { onClose: () => void }) {
     setImporting(true);
     try {
       const text = await file.text();
-      const parsed = parseContactsCsv(text);
+      const { contacts: parsed, skipped: skippedInvalid } = parseContactsCsv(text);
       if (parsed.length === 0) {
         toast.error("No valid emails found in that file");
         return;
       }
       const result = await doBulkImport({ data: { contacts: parsed } });
       refresh();
+      const notes = [
+        result.skipped > 0 ? `${result.skipped} already on the list` : null,
+        skippedInvalid > 0 ? `${skippedInvalid} invalid email${skippedInvalid === 1 ? "" : "s"} skipped` : null,
+      ].filter(Boolean);
       toast.success(
         `Imported ${result.imported} contact${result.imported === 1 ? "" : "s"}` +
-          (result.skipped > 0 ? ` (${result.skipped} already on the list)` : ""),
+          (notes.length > 0 ? ` (${notes.join(", ")})` : ""),
       );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Import failed");
@@ -439,6 +455,41 @@ function EmailListModal({ onClose }: { onClose: () => void }) {
       refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to remove contact");
+    }
+  }
+
+  function startEdit(contact: EmailContact) {
+    setEditingId(contact.id);
+    setEditEmail(contact.email);
+    setEditName(contact.name ?? "");
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditEmail("");
+    setEditName("");
+  }
+
+  async function saveEdit(contact: EmailContact) {
+    const trimmed = editEmail.trim();
+    if (!trimmed) {
+      toast.error("Enter an email address");
+      return;
+    }
+    if (!isValidEmail(trimmed)) {
+      toast.error("Enter a valid email address");
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      await doUpdate({ data: { id: contact.id, email: trimmed, name: editName.trim() || undefined } });
+      cancelEdit();
+      refresh();
+      toast.success("Contact updated");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update contact");
+    } finally {
+      setSavingEdit(false);
     }
   }
 
@@ -519,25 +570,83 @@ function EmailListModal({ onClose }: { onClose: () => void }) {
             <p className="text-sm text-muted-foreground">No contacts yet.</p>
           )}
           <div className="max-h-64 space-y-1 overflow-y-auto">
-            {contacts?.map((c) => (
-              <div
-                key={c.id}
-                className="flex items-center justify-between gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 text-sm"
-              >
-                <div className="min-w-0">
-                  <span className="block truncate font-medium">{c.name || c.email}</span>
-                  {c.name && <span className="block truncate text-xs text-muted-foreground">{c.email}</span>}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => removeContact(c)}
-                  className="shrink-0 text-muted-foreground hover:text-destructive"
-                  aria-label={`Remove ${c.email}`}
+            {contacts?.map((c) =>
+              editingId === c.id ? (
+                <div
+                  key={c.id}
+                  className="flex flex-wrap items-end gap-2 rounded-md border border-primary/40 bg-muted/30 px-2.5 py-2 text-sm"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ))}
+                  <label className="min-w-[160px] flex-1 text-sm">
+                    <span className="mb-1 block text-xs font-medium text-muted-foreground">Email</span>
+                    <input
+                      value={editEmail}
+                      onChange={(e) => setEditEmail(e.target.value)}
+                      autoFocus
+                      className="h-8 w-full rounded-md border border-border bg-background px-2 text-sm"
+                    />
+                  </label>
+                  <label className="min-w-[120px] flex-1 text-sm">
+                    <span className="mb-1 block text-xs font-medium text-muted-foreground">Name</span>
+                    <input
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      className="h-8 w-full rounded-md border border-border bg-background px-2 text-sm"
+                    />
+                  </label>
+                  <div className="flex shrink-0 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => saveEdit(c)}
+                      disabled={savingEdit}
+                      className="h-8 rounded-md bg-primary px-2.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={cancelEdit}
+                      disabled={savingEdit}
+                      className="h-8 rounded-md border border-border px-2.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  key={c.id}
+                  className="flex items-center justify-between gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 text-sm"
+                >
+                  <div className="min-w-0">
+                    <span className="block truncate font-medium">{c.name || c.email}</span>
+                    {c.name && <span className="block truncate text-xs text-muted-foreground">{c.email}</span>}
+                    {!isValidEmail(c.email) && (
+                      <span className="mt-0.5 block text-xs font-medium text-destructive">
+                        Invalid email — edit to fix
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => startEdit(c)}
+                      className="text-muted-foreground hover:text-primary"
+                      aria-label={`Edit ${c.email}`}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeContact(c)}
+                      className="text-muted-foreground hover:text-destructive"
+                      aria-label={`Remove ${c.email}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ),
+            )}
           </div>
         </div>
       </div>
