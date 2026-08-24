@@ -23,3 +23,7 @@ env:
     secret: GOOGLE_GBP_CLIENT_ID
   - variable: GOOGLE_GBP_CLIENT_SECRET
     secret: GOOGLE_GBP_CLIENT_SECRET
+  # Shared secret Cloud Scheduler sends as `Authorization: Bearer <value>`
+  # when it hits /api/cron/process-email-queue — see src/routes/api/cron/process-email-queue.ts.
+  - variable: CRON_SECRET
+    secret: CRON_SECRET
