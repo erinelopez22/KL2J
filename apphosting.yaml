@@ -8,9 +8,9 @@ env:
   # Public, non-secret values (same as in the committed .env) — plain value,
   # not a secret reference.
   - variable: SUPABASE_URL
-    value: "https://glcpppvyzrwzmobkdcmi.supabase.co"
+    value: "https://asggvunieersxjpkhiod.supabase.co"
   - variable: SUPABASE_PUBLISHABLE_KEY
-    value: "sb_publishable_OrzXuUfNA_86nkpp7xo4FQ_ZYwfnUax"
+    value: "sb_publishable_1UbfdLhJ4FN3VqqPssRJeQ_TmNAJ_ni"
   # Secrets, created via `firebase apphosting:secrets:set` — reference by name,
   # value stays in Secret Manager rather than plaintext here.
   - variable: SUPABASE_SERVICE_ROLE_KEY
