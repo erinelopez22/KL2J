@@ -25,21 +25,36 @@ export const listAdminUsers = createServerFn({ method: "GET" })
       }
       users = usersData.users.map((u) => ({ id: u.id, email: u.email ?? null, created_at: u.created_at ?? null }));
     } else {
-      const { data: userData, error: userErr } = await supabaseAdmin.auth.admin.getUserById(context.userId);
-      if (userErr || !userData?.user) {
-        console.error("listAdminUsers/self failed", userErr);
-        throw new Error("Failed to load user");
+      // Plain admins see themselves plus every other user holding the
+      // "admin" role (not super admins) — they can create/edit peers but
+      // never touch a super admin account.
+      const { data: adminRoleRows, error: adminRoleErr } = await supabaseAdmin
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "admin");
+      if (adminRoleErr) {
+        console.error("listAdminUsers/adminRoles failed", adminRoleErr);
+        throw new Error("Failed to load roles");
       }
-      users = [{ id: userData.user.id, email: userData.user.email ?? null, created_at: userData.user.created_at ?? null }];
+      const targetIds = new Set((adminRoleRows ?? []).map((r) => r.user_id));
+      targetIds.add(context.userId);
+
+      const results = await Promise.all(
+        Array.from(targetIds).map((id) => supabaseAdmin.auth.admin.getUserById(id)),
+      );
+      users = results
+        .filter((r) => !r.error && r.data?.user)
+        .map((r) => ({
+          id: r.data!.user!.id,
+          email: r.data!.user!.email ?? null,
+          created_at: r.data!.user!.created_at ?? null,
+        }));
     }
 
     const { data: roleRows, error: rolesErr } = await supabaseAdmin
       .from("user_roles")
       .select("user_id, role")
-      .in(
-        "user_id",
-        isSuperAdmin ? users.map((u) => u.id) : [context.userId],
-      );
+      .in("user_id", users.map((u) => u.id));
     if (rolesErr) {
       console.error("listAdminUsers/roles failed", rolesErr);
       throw new Error("Failed to load roles");
@@ -71,8 +86,14 @@ export const createUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => CreateUserSchema.parse(data))
   .handler(async ({ data, context }) => {
-    const { assertRole } = await import("@/lib/admin/roles.server");
-    await assertRole(context.userId, "super_admin");
+    const { getUserRoles } = await import("@/lib/admin/roles.server");
+    const roles = await getUserRoles(context.userId);
+    const isSuperAdmin = roles.includes("super_admin");
+    const isAdmin = roles.includes("admin") || isSuperAdmin;
+    if (!isAdmin) throw new Error("Forbidden");
+    if (data.role === "super_admin" && !isSuperAdmin) {
+      throw new Error("Only super admins can create a super admin account");
+    }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
@@ -120,7 +141,12 @@ export const updateUser = createServerFn({ method: "POST" })
     const isSuperAdmin = roles.includes("super_admin");
     const isAdmin = roles.includes("admin") || isSuperAdmin;
     if (!isAdmin) throw new Error("Forbidden");
-    if (!isSuperAdmin && data.targetUserId !== context.userId) throw new Error("Forbidden");
+    if (!isSuperAdmin && data.targetUserId !== context.userId) {
+      const targetRoles = await getUserRoles(data.targetUserId);
+      if (targetRoles.includes("super_admin") || !targetRoles.includes("admin")) {
+        throw new Error("Forbidden");
+      }
+    }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const updatePayload: Record<string, unknown> = {};

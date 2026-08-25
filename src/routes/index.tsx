@@ -2796,7 +2796,7 @@ function Partners() {
                 target="_blank"
                 rel="noopener noreferrer"
                 title={c.name}
-                className="flex h-16 w-32 items-center justify-center grayscale transition hover:grayscale-0"
+                className="flex h-16 w-32 items-center justify-center"
               >
                 <img
                   src={c.logo_url}
@@ -2808,7 +2808,7 @@ function Partners() {
               <div
                 key={c.id}
                 title={c.name}
-                className="flex h-16 w-32 items-center justify-center grayscale"
+                className="flex h-16 w-32 items-center justify-center"
               >
                 <img
                   src={c.logo_url}

@@ -18,7 +18,7 @@ function AdminUsers() {
   const queryClient = useQueryClient();
   const { user } = useSession();
   const confirm = useConfirm();
-  const { isSuperAdmin } = Route.useRouteContext();
+  const { isAdmin, isSuperAdmin } = Route.useRouteContext();
   const listUsers = useServerFn(listAdminUsers);
   const doCreateUser = useServerFn(createUser);
   const doUpdateUser = useServerFn(updateUser);
@@ -122,7 +122,7 @@ function AdminUsers() {
 
       <div className="mt-6 flex items-center justify-between gap-3">
         <h2 className="text-xl font-semibold">Users</h2>
-        {isSuperAdmin && user?.id && (
+        {isAdmin && user?.id && (
           <button
             type="button"
             onClick={() => setShowCreateForm((open) => !open)}
@@ -194,7 +194,7 @@ function AdminUsers() {
                   className="mt-1 w-full rounded-md border border-input px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   <option value="admin">admin</option>
-                  <option value="super_admin">super_admin</option>
+                  {isSuperAdmin && <option value="super_admin">super_admin</option>}
                 </select>
               </label>
             </div>
@@ -222,7 +222,10 @@ function AdminUsers() {
 
       <div className="mt-6 space-y-2">
         {users?.map((u) => {
-          const canEdit = isSuperAdmin || user?.id === u.id;
+          const canEdit =
+            isSuperAdmin ||
+            user?.id === u.id ||
+            (isAdmin && u.roles.includes("admin") && !u.roles.includes("super_admin"));
           const canDelete = isSuperAdmin && user?.id !== u.id;
           return (
             <div key={u.id} className="rounded-lg border border-border bg-card p-3">
