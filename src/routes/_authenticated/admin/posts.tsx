@@ -15,6 +15,7 @@ import {
   ExternalLink,
   Search,
   Users2,
+  UserX,
   Upload,
   Image as ImageIcon,
   Eye,
@@ -26,6 +27,7 @@ import {
   startPostSending,
   resumePausedPost,
   retryFailedRecipients,
+  listSuppressedEmails,
 } from "@/lib/admin/posts.functions";
 import { SendProgress } from "@/components/admin/SendProgress";
 import {
@@ -36,6 +38,7 @@ import {
 } from "@/lib/admin/email-contacts.functions";
 import { parseContactsCsv } from "@/lib/admin/parseContactsCsv";
 import { isValidEmail } from "@/lib/email";
+import { checkPostContent } from "@/lib/admin/postContentPolicyCheck";
 import { useConfirm } from "@/components/ConfirmDialogProvider";
 import { ctaForPost } from "@/lib/postCta";
 import {
@@ -219,6 +222,17 @@ function PostViewer({
     if (post.total_count === 0) {
       toast.error("This post has no recipients — edit it and choose who to send to first.");
       return;
+    }
+    const policyIssues = checkPostContent(post.subject, post.body_html);
+    if (policyIssues.length > 0) {
+      if (
+        !(await confirm(
+          `This post may raise spam/policy concerns: ${policyIssues.map((i) => i.message).join(" ")}`,
+          { title: "Possible policy concerns", confirmLabel: "Send anyway", cancelLabel: "Go back and edit" },
+        ))
+      ) {
+        return;
+      }
     }
     if (
       !(await confirm(
@@ -423,6 +437,61 @@ function PostViewer({
 }
 
 type EmailContact = { id: string; email: string; name: string | null; source: string; created_at: string };
+
+function UnsubscribedModal({ onClose }: { onClose: () => void }) {
+  const doList = useServerFn(listSuppressedEmails);
+  const { data: rows, isLoading } = useQuery({
+    queryKey: ["admin-email-suppressions"],
+    queryFn: () => doList(),
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4" onClick={onClose}>
+      <div
+        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-2xl sm:p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold">Unsubscribed</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              These addresses opted out of Posts announcement emails and are automatically excluded from
+              every future send.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {isLoading && <p className="mt-4 text-sm text-muted-foreground">Loading…</p>}
+        {!isLoading && (rows?.length ?? 0) === 0 && (
+          <p className="mt-4 text-sm text-muted-foreground">No one has unsubscribed yet.</p>
+        )}
+        {!isLoading && rows && rows.length > 0 && (
+          <div className="mt-4 space-y-1.5">
+            {rows.map((r) => (
+              <div
+                key={r.id}
+                className="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/30 px-2.5 py-1.5 text-sm"
+              >
+                <span className="truncate">{r.email}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {new Date(r.unsubscribed_at).toLocaleDateString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function EmailListModal({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient();
@@ -933,6 +1002,7 @@ function AdminPosts() {
   const [viewing, setViewing] = useState<PostRow | null>(null);
   const [showEmailList, setShowEmailList] = useState(false);
   const [showCoverPhoto, setShowCoverPhoto] = useState(false);
+  const [showUnsubscribed, setShowUnsubscribed] = useState(false);
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<PostSortKey>("newest");
 
@@ -1008,6 +1078,13 @@ function AdminPosts() {
           </button>
           <button
             type="button"
+            onClick={() => setShowUnsubscribed(true)}
+            className="flex items-center gap-1.5 rounded-md border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted"
+          >
+            <UserX className="h-4 w-4" /> Unsubscribed
+          </button>
+          <button
+            type="button"
             onClick={() => setEditing("new")}
             className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
           >
@@ -1016,6 +1093,7 @@ function AdminPosts() {
         </div>
       </div>
       {showEmailList && <EmailListModal onClose={() => setShowEmailList(false)} />}
+      {showUnsubscribed && <UnsubscribedModal onClose={() => setShowUnsubscribed(false)} />}
       {showCoverPhoto && <EmailCoverPhotoModal onClose={() => setShowCoverPhoto(false)} />}
 
       <div className="mt-4 flex flex-wrap gap-2">

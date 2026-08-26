@@ -104,6 +104,15 @@ async function resolveRecipients(
     });
   }
 
+  if (byEmail.size === 0) return [];
+
+  const { data: suppressedRows, error: suppressedErr } = await supabaseAdmin
+    .from("email_suppressions")
+    .select("email")
+    .in("email", Array.from(byEmail.keys()));
+  if (suppressedErr) throw new Error(`Failed to check unsubscribes: ${suppressedErr.message}`);
+  for (const row of suppressedRows ?? []) byEmail.delete(row.email);
+
   return Array.from(byEmail.values());
 }
 
@@ -491,4 +500,20 @@ export const previewPostEmail = createServerFn({ method: "POST" })
     });
 
     return { html };
+  });
+
+export const listSuppressedEmails = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { assertRole } = await import("@/lib/admin/roles.server");
+    await assertRole(context.userId, "admin");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data, error } = await supabaseAdmin
+      .from("email_suppressions")
+      .select("id, email, unsubscribed_at")
+      .order("unsubscribed_at", { ascending: false });
+    if (error) throw new Error(`Failed to load unsubscribes: ${error.message}`);
+
+    return data ?? [];
   });

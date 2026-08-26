@@ -28,3 +28,7 @@ env:
   # when it hits /api/cron/process-email-queue — see src/routes/api/cron/process-email-queue.ts.
   - variable: CRON_SECRET
     secret: CRON_SECRET
+  # Signs the per-recipient unsubscribe link in Posts emails — see
+  # src/lib/unsubscribe-token.server.ts.
+  - variable: UNSUBSCRIBE_SECRET
+    secret: UNSUBSCRIBE_SECRET

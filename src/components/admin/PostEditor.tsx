@@ -40,6 +40,7 @@ import { uploadFileDirect } from "@/lib/adminDirectUpload";
 import { storagePathFromUrl } from "@/lib/storagePathFromUrl";
 import { dedupeContactsByEmail } from "@/lib/admin/dedupeEmailContacts";
 import { isValidEmail } from "@/lib/email";
+import { checkPostContent } from "@/lib/admin/postContentPolicyCheck";
 import { ctaForPost, type PostType } from "@/lib/postCta";
 import { compressImage } from "@/lib/compressImage";
 import { isOversizedFile, MAX_ADMIN_UPLOAD_BYTES } from "@/lib/uploadLimits";
@@ -1111,6 +1112,17 @@ export function PostEditor({
       if (recipientSummaryCount === 0) {
         toast.error("Add at least one recipient first");
         return;
+      }
+      const policyIssues = checkPostContent(title.trim(), editor.getHTML());
+      if (policyIssues.length > 0) {
+        if (
+          !(await confirm(
+            `This post may raise spam/policy concerns: ${policyIssues.map((i) => i.message).join(" ")}`,
+            { title: "Possible policy concerns", confirmLabel: "Send anyway", cancelLabel: "Go back and edit" },
+          ))
+        ) {
+          return;
+        }
       }
       const count = recipientSummaryCount;
       if (

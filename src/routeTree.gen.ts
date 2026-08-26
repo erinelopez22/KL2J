@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as MyInquiriesRouteImport } from './routes/my-inquiries'
+import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
 import { Route as AuthenticatedAdminRouteRouteImport } from './routes/_authenticated/admin/route'
 import { Route as AuthenticatedBoardsRouteImport } from './routes/_authenticated/boards'
 import { Route as AuthenticatedInboxRouteImport } from './routes/_authenticated/inbox'
@@ -51,6 +52,11 @@ const AuthRoute = AuthRouteImport.update({
 const MyInquiriesRoute = MyInquiriesRouteImport.update({
   id: '/my-inquiries',
   path: '/my-inquiries',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UnsubscribeRoute = UnsubscribeRouteImport.update({
+  id: '/unsubscribe',
+  path: '/unsubscribe',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedAdminRouteRoute = AuthenticatedAdminRouteRouteImport.update({
@@ -171,6 +177,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/my-inquiries': typeof MyInquiriesRoute
+  '/unsubscribe': typeof UnsubscribeRoute
   '/admin': typeof AuthenticatedAdminRouteRouteWithChildren
   '/boards': typeof AuthenticatedBoardsRoute
   '/inbox': typeof AuthenticatedInboxRoute
@@ -196,6 +203,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/my-inquiries': typeof MyInquiriesRoute
+  '/unsubscribe': typeof UnsubscribeRoute
   '/boards': typeof AuthenticatedBoardsRoute
   '/inbox': typeof AuthenticatedInboxRoute
   '/admin/companies': typeof AuthenticatedAdminCompaniesRoute
@@ -222,6 +230,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/my-inquiries': typeof MyInquiriesRoute
+  '/unsubscribe': typeof UnsubscribeRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteRouteWithChildren
   '/_authenticated/boards': typeof AuthenticatedBoardsRoute
   '/_authenticated/inbox': typeof AuthenticatedInboxRoute
@@ -249,6 +258,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/my-inquiries'
+    | '/unsubscribe'
     | '/admin'
     | '/boards'
     | '/inbox'
@@ -274,6 +284,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/my-inquiries'
+    | '/unsubscribe'
     | '/boards'
     | '/inbox'
     | '/admin/companies'
@@ -299,6 +310,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/my-inquiries'
+    | '/unsubscribe'
     | '/_authenticated/admin'
     | '/_authenticated/boards'
     | '/_authenticated/inbox'
@@ -326,6 +338,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   MyInquiriesRoute: typeof MyInquiriesRoute
+  UnsubscribeRoute: typeof UnsubscribeRoute
   ApiCronProcessEmailQueueRoute: typeof ApiCronProcessEmailQueueRoute
   ApiAuthGoogleBusinessCallbackRoute: typeof ApiAuthGoogleBusinessCallbackRoute
 }
@@ -358,6 +371,13 @@ declare module '@tanstack/react-router' {
       path: '/my-inquiries'
       fullPath: '/my-inquiries'
       preLoaderRoute: typeof MyInquiriesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/unsubscribe': {
+      id: '/unsubscribe'
+      path: '/unsubscribe'
+      fullPath: '/unsubscribe'
+      preLoaderRoute: typeof UnsubscribeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/admin': {
@@ -566,6 +586,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   MyInquiriesRoute: MyInquiriesRoute,
+  UnsubscribeRoute: UnsubscribeRoute,
   ApiCronProcessEmailQueueRoute: ApiCronProcessEmailQueueRoute,
   ApiAuthGoogleBusinessCallbackRoute: ApiAuthGoogleBusinessCallbackRoute,
 }

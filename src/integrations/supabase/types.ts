@@ -328,6 +328,24 @@ export type Database = {
         };
         Relationships: [];
       };
+      email_suppressions: {
+        Row: {
+          email: string;
+          id: string;
+          unsubscribed_at: string;
+        };
+        Insert: {
+          email: string;
+          id?: string;
+          unsubscribed_at?: string;
+        };
+        Update: {
+          email?: string;
+          id?: string;
+          unsubscribed_at?: string;
+        };
+        Relationships: [];
+      };
       gallery_folders: {
         Row: {
           created_at: string;

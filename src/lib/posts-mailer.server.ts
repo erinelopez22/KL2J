@@ -2,8 +2,11 @@
 // never top-level import from *.functions.ts or route files (see the
 // warning in src/integrations/supabase/client.server.ts).
 import { ctaForPost, type PostType } from "@/lib/postCta";
+import { generateUnsubscribeToken } from "@/lib/unsubscribe-token.server";
 
 export type { PostType };
+
+const SITE_URL = "https://kl2jlandsurveying.com";
 
 type TypeMeta = {
   label: string;
@@ -214,8 +217,18 @@ function ctaHtml(post: Pick<PostForEmail, "type" | "project_ids">, accentColor: 
   </div>`;
 }
 
-export function buildPostEmailHtml(post: PostForEmail): string {
+// `recipientEmail` is omitted for the admin preview (no real recipient to
+// build a link for) and included for every real send, where it produces a
+// signed, per-recipient unsubscribe link — see unsubscribe-token.server.ts.
+export function buildPostEmailHtml(post: PostForEmail, recipientEmail?: string): string {
   const meta = POST_TYPE_META[post.type];
+  const unsubscribeHtml = recipientEmail
+    ? (() => {
+        const token = generateUnsubscribeToken(recipientEmail);
+        const url = `${SITE_URL}/unsubscribe?email=${encodeURIComponent(recipientEmail)}&token=${token}`;
+        return `<a href="${url}" style="color:#999;text-decoration:underline;">Unsubscribe</a> from these emails.`;
+      })()
+    : "";
   return `
 <div style="background:#f4f4f5;padding:32px 12px;font-family:system-ui,-apple-system,'Segoe UI',Arial,sans-serif;">
   <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
@@ -228,6 +241,7 @@ export function buildPostEmailHtml(post: PostForEmail): string {
     <div style="padding:18px 28px;background:#fafafa;border-top:1px solid #eee;text-align:center;">
       <p style="margin:0;font-size:11px;color:#999;line-height:1.5;">
         You're receiving this because you previously contacted KL2J Land Surveying and Engineering Services.
+        ${unsubscribeHtml}
       </p>
       <p style="margin:8px 0 0;font-size:11px;color:#bbb;font-weight:600;letter-spacing:0.04em;">
         KL2J LAND SURVEYING AND ENGINEERING SERVICES
@@ -246,7 +260,7 @@ export async function sendPostToRecipient(
     from: FROM_NOTIFICATION,
     to: recipient.email,
     subject: post.subject,
-    html: buildPostEmailHtml(post),
+    html: buildPostEmailHtml(post, recipient.email),
   });
 }
 
