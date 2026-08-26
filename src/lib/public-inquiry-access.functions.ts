@@ -1,8 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-const SITE_URL = "https://kl2jlandsurveying.com";
-
 const AttachmentSchema = z.object({
   path: z.string().min(1),
   name: z.string().min(1).max(200),
@@ -55,8 +53,9 @@ export const lookupInquiryByCode = createServerFn({ method: "POST" })
   });
 
 // Forgot-code recovery: match on email + any part of the inquirer's name.
-// If matched, re-sends the code(s) by email rather than returning them
-// directly in the response.
+// Returns the matched code(s) directly rather than emailing them — the
+// email+name match is itself the gate, same security bar as before, just
+// without a round-trip through an inbox.
 export const recoverInquiryCode = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) =>
     z.object({ email: z.string().email().max(200), name: z.string().min(1).max(200) }).parse(data),
@@ -77,27 +76,10 @@ export const recoverInquiryCode = createServerFn({ method: "POST" })
       (r): r is typeof r & { inquiry_code: string } => Boolean(r.inquiry_code) && namesMatch(data.name, r.name),
     );
     if (matches.length === 0) {
-      return { matched: false };
+      return { matched: false as const, codes: [] as string[] };
     }
 
-    const { sendMail } = await import("@/lib/mailer.server");
-    const codeList = matches.map((m) => m.inquiry_code).join(", ");
-    try {
-      await sendMail({
-        to: data.email.trim(),
-        subject: "Your KL2J inquiry code(s)",
-        html: `
-<div style="font-family:system-ui,Arial,sans-serif;max-width:560px;margin:0 auto;padding:16px;color:#111;">
-  <h2 style="margin:0 0 12px;color:#8b1e1e;">Here ${matches.length === 1 ? "is your inquiry code" : "are your inquiry codes"}</h2>
-  <p style="font-size:20px;font-weight:700;color:#8b1e1e;">${codeList}</p>
-  <p>Use ${matches.length === 1 ? "it" : "any of them"} at <a href="${SITE_URL}/my-inquiries">${SITE_URL}/my-inquiries</a> to check your inquiry.</p>
-</div>`.trim(),
-      });
-    } catch (e) {
-      console.error("recoverInquiryCode email send failed", e);
-      throw new Error("We found your inquiry but couldn't send the email. Please try again shortly.");
-    }
-    return { matched: true };
+    return { matched: true as const, codes: matches.map((m) => m.inquiry_code) };
   });
 
 // Inquirer posts a message/attachment into the thread, gated by their code.

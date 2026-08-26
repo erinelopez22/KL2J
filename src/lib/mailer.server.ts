@@ -1,6 +1,11 @@
 import { Resend } from "resend";
 
-const FROM_ADDRESS = "KL2J Land Surveying <notifications@kl2jlandsurveying.com>";
+// Each feature sends from its own address (all on the same verified domain,
+// so no extra DNS work) — keeps inbound replies naturally sorted by which
+// part of the app they're about.
+export const FROM_INQUIRY = "KL2J Land Surveying <inquiry@kl2jlandsurveying.com>";
+export const FROM_ADMIN = "KL2J Land Surveying <admin@kl2jlandsurveying.com>";
+export const FROM_NOTIFICATION = "KL2J Land Surveying <notification@kl2jlandsurveying.com>";
 
 let _resend: Resend | undefined;
 
@@ -14,6 +19,7 @@ function getResend(): Resend {
 }
 
 export async function sendMail(opts: {
+  from: string;
   to: string;
   subject: string;
   html: string;
@@ -22,7 +28,7 @@ export async function sendMail(opts: {
   const resend = getResend();
 
   const { data, error } = await resend.emails.send({
-    from: FROM_ADDRESS,
+    from: opts.from,
     to: opts.to,
     subject: opts.subject,
     html: opts.html,

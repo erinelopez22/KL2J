@@ -63,11 +63,12 @@ export async function notifyInquirerOfAdminComment(
   if (error || !inquiry?.email || !inquiry.inquiry_code) return;
 
   try {
-    const { sendMail } = await import("@/lib/mailer.server");
+    const { sendMail, FROM_ADMIN } = await import("@/lib/mailer.server");
     const preview = message
       ? `<p style="white-space:pre-wrap;">${esc(message)}</p>`
       : "<p>(no message text)</p>";
     await sendMail({
+      from: FROM_ADMIN,
       to: inquiry.email,
       subject: "New message from KL2J about your inquiry",
       html: `

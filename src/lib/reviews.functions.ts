@@ -11,6 +11,6 @@ const ReviewSchema = z.object({
 export const submitReview = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => ReviewSchema.parse(data))
   .handler(async ({ data }) => {
-    const { insertReviewAndNotify } = await import("@/lib/reviews-notify.server");
-    return insertReviewAndNotify(data);
+    const { insertReview } = await import("@/lib/reviews.server");
+    return insertReview(data);
   });

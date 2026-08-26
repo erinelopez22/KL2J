@@ -68,17 +68,19 @@ function ForgotCodeForm() {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<"sent" | "notfound" | null>(null);
+  const [notFound, setNotFound] = useState(false);
+  const [foundCodes, setFoundCodes] = useState<string[] | null>(null);
   const doRecover = useServerFn(recoverInquiryCode);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!email.trim() || !name.trim()) return;
     setBusy(true);
-    setResult(null);
+    setNotFound(false);
     try {
       const res = await doRecover({ data: { email: email.trim(), name: name.trim() } });
-      setResult(res.matched ? "sent" : "notfound");
+      if (res.matched) setFoundCodes(res.codes);
+      else setNotFound(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -87,38 +89,90 @@ function ForgotCodeForm() {
   }
 
   return (
-    <form onSubmit={submit} className="mt-3 space-y-2 rounded-lg border border-border bg-muted/30 p-3">
-      <label className="block text-sm">
-        <span className="mb-1 block text-xs font-medium text-muted-foreground">Registered email</span>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-        />
-      </label>
-      <label className="block text-sm">
-        <span className="mb-1 block text-xs font-medium text-muted-foreground">Your name (first, last, or full)</span>
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-        />
-      </label>
-      <button
-        type="submit"
-        disabled={busy}
-        className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-      >
-        {busy ? "Checking…" : "Resend my code"}
-      </button>
-      {result === "sent" && (
-        <p className="text-sm font-medium text-emerald-700">Your inquiry code has been sent to your email.</p>
+    <>
+      <form onSubmit={submit} className="mt-3 space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+        <label className="block text-sm">
+          <span className="mb-1 block text-xs font-medium text-muted-foreground">Registered email</span>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+          />
+        </label>
+        <label className="block text-sm">
+          <span className="mb-1 block text-xs font-medium text-muted-foreground">Your name (first, last, or full)</span>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+          />
+        </label>
+        <button
+          type="submit"
+          disabled={busy}
+          className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+        >
+          {busy ? "Checking…" : "Find my code"}
+        </button>
+        {notFound && (
+          <p className="text-sm font-medium text-destructive">That name and email didn't match any inquiry.</p>
+        )}
+      </form>
+
+      {foundCodes && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"
+          onClick={() => setFoundCodes(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl border border-border bg-card p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold">
+              {foundCodes.length === 1 ? "Your inquiry code" : "Your inquiry codes"}
+            </h3>
+            <div className="mt-3 space-y-2">
+              {foundCodes.map((code) => (
+                <div
+                  key={code}
+                  className="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/30 px-3 py-2"
+                >
+                  <span className="font-mono text-lg font-bold tracking-wide text-primary">{code}</span>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await navigator.clipboard.writeText(code);
+                        toast.success("Copied");
+                      }}
+                      className="rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
+                    >
+                      Copy
+                    </button>
+                    <Link
+                      to="/my-inquiries"
+                      search={{ code }}
+                      onClick={() => setFoundCodes(null)}
+                      className="rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+                    >
+                      Track
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setFoundCodes(null)}
+              className="mt-4 w-full rounded-md border border-border px-4 py-2 text-sm hover:bg-muted"
+            >
+              Close
+            </button>
+          </div>
+        </div>
       )}
-      {result === "notfound" && (
-        <p className="text-sm font-medium text-destructive">That name and email didn't match any inquiry.</p>
-      )}
-    </form>
+    </>
   );
 }
 

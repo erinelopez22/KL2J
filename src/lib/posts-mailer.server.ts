@@ -241,8 +241,9 @@ export async function sendPostToRecipient(
   post: PostForEmail,
   recipient: { email: string; name?: string | null },
 ): Promise<{ response: string }> {
-  const { sendMail } = await import("@/lib/mailer.server");
+  const { sendMail, FROM_NOTIFICATION } = await import("@/lib/mailer.server");
   return sendMail({
+    from: FROM_NOTIFICATION,
     to: recipient.email,
     subject: post.subject,
     html: buildPostEmailHtml(post),

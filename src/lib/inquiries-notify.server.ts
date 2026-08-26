@@ -84,7 +84,7 @@ export async function insertInquiryAndNotify(data: InquiryInput): Promise<{
     throw new Error("Failed to save inquiry");
   }
 
-  const { sendMail } = await import("@/lib/mailer.server");
+  const { sendMail, FROM_INQUIRY } = await import("@/lib/mailer.server");
 
   let emailSent = false;
   let emailError: string | null = null;
@@ -127,6 +127,7 @@ export async function insertInquiryAndNotify(data: InquiryInput): Promise<{
 </div>`.trim();
 
     await sendMail({
+      from: FROM_INQUIRY,
       to: NOTIFY_TO,
       subject,
       html,
@@ -156,6 +157,7 @@ export async function insertInquiryAndNotify(data: InquiryInput): Promise<{
 </div>`.trim();
 
       await sendMail({
+        from: FROM_INQUIRY,
         to: data.email,
         subject: `Your KL2J inquiry code: ${inserted.inquiry_code}`,
         html: inquirerHtml,
