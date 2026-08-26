@@ -1,4 +1,4 @@
-import { Resend } from "resend";
+import { BrevoClient } from "@getbrevo/brevo";
 
 // Each feature sends from its own address (all on the same verified domain,
 // so no extra DNS work) — keeps inbound replies naturally sorted by which
@@ -7,15 +7,26 @@ export const FROM_INQUIRY = "KL2J Land Surveying <inquiry@kl2jlandsurveying.com>
 export const FROM_ADMIN = "KL2J Land Surveying <admin@kl2jlandsurveying.com>";
 export const FROM_NOTIFICATION = "KL2J Land Surveying <notification@kl2jlandsurveying.com>";
 
-let _resend: Resend | undefined;
+let _brevo: BrevoClient | undefined;
 
-function getResend(): Resend {
-  const apiKey = process.env.RESEND_API_KEY;
+function getBrevo(): BrevoClient {
+  const apiKey = process.env.BREVO_API_KEY;
   if (!apiKey) {
-    throw new Error("Email sender not configured (missing RESEND_API_KEY)");
+    throw new Error("Email sender not configured (missing BREVO_API_KEY)");
   }
-  if (!_resend) _resend = new Resend(apiKey);
-  return _resend;
+  if (!_brevo) _brevo = new BrevoClient({ apiKey });
+  return _brevo;
+}
+
+// Parses the "Display Name <email@domain>" format callers already use into
+// the {email, name} shape Brevo's API wants.
+function parseAddress(value: string): { email: string; name?: string } {
+  const match = value.match(/^(.*?)\s*<(.+)>$/);
+  if (match) {
+    const name = match[1].trim();
+    return { email: match[2].trim(), name: name || undefined };
+  }
+  return { email: value.trim() };
 }
 
 export async function sendMail(opts: {
@@ -25,19 +36,15 @@ export async function sendMail(opts: {
   html: string;
   replyTo?: string;
 }): Promise<{ response: string }> {
-  const resend = getResend();
+  const brevo = getBrevo();
 
-  const { data, error } = await resend.emails.send({
-    from: opts.from,
-    to: opts.to,
+  const result = await brevo.transactionalEmails.sendTransacEmail({
+    sender: parseAddress(opts.from),
+    to: [parseAddress(opts.to)],
     subject: opts.subject,
-    html: opts.html,
-    replyTo: opts.replyTo,
+    htmlContent: opts.html,
+    replyTo: opts.replyTo ? parseAddress(opts.replyTo) : undefined,
   });
 
-  if (error) {
-    throw new Error(error.message || "Failed to send email via Resend");
-  }
-
-  return { response: data?.id ?? "" };
+  return { response: result.messageId ?? "" };
 }

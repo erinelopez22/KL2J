@@ -16,10 +16,10 @@ env:
   - variable: SUPABASE_SERVICE_ROLE_KEY
     secret: SUPABASE_SERVICE_ROLE_KEY
   # Outgoing email (all app mail — inquiry notifications, post announcements,
-  # etc.) goes through Resend's API rather than Gmail SMTP, since a personal
+  # etc.) goes through Brevo's API rather than Gmail SMTP, since a personal
   # Gmail account risks getting rate-limited/flagged for this kind of volume.
-  - variable: RESEND_API_KEY
-    secret: RESEND_API_KEY
+  - variable: BREVO_API_KEY
+    secret: BREVO_API_KEY
   - variable: GOOGLE_GBP_CLIENT_ID
     secret: GOOGLE_GBP_CLIENT_ID
   - variable: GOOGLE_GBP_CLIENT_SECRET
