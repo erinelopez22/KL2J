@@ -1,22 +1,16 @@
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
-let _transporter: ReturnType<typeof nodemailer.createTransport> | undefined;
+const FROM_ADDRESS = "KL2J Land Surveying <notifications@kl2jlandsurveying.com>";
 
-function getTransporter() {
-  const user = process.env.GMAIL_SMTP_USER;
-  const pass = process.env.GMAIL_SMTP_APP_PASSWORD;
+let _resend: Resend | undefined;
 
-  if (!user || !pass) return null;
-
-  if (!_transporter) {
-    _transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 465,
-      secure: true,
-      auth: { user, pass },
-    });
+function getResend(): Resend {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    throw new Error("Email sender not configured (missing RESEND_API_KEY)");
   }
-  return _transporter;
+  if (!_resend) _resend = new Resend(apiKey);
+  return _resend;
 }
 
 export async function sendMail(opts: {
@@ -25,17 +19,19 @@ export async function sendMail(opts: {
   html: string;
   replyTo?: string;
 }): Promise<{ response: string }> {
-  const transporter = getTransporter();
-  if (!transporter) {
-    throw new Error("Email sender not configured (missing GMAIL_SMTP_USER or GMAIL_SMTP_APP_PASSWORD)");
-  }
+  const resend = getResend();
 
-  const info = await transporter.sendMail({
-    from: `KL2J Website <${process.env.GMAIL_SMTP_USER}>`,
+  const { data, error } = await resend.emails.send({
+    from: FROM_ADDRESS,
     to: opts.to,
     subject: opts.subject,
     html: opts.html,
     replyTo: opts.replyTo,
   });
-  return { response: info.response };
+
+  if (error) {
+    throw new Error(error.message || "Failed to send email via Resend");
+  }
+
+  return { response: data?.id ?? "" };
 }
