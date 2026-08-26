@@ -853,6 +853,7 @@ export function PostEditor({
   duplicateFrom,
   onClose,
   onSaved,
+  onQueued,
 }: {
   post?: PostRecord;
   // Pre-fills content from a sent post without linking to it — save() still
@@ -861,6 +862,12 @@ export function PostEditor({
   duplicateFrom?: PostRecord;
   onClose: () => void;
   onSaved: () => void;
+  // Fires the moment a send successfully starts (post created/updated and
+  // queued), separately from onSaved — which only fires once the whole
+  // send finishes or on a plain draft save. Lets the list behind this
+  // modal show the new/updated post right away instead of staying stale
+  // until the full send completes or the admin manually reloads.
+  onQueued?: () => void;
 }) {
   const confirm = useConfirm();
   const source = post ?? duplicateFrom;
@@ -1165,6 +1172,7 @@ export function PostEditor({
           .single();
         if (error || !data) throw new Error("Post saved, but failed to start sending");
         setSendingPost(data as SendablePost);
+        onQueued?.();
       } else {
         toast.success(post ? "Post updated" : "Draft saved");
         onSaved();

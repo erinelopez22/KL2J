@@ -243,6 +243,7 @@ function PostViewer({
     try {
       await doStartSending({ data: { id: post.id } });
       setSendActive(true);
+      onChanged();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to start sending");
     }
@@ -252,6 +253,7 @@ function PostViewer({
     try {
       await doResumePaused({ data: { id: post.id } });
       setSendActive(true);
+      onChanged();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to resume sending");
     }
@@ -262,6 +264,7 @@ function PostViewer({
       const result = await doRetryFailed({ data: { id: post.id } });
       toast.success(`Retrying ${result.retried} recipient(s)`);
       setSendActive(true);
+      onChanged();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to retry");
     }
@@ -1221,6 +1224,7 @@ function AdminPosts() {
         <PostEditor
           post={editing === "new" ? undefined : editing}
           onClose={() => setEditing(null)}
+          onQueued={refresh}
           onSaved={() => {
             setEditing(null);
             refresh();
@@ -1232,6 +1236,7 @@ function AdminPosts() {
         <PostEditor
           duplicateFrom={duplicating}
           onClose={() => setDuplicating(null)}
+          onQueued={refresh}
           onSaved={() => {
             setDuplicating(null);
             refresh();
