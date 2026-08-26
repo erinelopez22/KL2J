@@ -1179,7 +1179,7 @@ export function PostEditor({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"
-      onClick={sendingPost ? undefined : onClose}
+      onClick={onClose}
     >
       <div
         className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-border bg-card shadow-2xl"
@@ -1189,15 +1189,13 @@ export function PostEditor({
           <h2 className="text-base font-semibold">
             {sendingPost ? "Queued…" : post ? "Edit post" : "Create post"}
           </h2>
-          {!sendingPost && (
-            <button
-              onClick={onClose}
-              className="absolute right-4 rounded-full p-1.5 text-muted-foreground hover:bg-muted"
-              aria-label="Close"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          )}
+          <button
+            onClick={onClose}
+            className="absolute right-4 rounded-full p-1.5 text-muted-foreground hover:bg-muted"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
         <div className="space-y-4 p-4">
