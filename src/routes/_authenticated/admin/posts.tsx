@@ -129,6 +129,17 @@ const DELIVERY_STATUS_META: Record<string, { label: string; className: string }>
   error: { label: "Provider error", className: "bg-destructive/10 text-destructive" },
 };
 
+// A recipient's headline badge should say the single most truthful thing we
+// know — never "sent" (implying success) next to "hard bounce" (a failure)
+// at the same time. Once Brevo's told us the real outcome, that replaces
+// the generic queue status entirely instead of sitting alongside it.
+function recipientBadge(r: PostRecipientRow): { label: string; className: string } {
+  if (r.status === "sent" && r.delivery_status && DELIVERY_STATUS_META[r.delivery_status]) {
+    return DELIVERY_STATUS_META[r.delivery_status];
+  }
+  return { label: r.status, className: RECIPIENT_STATUS_STYLES[r.status] };
+}
+
 function RecipientsModal({ postId, onClose }: { postId: string; onClose: () => void }) {
   const { data: recipients, isLoading } = useQuery({
     queryKey: ["post-recipients", postId],
@@ -189,20 +200,13 @@ function RecipientsModal({ postId, onClose }: { postId: string; onClose: () => v
                       Held — the send was paused for this post
                     </p>
                   )}
-                  {r.status === "sent" && r.delivery_status && (
-                    <p className="mt-1 text-xs">
-                      <span
-                        className={`rounded px-1.5 py-0.5 font-medium ${
-                          DELIVERY_STATUS_META[r.delivery_status]?.className ??
-                          "bg-muted text-muted-foreground"
-                        }`}
-                      >
-                        {DELIVERY_STATUS_META[r.delivery_status]?.label ?? r.delivery_status}
-                      </span>
-                      {r.delivery_detail && (
-                        <span className="ml-1.5 text-muted-foreground">{r.delivery_detail}</span>
-                      )}
+                  {r.status === "sent" && !r.delivery_status && (
+                    <p className="mt-1 text-[10px] text-muted-foreground">
+                      Waiting on delivery status from Brevo…
                     </p>
+                  )}
+                  {r.status === "sent" && r.delivery_status && r.delivery_detail && (
+                    <p className="mt-1 text-xs text-muted-foreground">{r.delivery_detail}</p>
                   )}
                   {(r.opened_at || r.clicked_at) && (
                     <p className="mt-0.5 text-[10px] text-muted-foreground">
@@ -213,9 +217,9 @@ function RecipientsModal({ postId, onClose }: { postId: string; onClose: () => v
                   )}
                 </div>
                 <span
-                  className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase ${RECIPIENT_STATUS_STYLES[r.status]}`}
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase ${recipientBadge(r).className}`}
                 >
-                  {r.status}
+                  {recipientBadge(r).label}
                 </span>
               </div>
             ))}
