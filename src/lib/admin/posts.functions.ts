@@ -502,6 +502,19 @@ export const previewPostEmail = createServerFn({ method: "POST" })
     return { html };
   });
 
+// One-time/on-demand catch-up for recipients whose message was sent before
+// the Brevo webhook existed (or during a window it was misconfigured) —
+// see src/lib/admin/email-delivery-backfill.server.ts for why this can't
+// just be "wait for a retry."
+export const backfillDeliveryStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { assertRole } = await import("@/lib/admin/roles.server");
+    await assertRole(context.userId, "admin");
+    const { backfillDeliveryStatuses } = await import("@/lib/admin/email-delivery-backfill.server");
+    return backfillDeliveryStatuses();
+  });
+
 export const listSuppressedEmails = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {

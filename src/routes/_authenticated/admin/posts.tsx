@@ -19,6 +19,7 @@ import {
   Upload,
   Image as ImageIcon,
   Eye,
+  RefreshCw,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -28,6 +29,7 @@ import {
   resumePausedPost,
   retryFailedRecipients,
   listSuppressedEmails,
+  backfillDeliveryStatus,
 } from "@/lib/admin/posts.functions";
 import { SendProgress } from "@/components/admin/SendProgress";
 import {
@@ -1053,6 +1055,24 @@ function AdminPosts() {
   const [showUnsubscribed, setShowUnsubscribed] = useState(false);
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<PostSortKey>("newest");
+  const [backfilling, setBackfilling] = useState(false);
+  const doBackfillDeliveryStatus = useServerFn(backfillDeliveryStatus);
+
+  async function runBackfill() {
+    setBackfilling(true);
+    try {
+      const result = await doBackfillDeliveryStatus();
+      toast.success(
+        result.checked === 0
+          ? "Nothing to check — every sent recipient already has a delivery status."
+          : `Checked ${result.checked}, updated ${result.updated} with a delivery status from Brevo's history.`,
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to refresh delivery status");
+    } finally {
+      setBackfilling(false);
+    }
+  }
 
   const { data: posts, isLoading } = useQuery({
     queryKey: ["admin-posts"],
@@ -1130,6 +1150,20 @@ function AdminPosts() {
             className="flex items-center gap-1.5 rounded-md border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted"
           >
             <UserX className="h-4 w-4" /> Unsubscribed
+          </button>
+          <button
+            type="button"
+            onClick={runBackfill}
+            disabled={backfilling}
+            title="Check Brevo's history for any sent recipient that never got a live delivery-status update"
+            className="flex items-center gap-1.5 rounded-md border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
+          >
+            {backfilling ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+            Refresh delivery status
           </button>
           <button
             type="button"
