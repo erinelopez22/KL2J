@@ -118,12 +118,26 @@ export type PostForEmail = {
   project_ids: string[];
   attachments: PostAttachment[];
   coverPhotoUrl?: string | null;
+  logoUrl?: string | null;
 };
 
-// A gradient banner with a big emoji badge, a small uppercase kicker label,
-// the post title, and a short type-flavored tagline. `background-color` is
-// set alongside `background-image` so clients that don't render gradients
-// (older Outlook) still get a solid, on-brand color instead of white.
+// The badge at the top of the hero banner: the real site logo (same one
+// admins upload in Settings and the public site uses) when set, falling
+// back to the type's emoji so older posts/previews without a configured
+// logo still render something. `object-fit:contain` inside a fixed circle
+// keeps a non-square logo from stretching or overflowing.
+function heroBadgeHtml(meta: TypeMeta, logoUrl?: string | null): string {
+  if (logoUrl) {
+    return `<div style="display:inline-flex;width:60px;height:60px;align-items:center;justify-content:center;border-radius:50%;background:#ffffff;overflow:hidden;"><img src="${esc(logoUrl)}" alt="KL2J" style="width:44px;height:44px;object-fit:contain;" /></div>`;
+  }
+  return `<div style="display:inline-block;width:60px;height:60px;line-height:60px;border-radius:50%;background:rgba(255,255,255,0.18);font-size:30px;">${meta.emoji}</div>`;
+}
+
+// A gradient banner with a badge (logo or emoji fallback — see
+// heroBadgeHtml), a small uppercase kicker label, the post title, and a
+// short type-flavored tagline. `background-color` is set alongside
+// `background-image` so clients that don't render gradients (older
+// Outlook) still get a solid, on-brand color instead of white.
 //
 // When a cover photo is set, it REPLACES this solid-color banner — the
 // photo becomes the background and the same badge/kicker/title/tagline
@@ -132,11 +146,16 @@ export type PostForEmail = {
 // letterboxing); `background-position:left top` anchors the crop to the
 // top-left corner instead of centering it, since that's where cover photos
 // tend to have a logo baked in — cropping trims the right/bottom instead.
-function heroHtml(meta: TypeMeta, title: string, coverPhotoUrl?: string | null): string {
+function heroHtml(
+  meta: TypeMeta,
+  title: string,
+  coverPhotoUrl?: string | null,
+  logoUrl?: string | null,
+): string {
   if (coverPhotoUrl) {
     return `
     <div style="background-color:${meta.accentColor};background-image:url('${esc(coverPhotoUrl)}');background-size:cover;background-repeat:no-repeat;background-position:left top;padding:40px 28px 32px;text-align:center;">
-      <div style="display:inline-block;width:60px;height:60px;line-height:60px;border-radius:50%;background:rgba(255,255,255,0.18);font-size:30px;">${meta.emoji}</div>
+      ${heroBadgeHtml(meta, logoUrl)}
       <div style="margin-top:14px;color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;opacity:0.9;text-shadow:0 1px 3px rgba(0,0,0,0.5);">${esc(meta.label)}</div>
       <h1 style="margin:10px 0 0;color:#ffffff;font-size:23px;font-weight:800;line-height:1.35;text-shadow:0 1px 4px rgba(0,0,0,0.5);">${esc(title)}</h1>
       <p style="margin:10px 0 0;color:rgba(255,255,255,0.92);font-size:13px;text-shadow:0 1px 3px rgba(0,0,0,0.5);">${esc(meta.tagline)}</p>
@@ -144,7 +163,7 @@ function heroHtml(meta: TypeMeta, title: string, coverPhotoUrl?: string | null):
   }
   return `
   <div style="background-color:${meta.accentColor};background-image:linear-gradient(135deg, ${meta.accentColor}, ${meta.accentColorSoft});padding:40px 28px 32px;text-align:center;">
-    <div style="display:inline-block;width:60px;height:60px;line-height:60px;border-radius:50%;background:rgba(255,255,255,0.18);font-size:30px;">${meta.emoji}</div>
+    ${heroBadgeHtml(meta, logoUrl)}
     <div style="margin-top:14px;color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;opacity:0.85;">${esc(meta.label)}</div>
     <h1 style="margin:10px 0 0;color:#ffffff;font-size:23px;font-weight:800;line-height:1.35;">${esc(title)}</h1>
     <p style="margin:10px 0 0;color:rgba(255,255,255,0.88);font-size:13px;">${esc(meta.tagline)}</p>
@@ -232,7 +251,7 @@ export function buildPostEmailHtml(post: PostForEmail, recipientEmail?: string):
   return `
 <div style="background:#f4f4f5;padding:32px 12px;font-family:system-ui,-apple-system,'Segoe UI',Arial,sans-serif;">
   <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
-    ${heroHtml(meta, post.title, post.coverPhotoUrl)}
+    ${heroHtml(meta, post.title, post.coverPhotoUrl, post.logoUrl)}
     <div style="padding:6px 28px 30px;">
       ${bodyCardHtml(post.type, post.body_html, meta)}
       ${attachmentsHtml(post.attachments)}

@@ -482,7 +482,7 @@ export const previewPostEmail = createServerFn({ method: "POST" })
 
     const { data: siteSettings } = await supabaseAdmin
       .from("site_settings")
-      .select("email_cover_photo_url, email_cover_photo_by_type")
+      .select("email_cover_photo_url, email_cover_photo_by_type, logo_url")
       .eq("id", 1)
       .single();
 
@@ -498,6 +498,7 @@ export const previewPostEmail = createServerFn({ method: "POST" })
       project_ids: [],
       attachments: [],
       coverPhotoUrl: coverPhotoByType[data.type] ?? siteSettings?.email_cover_photo_url ?? null,
+      logoUrl: siteSettings?.logo_url ?? null,
     });
 
     return { html };

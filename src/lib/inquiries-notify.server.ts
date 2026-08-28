@@ -34,8 +34,9 @@ export type InquiryInput = {
 };
 
 function esc(s: string) {
-  return s.replace(/[&<>"']/g, (c) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string),
+  return s.replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string,
   );
 }
 
@@ -85,6 +86,8 @@ export async function insertInquiryAndNotify(data: InquiryInput): Promise<{
   }
 
   const { sendMail, FROM_INQUIRY } = await import("@/lib/mailer.server");
+  const { getSiteLogoUrl, logoHeaderHtml } = await import("@/lib/email-branding.server");
+  const logoHtml = logoHeaderHtml(await getSiteLogoUrl(supabaseAdmin));
 
   let emailSent = false;
   let emailError: string | null = null;
@@ -96,7 +99,8 @@ export async function insertInquiryAndNotify(data: InquiryInput): Promise<{
       data.checklist_responses && data.checklist_responses.length > 0
         ? data.checklist_responses
             .map((c) => {
-              if (c.type === "checkbox") return `${c.checked ? "&#9745;" : "&#9744;"} ${esc(c.label)}`;
+              if (c.type === "checkbox")
+                return `${c.checked ? "&#9745;" : "&#9744;"} ${esc(c.label)}`;
               if (c.type === "document") {
                 const hasFiles = c.documents && c.documents.length > 0;
                 const value = hasFiles
@@ -112,6 +116,7 @@ export async function insertInquiryAndNotify(data: InquiryInput): Promise<{
         : "—";
     const html = `
 <div style="font-family:system-ui,Arial,sans-serif;max-width:560px;margin:0 auto;padding:16px;color:#111;">
+  ${logoHtml}
   <h2 style="margin:0 0 12px;color:#8b1e1e;">New inquiry from KL2J website</h2>
   <table style="width:100%;border-collapse:collapse;font-size:14px;">
     <tr><td style="padding:6px 0;color:#666;width:110px;">Inquiry Code</td><td><strong>${esc(inserted.inquiry_code)}</strong></td></tr>
@@ -147,6 +152,7 @@ export async function insertInquiryAndNotify(data: InquiryInput): Promise<{
     try {
       const inquirerHtml = `
 <div style="font-family:system-ui,Arial,sans-serif;max-width:560px;margin:0 auto;padding:16px;color:#111;">
+  ${logoHtml}
   <h2 style="margin:0 0 12px;color:#8b1e1e;">Thanks for reaching out to KL2J!</h2>
   <p>We've received your inquiry${servicesLabel ? ` for <strong>${esc(servicesLabel)}</strong>` : ""}. A member of our team will follow up soon.</p>
   <p style="margin:20px 0;padding:16px;background:#f7f2f2;border-radius:8px;text-align:center;">

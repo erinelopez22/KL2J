@@ -64,6 +64,8 @@ export async function notifyInquirerOfAdminComment(
 
   try {
     const { sendMail, FROM_ADMIN } = await import("@/lib/mailer.server");
+    const { getSiteLogoUrl, logoHeaderHtml } = await import("@/lib/email-branding.server");
+    const logoHtml = logoHeaderHtml(await getSiteLogoUrl(supabaseAdmin));
     const preview = message
       ? `<p style="white-space:pre-wrap;">${esc(message)}</p>`
       : "<p>(no message text)</p>";
@@ -73,6 +75,7 @@ export async function notifyInquirerOfAdminComment(
       subject: "New message from KL2J about your inquiry",
       html: `
 <div style="font-family:system-ui,Arial,sans-serif;max-width:560px;margin:0 auto;padding:16px;color:#111;">
+  ${logoHtml}
   <h2 style="margin:0 0 12px;color:#8b1e1e;">You have a new message from KL2J</h2>
   ${preview}
   ${hasAttachments ? "<p>A file was also attached.</p>" : ""}

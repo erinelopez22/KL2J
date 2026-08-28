@@ -61,14 +61,15 @@ export async function processNextQueuedEmail(): Promise<ProcessResult> {
       .single(),
     supabaseAdmin
       .from("site_settings")
-      .select("email_cover_photo_url, email_cover_photo_by_type")
+      .select("email_cover_photo_url, email_cover_photo_by_type, logo_url")
       .eq("id", 1)
       .single(),
   ]);
   if (postErr || !post) throw new Error("Post not found for queued recipient");
 
   const { sendPostToRecipient } = await import("@/lib/posts-mailer.server");
-  const coverPhotoByType = (siteSettings?.email_cover_photo_by_type as Record<string, string>) ?? {};
+  const coverPhotoByType =
+    (siteSettings?.email_cover_photo_by_type as Record<string, string>) ?? {};
   const postForEmail = {
     type: post.type as PostType,
     title: post.title,
@@ -82,6 +83,7 @@ export async function processNextQueuedEmail(): Promise<ProcessResult> {
       kind: "image" | "video" | "document";
     }[],
     coverPhotoUrl: coverPhotoByType[post.type] ?? siteSettings?.email_cover_photo_url ?? null,
+    logoUrl: siteSettings?.logo_url ?? null,
   };
 
   let outcome: "sent" | "failed" = "sent";
@@ -91,7 +93,12 @@ export async function processNextQueuedEmail(): Promise<ProcessResult> {
     const { response } = await sendPostToRecipient(postForEmail, candidate);
     await supabaseAdmin
       .from("post_recipients")
-      .update({ status: "sent", brevo_message_id: response, sent_at: attemptedAt, attempted_at: attemptedAt })
+      .update({
+        status: "sent",
+        brevo_message_id: response,
+        sent_at: attemptedAt,
+        attempted_at: attemptedAt,
+      })
       .eq("id", candidate.id);
   } catch (e) {
     outcome = "failed";
@@ -111,9 +118,17 @@ export async function processNextQueuedEmail(): Promise<ProcessResult> {
   await syncPostCounts(supabaseAdmin, candidate.post_id);
 
   const circuitBroken =
-    outcome === "failed" ? await maybeTripCircuitBreaker(supabaseAdmin, candidate.post_id, errorMessage) : false;
+    outcome === "failed"
+      ? await maybeTripCircuitBreaker(supabaseAdmin, candidate.post_id, errorMessage)
+      : false;
 
-  return { picked: true, recipientId: candidate.id, email: candidate.email, outcome, circuitBroken };
+  return {
+    picked: true,
+    recipientId: candidate.id,
+    email: candidate.email,
+    outcome,
+    circuitBroken,
+  };
 }
 
 async function syncPostCounts(supabaseAdmin: SupabaseClient, postId: string): Promise<void> {
