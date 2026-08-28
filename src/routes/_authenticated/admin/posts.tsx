@@ -63,6 +63,7 @@ type PostRow = PostRecord & {
   sent_count: number;
   failed_count: number;
   bounced_count: number;
+  delivered_count: number;
   created_at: string;
   sent_at: string | null;
 };
@@ -399,7 +400,7 @@ function PostViewer({
 
           <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-muted/10 p-3 text-sm">
             <p className="font-medium">
-              {post.sent_count}/{post.total_count} sent
+              {post.delivered_count}/{post.total_count} delivered
               {post.failed_count > 0 ? `, ${post.failed_count} failed` : ""}
               {post.bounced_count > 0 ? `, ${post.bounced_count} bounced` : ""}
             </p>
@@ -1266,7 +1267,7 @@ function AdminPosts() {
                   <span className="font-medium">{p.title}</span>
                 </div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  {p.sent_count}/{p.total_count} sent
+                  {p.delivered_count}/{p.total_count} delivered
                   {p.failed_count > 0 ? `, ${p.failed_count} failed` : ""}
                   {p.bounced_count > 0 ? `, ${p.bounced_count} bounced` : ""} ·{" "}
                   {new Date(p.created_at).toLocaleString()}

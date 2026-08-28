@@ -765,6 +765,7 @@ export type Database = {
           bounced_count: number;
           created_at: string;
           created_by: string | null;
+          delivered_count: number;
           failed_count: number;
           id: string;
           project_ids: string[];
@@ -784,6 +785,7 @@ export type Database = {
           bounced_count?: number;
           created_at?: string;
           created_by?: string | null;
+          delivered_count?: number;
           failed_count?: number;
           id?: string;
           project_ids?: string[];
@@ -803,6 +805,7 @@ export type Database = {
           bounced_count?: number;
           created_at?: string;
           created_by?: string | null;
+          delivered_count?: number;
           failed_count?: number;
           id?: string;
           project_ids?: string[];

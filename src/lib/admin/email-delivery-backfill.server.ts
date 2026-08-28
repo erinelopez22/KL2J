@@ -133,32 +133,25 @@ export async function backfillDeliveryStatuses(): Promise<BackfillResult> {
     }
   }
 
-  // Always resync every post's bounced_count against what post_recipients
-  // actually says now — not just posts touched by this run's loop above —
-  // so a post whose bounces were already captured before bounced_count
-  // existed (or by a previous backfill run) still gets its summary count
-  // corrected the next time this is clicked.
-  const { data: bouncedRows, error: bouncedErr } = await supabaseAdmin
+  // Always resync every post's delivered_count/bounced_count against what
+  // post_recipients actually says now — not just posts touched by this
+  // run's loop above — so a post whose statuses were already captured
+  // before these counts existed (or by a previous backfill run) still gets
+  // its summary corrected the next time this is clicked.
+  const { data: statusRows, error: statusErr } = await supabaseAdmin
     .from("post_recipients")
     .select("post_id")
-    .in("delivery_status", [
-      "hard_bounce",
-      "soft_bounce",
-      "blocked",
-      "invalid_email",
-      "spam",
-      "error",
-    ]);
-  if (bouncedErr) {
+    .not("delivery_status", "is", null);
+  if (statusErr) {
     console.error(
       "backfillDeliveryStatuses: failed to load posts to resync counts for",
-      bouncedErr.message,
+      statusErr.message,
     );
   } else {
-    const { syncPostBouncedCount } = await import("@/lib/posts-delivery-counts.server");
-    const postIds = new Set((bouncedRows ?? []).map((r) => r.post_id));
+    const { syncPostDeliveryCounts } = await import("@/lib/posts-delivery-counts.server");
+    const postIds = new Set((statusRows ?? []).map((r) => r.post_id));
     for (const postId of postIds) {
-      await syncPostBouncedCount(supabaseAdmin, postId);
+      await syncPostDeliveryCounts(supabaseAdmin, postId);
     }
   }
 

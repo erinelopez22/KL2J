@@ -1,15 +1,15 @@
 // Server-only. Shared by src/routes/api/webhooks/brevo.ts (live events) and
 // src/lib/admin/email-delivery-backfill.server.ts (catch-up for older
 // sends) — both write a delivery_status onto post_recipients and need the
-// same "recompute posts.bounced_count from what's actually in the table"
-// step afterward, so a post's summary count can never drift from its
-// recipients' real state.
+// same "recompute posts.delivered_count/bounced_count from what's actually
+// in the table" step afterward, so a post's summary counts can never drift
+// from its recipients' real state.
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 // Outcomes that mean the recipient did NOT get the email despite Brevo
 // having accepted the send — what an admin actually cares about when a
-// post's summary says "N sent." Excludes "deferred" (still might resolve)
-// and "unsubscribed" (not a failure, just an opt-out).
+// post's summary says "N delivered." Excludes "deferred" (still might
+// resolve) and "unsubscribed" (not a failure, just an opt-out).
 const BOUNCE_LIKE_STATUSES = [
   "hard_bounce",
   "soft_bounce",
@@ -19,21 +19,32 @@ const BOUNCE_LIKE_STATUSES = [
   "error",
 ];
 
-export async function syncPostBouncedCount(
+export async function syncPostDeliveryCounts(
   supabaseAdmin: SupabaseClient,
   postId: string,
 ): Promise<void> {
-  const { count, error } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from("post_recipients")
-    .select("id", { count: "exact", head: true })
+    .select("delivery_status")
     .eq("post_id", postId)
-    .in("delivery_status", BOUNCE_LIKE_STATUSES);
+    .not("delivery_status", "is", null);
   if (error) {
-    console.error(`syncPostBouncedCount: failed to count for post ${postId}`, error.message);
+    console.error(
+      `syncPostDeliveryCounts: failed to load statuses for post ${postId}`,
+      error.message,
+    );
     return;
   }
+
+  let delivered = 0;
+  let bounced = 0;
+  for (const row of data ?? []) {
+    if (row.delivery_status === "delivered") delivered++;
+    else if (row.delivery_status && BOUNCE_LIKE_STATUSES.includes(row.delivery_status)) bounced++;
+  }
+
   await supabaseAdmin
     .from("posts")
-    .update({ bounced_count: count ?? 0 })
+    .update({ delivered_count: delivered, bounced_count: bounced })
     .eq("id", postId);
 }

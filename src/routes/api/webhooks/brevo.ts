@@ -81,8 +81,8 @@ async function applyEvent(
       .select("post_id")
       .maybeSingle();
     if (updated?.post_id) {
-      const { syncPostBouncedCount } = await import("@/lib/posts-delivery-counts.server");
-      await syncPostBouncedCount(supabaseAdmin, updated.post_id);
+      const { syncPostDeliveryCounts } = await import("@/lib/posts-delivery-counts.server");
+      await syncPostDeliveryCounts(supabaseAdmin, updated.post_id);
     }
   }
   // Any other event name (e.g. "request", Brevo's own "accepted for
