@@ -32,3 +32,9 @@ env:
   # src/lib/unsubscribe-token.server.ts.
   - variable: UNSUBSCRIBE_SECRET
     secret: UNSUBSCRIBE_SECRET
+  # Shared secret Brevo appends as a `?secret=` query param when it calls
+  # /api/webhooks/brevo to report delivery status (bounced, opened, clicked,
+  # ...) — see src/routes/api/webhooks/brevo.ts. Must also be pasted into
+  # the webhook URL configured in Brevo's dashboard.
+  - variable: BREVO_WEBHOOK_SECRET
+    secret: BREVO_WEBHOOK_SECRET

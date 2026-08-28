@@ -29,6 +29,20 @@ function parseAddress(value: string): { email: string; name?: string } {
   return { email: value.trim() };
 }
 
+// Brevo runs its own personalization/template parser over `subject` and
+// `htmlContent` on every send — looking for `{{ ... }}` — even when we
+// never use Brevo templating ourselves and pass fully-rendered content. A
+// stray `{`/`}` typed by an admin (a post title) or a customer (an inquiry
+// message quoted back into a notification email) is enough to make that
+// parser choke and reject the whole send with a cryptic parse error.
+// None of our own template markup ever needs a literal curly brace, so
+// swapping user-typed ones for visually-identical fullwidth lookalikes
+// here neutralizes this everywhere, in one place, without changing what
+// the words say.
+function neutralizeBrevoTemplateSyntax(value: string): string {
+  return value.replace(/\{/g, "｛").replace(/\}/g, "｝");
+}
+
 export async function sendMail(opts: {
   from: string;
   to: string;
@@ -41,8 +55,8 @@ export async function sendMail(opts: {
   const result = await brevo.transactionalEmails.sendTransacEmail({
     sender: parseAddress(opts.from),
     to: [parseAddress(opts.to)],
-    subject: opts.subject,
-    htmlContent: opts.html,
+    subject: neutralizeBrevoTemplateSyntax(opts.subject),
+    htmlContent: neutralizeBrevoTemplateSyntax(opts.html),
     replyTo: opts.replyTo ? parseAddress(opts.replyTo) : undefined,
   });
 

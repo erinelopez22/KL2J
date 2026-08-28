@@ -91,7 +91,7 @@ export async function processNextQueuedEmail(): Promise<ProcessResult> {
     const { response } = await sendPostToRecipient(postForEmail, candidate);
     await supabaseAdmin
       .from("post_recipients")
-      .update({ status: "sent", smtp_response: response, sent_at: attemptedAt, attempted_at: attemptedAt })
+      .update({ status: "sent", brevo_message_id: response, sent_at: attemptedAt, attempted_at: attemptedAt })
       .eq("id", candidate.id);
   } catch (e) {
     outcome = "failed";

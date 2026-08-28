@@ -96,6 +96,10 @@ type PostRecipientRow = {
   smtp_response: string | null;
   sent_at: string | null;
   created_at: string;
+  delivery_status: string | null;
+  delivery_detail: string | null;
+  opened_at: string | null;
+  clicked_at: string | null;
 };
 
 const RECIPIENT_STATUS_STYLES: Record<PostRecipientRow["status"], string> = {
@@ -106,13 +110,32 @@ const RECIPIENT_STATUS_STYLES: Record<PostRecipientRow["status"], string> = {
   paused: "bg-destructive/10 text-destructive",
 };
 
+// What actually happened after Brevo accepted the send, reported back by
+// the /api/webhooks/brevo endpoint — a step past `status: "sent"`, which
+// only ever meant "the API call succeeded." Null until Brevo's first
+// webhook call for that message arrives, which can take a few seconds to
+// minutes after sending.
+const DELIVERY_STATUS_META: Record<string, { label: string; className: string }> = {
+  delivered: { label: "Delivered", className: "bg-emerald-100 text-emerald-700" },
+  hard_bounce: { label: "Hard bounce", className: "bg-destructive/10 text-destructive" },
+  soft_bounce: { label: "Soft bounce", className: "bg-amber-100 text-amber-700" },
+  blocked: { label: "Blocked", className: "bg-destructive/10 text-destructive" },
+  invalid_email: { label: "Invalid email", className: "bg-destructive/10 text-destructive" },
+  deferred: { label: "Deferred", className: "bg-amber-100 text-amber-700" },
+  spam: { label: "Marked as spam", className: "bg-destructive/10 text-destructive" },
+  unsubscribed: { label: "Unsubscribed", className: "bg-muted text-muted-foreground" },
+  error: { label: "Provider error", className: "bg-destructive/10 text-destructive" },
+};
+
 function RecipientsModal({ postId, onClose }: { postId: string; onClose: () => void }) {
   const { data: recipients, isLoading } = useQuery({
     queryKey: ["post-recipients", postId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("post_recipients")
-        .select("id, email, name, source, status, error, attempts, smtp_response, sent_at, created_at")
+        .select(
+          "id, email, name, source, status, error, attempts, smtp_response, sent_at, created_at, delivery_status, delivery_detail, opened_at, clicked_at",
+        )
         .eq("post_id", postId)
         .order("created_at", { ascending: true });
       if (error) throw error;
@@ -162,6 +185,28 @@ function RecipientsModal({ postId, onClose }: { postId: string; onClose: () => v
                   {r.status === "paused" && (
                     <p className="mt-1 text-xs text-destructive">
                       Held — the send was paused for this post
+                    </p>
+                  )}
+                  {r.status === "sent" && r.delivery_status && (
+                    <p className="mt-1 text-xs">
+                      <span
+                        className={`rounded px-1.5 py-0.5 font-medium ${
+                          DELIVERY_STATUS_META[r.delivery_status]?.className ??
+                          "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {DELIVERY_STATUS_META[r.delivery_status]?.label ?? r.delivery_status}
+                      </span>
+                      {r.delivery_detail && (
+                        <span className="ml-1.5 text-muted-foreground">{r.delivery_detail}</span>
+                      )}
+                    </p>
+                  )}
+                  {(r.opened_at || r.clicked_at) && (
+                    <p className="mt-0.5 text-[10px] text-muted-foreground">
+                      {r.opened_at && `Opened ${new Date(r.opened_at).toLocaleString()}`}
+                      {r.opened_at && r.clicked_at && " · "}
+                      {r.clicked_at && `Clicked ${new Date(r.clicked_at).toLocaleString()}`}
                     </p>
                   )}
                 </div>

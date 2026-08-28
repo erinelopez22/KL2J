@@ -33,6 +33,7 @@ import { Route as AuthenticatedAdminServicesRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminUsersRouteImport } from './routes/_authenticated/admin/users'
 import { Route as AuthenticatedBBoardIdRouteImport } from './routes/_authenticated/b.$boardId'
 import { Route as ApiCronProcessEmailQueueRouteImport } from './routes/api/cron/process-email-queue'
+import { Route as ApiWebhooksBrevoRouteImport } from './routes/api/webhooks/brevo'
 import { Route as ApiAuthGoogleBusinessCallbackRouteImport } from './routes/api/auth/google-business/callback'
 
 const IndexRoute = IndexRouteImport.update({
@@ -166,6 +167,11 @@ const ApiCronProcessEmailQueueRoute =
     path: '/api/cron/process-email-queue',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiWebhooksBrevoRoute = ApiWebhooksBrevoRouteImport.update({
+  id: '/api/webhooks/brevo',
+  path: '/api/webhooks/brevo',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAuthGoogleBusinessCallbackRoute =
   ApiAuthGoogleBusinessCallbackRouteImport.update({
     id: '/api/auth/google-business/callback',
@@ -196,6 +202,7 @@ export interface FileRoutesByFullPath {
   '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/b/$boardId': typeof AuthenticatedBBoardIdRoute
   '/api/cron/process-email-queue': typeof ApiCronProcessEmailQueueRoute
+  '/api/webhooks/brevo': typeof ApiWebhooksBrevoRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/api/auth/google-business/callback': typeof ApiAuthGoogleBusinessCallbackRoute
 }
@@ -221,6 +228,7 @@ export interface FileRoutesByTo {
   '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/b/$boardId': typeof AuthenticatedBBoardIdRoute
   '/api/cron/process-email-queue': typeof ApiCronProcessEmailQueueRoute
+  '/api/webhooks/brevo': typeof ApiWebhooksBrevoRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/api/auth/google-business/callback': typeof ApiAuthGoogleBusinessCallbackRoute
 }
@@ -249,6 +257,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/users': typeof AuthenticatedAdminUsersRoute
   '/_authenticated/b/$boardId': typeof AuthenticatedBBoardIdRoute
   '/api/cron/process-email-queue': typeof ApiCronProcessEmailQueueRoute
+  '/api/webhooks/brevo': typeof ApiWebhooksBrevoRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/api/auth/google-business/callback': typeof ApiAuthGoogleBusinessCallbackRoute
 }
@@ -277,6 +286,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/b/$boardId'
     | '/api/cron/process-email-queue'
+    | '/api/webhooks/brevo'
     | '/admin/'
     | '/api/auth/google-business/callback'
   fileRoutesByTo: FileRoutesByTo
@@ -302,6 +312,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/b/$boardId'
     | '/api/cron/process-email-queue'
+    | '/api/webhooks/brevo'
     | '/admin'
     | '/api/auth/google-business/callback'
   id:
@@ -329,6 +340,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/users'
     | '/_authenticated/b/$boardId'
     | '/api/cron/process-email-queue'
+    | '/api/webhooks/brevo'
     | '/_authenticated/admin/'
     | '/api/auth/google-business/callback'
   fileRoutesById: FileRoutesById
@@ -340,6 +352,7 @@ export interface RootRouteChildren {
   MyInquiriesRoute: typeof MyInquiriesRoute
   UnsubscribeRoute: typeof UnsubscribeRoute
   ApiCronProcessEmailQueueRoute: typeof ApiCronProcessEmailQueueRoute
+  ApiWebhooksBrevoRoute: typeof ApiWebhooksBrevoRoute
   ApiAuthGoogleBusinessCallbackRoute: typeof ApiAuthGoogleBusinessCallbackRoute
 }
 
@@ -513,6 +526,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCronProcessEmailQueueRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/webhooks/brevo': {
+      id: '/api/webhooks/brevo'
+      path: '/api/webhooks/brevo'
+      fullPath: '/api/webhooks/brevo'
+      preLoaderRoute: typeof ApiWebhooksBrevoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/google-business/callback': {
       id: '/api/auth/google-business/callback'
       path: '/api/auth/google-business/callback'
@@ -588,6 +608,7 @@ const rootRouteChildren: RootRouteChildren = {
   MyInquiriesRoute: MyInquiriesRoute,
   UnsubscribeRoute: UnsubscribeRoute,
   ApiCronProcessEmailQueueRoute: ApiCronProcessEmailQueueRoute,
+  ApiWebhooksBrevoRoute: ApiWebhooksBrevoRoute,
   ApiAuthGoogleBusinessCallbackRoute: ApiAuthGoogleBusinessCallbackRoute,
 }
 export const routeTree = rootRouteImport

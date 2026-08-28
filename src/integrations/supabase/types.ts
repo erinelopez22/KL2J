@@ -678,12 +678,18 @@ export type Database = {
         Row: {
           attempted_at: string | null;
           attempts: number;
+          brevo_message_id: string | null;
+          clicked_at: string | null;
           created_at: string;
+          delivery_detail: string | null;
+          delivery_status: string | null;
+          delivery_updated_at: string | null;
           email: string;
           error: string | null;
           id: string;
           inquiry_id: string | null;
           name: string | null;
+          opened_at: string | null;
           post_id: string;
           scheduled_at: string;
           sent_at: string | null;
@@ -694,12 +700,18 @@ export type Database = {
         Insert: {
           attempted_at?: string | null;
           attempts?: number;
+          brevo_message_id?: string | null;
+          clicked_at?: string | null;
           created_at?: string;
+          delivery_detail?: string | null;
+          delivery_status?: string | null;
+          delivery_updated_at?: string | null;
           email: string;
           error?: string | null;
           id?: string;
           inquiry_id?: string | null;
           name?: string | null;
+          opened_at?: string | null;
           post_id: string;
           scheduled_at?: string;
           sent_at?: string | null;
@@ -710,12 +722,18 @@ export type Database = {
         Update: {
           attempted_at?: string | null;
           attempts?: number;
+          brevo_message_id?: string | null;
+          clicked_at?: string | null;
           created_at?: string;
+          delivery_detail?: string | null;
+          delivery_status?: string | null;
+          delivery_updated_at?: string | null;
           email?: string;
           error?: string | null;
           id?: string;
           inquiry_id?: string | null;
           name?: string | null;
+          opened_at?: string | null;
           post_id?: string;
           scheduled_at?: string;
           sent_at?: string | null;
