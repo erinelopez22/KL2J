@@ -486,7 +486,8 @@ export const previewPostEmail = createServerFn({ method: "POST" })
       .eq("id", 1)
       .single();
 
-    const coverPhotoByType = (siteSettings?.email_cover_photo_by_type as Record<string, string>) ?? {};
+    const coverPhotoByType =
+      (siteSettings?.email_cover_photo_by_type as Record<string, string>) ?? {};
     const meta = POST_TYPE_META[data.type as PostType];
     const html = buildPostEmailHtml({
       type: data.type as PostType,
@@ -513,6 +514,18 @@ export const backfillDeliveryStatus = createServerFn({ method: "POST" })
     await assertRole(context.userId, "admin");
     const { backfillDeliveryStatuses } = await import("@/lib/admin/email-delivery-backfill.server");
     return backfillDeliveryStatuses();
+  });
+
+// Brevo's own remaining send quota — separate from our internal
+// DAILY_SEND_CAP above, which paces OUR sending; this is what Brevo itself
+// will still accept before it starts rejecting sends outright.
+export const getEmailUsage = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { assertRole } = await import("@/lib/admin/roles.server");
+    await assertRole(context.userId, "admin");
+    const { getBrevoEmailUsage } = await import("@/lib/admin/brevo-account.server");
+    return getBrevoEmailUsage();
   });
 
 export const listSuppressedEmails = createServerFn({ method: "GET" })

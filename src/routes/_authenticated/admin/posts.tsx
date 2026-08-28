@@ -30,6 +30,7 @@ import {
   retryFailedRecipients,
   listSuppressedEmails,
   backfillDeliveryStatus,
+  getEmailUsage,
 } from "@/lib/admin/posts.functions";
 import { SendProgress } from "@/components/admin/SendProgress";
 import {
@@ -281,7 +282,11 @@ function PostViewer({
       if (
         !(await confirm(
           `This post may raise spam/policy concerns: ${policyIssues.map((i) => i.message).join(" ")}`,
-          { title: "Possible policy concerns", confirmLabel: "Send anyway", cancelLabel: "Go back and edit" },
+          {
+            title: "Possible policy concerns",
+            confirmLabel: "Send anyway",
+            cancelLabel: "Go back and edit",
+          },
         ))
       ) {
         return;
@@ -493,7 +498,13 @@ function PostViewer({
   );
 }
 
-type EmailContact = { id: string; email: string; name: string | null; source: string; created_at: string };
+type EmailContact = {
+  id: string;
+  email: string;
+  name: string | null;
+  source: string;
+  created_at: string;
+};
 
 function UnsubscribedModal({ onClose }: { onClose: () => void }) {
   const doList = useServerFn(listSuppressedEmails);
@@ -503,7 +514,10 @@ function UnsubscribedModal({ onClose }: { onClose: () => void }) {
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"
+      onClick={onClose}
+    >
       <div
         className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-2xl sm:p-6"
         onClick={(e) => e.stopPropagation()}
@@ -512,8 +526,8 @@ function UnsubscribedModal({ onClose }: { onClose: () => void }) {
           <div>
             <h2 className="text-lg font-semibold">Unsubscribed</h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              These addresses opted out of Posts announcement emails and are automatically excluded from
-              every future send.
+              These addresses opted out of Posts announcement emails and are automatically excluded
+              from every future send.
             </p>
           </div>
           <button
@@ -620,7 +634,9 @@ function EmailListModal({ onClose }: { onClose: () => void }) {
       refresh();
       const notes = [
         result.skipped > 0 ? `${result.skipped} already on the list` : null,
-        skippedInvalid > 0 ? `${skippedInvalid} invalid email${skippedInvalid === 1 ? "" : "s"} skipped` : null,
+        skippedInvalid > 0
+          ? `${skippedInvalid} invalid email${skippedInvalid === 1 ? "" : "s"} skipped`
+          : null,
       ].filter(Boolean);
       toast.success(
         `Imported ${result.imported} contact${result.imported === 1 ? "" : "s"}` +
@@ -667,7 +683,9 @@ function EmailListModal({ onClose }: { onClose: () => void }) {
     }
     setSavingEdit(true);
     try {
-      await doUpdate({ data: { id: contact.id, email: trimmed, name: editName.trim() || undefined } });
+      await doUpdate({
+        data: { id: contact.id, email: trimmed, name: editName.trim() || undefined },
+      });
       cancelEdit();
       refresh();
       toast.success("Contact updated");
@@ -679,14 +697,21 @@ function EmailListModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"
+      onClick={onClose}
+    >
       <div
         className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-2xl sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Email list</h2>
-          <button onClick={onClose} className="rounded-md p-1 text-muted-foreground hover:bg-muted" aria-label="Close">
+          <button
+            onClick={onClose}
+            className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+            aria-label="Close"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -706,7 +731,9 @@ function EmailListModal({ onClose }: { onClose: () => void }) {
             />
           </label>
           <label className="min-w-[120px] flex-1 text-sm">
-            <span className="mb-1 block text-xs font-medium text-muted-foreground">Name (optional)</span>
+            <span className="mb-1 block text-xs font-medium text-muted-foreground">
+              Name (optional)
+            </span>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -730,7 +757,11 @@ function EmailListModal({ onClose }: { onClose: () => void }) {
             disabled={importing}
             className="flex items-center gap-1.5 rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground hover:border-primary hover:text-primary disabled:opacity-50"
           >
-            {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+            {importing ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Upload className="h-3.5 w-3.5" />
+            )}
             Bulk import from CSV (columns: email, name)
           </button>
           <input
@@ -762,7 +793,9 @@ function EmailListModal({ onClose }: { onClose: () => void }) {
                   className="flex flex-wrap items-end gap-2 rounded-md border border-primary/40 bg-muted/30 px-2.5 py-2 text-sm"
                 >
                   <label className="min-w-[160px] flex-1 text-sm">
-                    <span className="mb-1 block text-xs font-medium text-muted-foreground">Email</span>
+                    <span className="mb-1 block text-xs font-medium text-muted-foreground">
+                      Email
+                    </span>
                     <input
                       value={editEmail}
                       onChange={(e) => setEditEmail(e.target.value)}
@@ -771,7 +804,9 @@ function EmailListModal({ onClose }: { onClose: () => void }) {
                     />
                   </label>
                   <label className="min-w-[120px] flex-1 text-sm">
-                    <span className="mb-1 block text-xs font-medium text-muted-foreground">Name</span>
+                    <span className="mb-1 block text-xs font-medium text-muted-foreground">
+                      Name
+                    </span>
                     <input
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
@@ -804,7 +839,11 @@ function EmailListModal({ onClose }: { onClose: () => void }) {
                 >
                   <div className="min-w-0">
                     <span className="block truncate font-medium">{c.name || c.email}</span>
-                    {c.name && <span className="block truncate text-xs text-muted-foreground">{c.email}</span>}
+                    {c.name && (
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {c.email}
+                      </span>
+                    )}
                     {!isValidEmail(c.email) && (
                       <span className="mt-0.5 block text-xs font-medium text-destructive">
                         Invalid email — edit to fix
@@ -955,12 +994,7 @@ function EmailCoverPhotoModal({ onClose }: { onClose: () => void }) {
             </div>
           )}
           <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover/cover:bg-black/50 group-hover/cover:opacity-100">
-            <QuickImageUpload
-              folder="branding"
-              label="Change"
-              iconOnly
-              onUploaded={onUpload}
-            />
+            <QuickImageUpload folder="branding" label="Change" iconOnly onUploaded={onUpload} />
           </div>
         </div>
         <div className="min-w-0 flex-1">
@@ -973,7 +1007,11 @@ function EmailCoverPhotoModal({ onClose }: { onClose: () => void }) {
           onClick={onPreview}
           className="flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
         >
-          {previewing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
+          {previewing ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Eye className="h-3.5 w-3.5" />
+          )}
           Preview
         </button>
         {url && (
@@ -1026,7 +1064,9 @@ function EmailCoverPhotoModal({ onClose }: { onClose: () => void }) {
         />
 
         <div className="mt-4 space-y-2">
-          <p className="text-xs font-semibold uppercase text-muted-foreground">Per-type overrides</p>
+          <p className="text-xs font-semibold uppercase text-muted-foreground">
+            Per-type overrides
+          </p>
           {(Object.keys(TYPE_LABELS) as PostType[]).map((type) => (
             <PhotoRow
               key={type}
@@ -1042,10 +1082,45 @@ function EmailCoverPhotoModal({ onClose }: { onClose: () => void }) {
           ))}
         </div>
       </div>
-      {previewHtml && (
-        <EmailPreviewModal html={previewHtml} onClose={() => setPreviewHtml(null)} />
-      )}
+      {previewHtml && <EmailPreviewModal html={previewHtml} onClose={() => setPreviewHtml(null)} />}
     </div>
+  );
+}
+
+// Brevo's own remaining quota, not our internal DAILY_SEND_CAP pacing —
+// what Brevo itself will still accept today before it starts rejecting
+// sends outright. staleTime keeps this from re-fetching Brevo's API on
+// every render; it's informational, not something that needs to be
+// second-fresh.
+function EmailUsageBadge() {
+  const doGetUsage = useServerFn(getEmailUsage);
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["brevo-email-usage"],
+    queryFn: () => doGetUsage(),
+    staleTime: 60_000,
+  });
+
+  if (isLoading) return null;
+  if (isError || !data) return null;
+
+  const label =
+    data.dailyLimit != null
+      ? `${data.credits}/${data.dailyLimit} emails left today (Brevo)`
+      : `${data.credits} Brevo credits remaining`;
+
+  const low = data.dailyLimit != null && data.credits <= data.dailyLimit * 0.15;
+
+  return (
+    <span
+      className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
+        low
+          ? "border-amber-300 bg-amber-50 text-amber-700"
+          : "border-border bg-muted/40 text-muted-foreground"
+      }`}
+      title="Brevo's own account-level send quota — separate from this app's own pacing limit"
+    >
+      {label}
+    </span>
   );
 }
 
@@ -1097,7 +1172,6 @@ function AdminPosts() {
     queryClient.invalidateQueries({ queryKey: ["admin-posts"] });
   }
 
-
   async function remove(post: PostRow) {
     const message =
       post.status === "draft"
@@ -1135,6 +1209,9 @@ function AdminPosts() {
           <p className="text-sm text-muted-foreground">
             Announce new projects, services, or company updates by email to your customers.
           </p>
+          <div className="mt-1.5">
+            <EmailUsageBadge />
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
