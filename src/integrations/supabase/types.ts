@@ -762,6 +762,7 @@ export type Database = {
         Row: {
           attachments: Json;
           body_html: string;
+          bounced_count: number;
           created_at: string;
           created_by: string | null;
           failed_count: number;
@@ -780,6 +781,7 @@ export type Database = {
         Insert: {
           attachments?: Json;
           body_html: string;
+          bounced_count?: number;
           created_at?: string;
           created_by?: string | null;
           failed_count?: number;
@@ -798,6 +800,7 @@ export type Database = {
         Update: {
           attachments?: Json;
           body_html?: string;
+          bounced_count?: number;
           created_at?: string;
           created_by?: string | null;
           failed_count?: number;

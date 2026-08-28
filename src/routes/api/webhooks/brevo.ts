@@ -74,10 +74,16 @@ async function applyEvent(
     return;
   }
   if (DELIVERY_OUTCOME_EVENTS.has(eventName)) {
-    await supabaseAdmin
+    const { data: updated } = await supabaseAdmin
       .from("post_recipients")
       .update({ delivery_status: eventName, delivery_detail: detail, delivery_updated_at: now })
-      .eq("brevo_message_id", messageId);
+      .eq("brevo_message_id", messageId)
+      .select("post_id")
+      .maybeSingle();
+    if (updated?.post_id) {
+      const { syncPostBouncedCount } = await import("@/lib/posts-delivery-counts.server");
+      await syncPostBouncedCount(supabaseAdmin, updated.post_id);
+    }
   }
   // Any other event name (e.g. "request", Brevo's own "accepted for
   // sending" echo) is ignored — it's redundant with our own queue status.

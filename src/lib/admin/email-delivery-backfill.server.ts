@@ -83,54 +83,84 @@ export async function backfillDeliveryStatuses(): Promise<BackfillResult> {
 
   const { data: rows, error } = await supabaseAdmin
     .from("post_recipients")
-    .select("id, brevo_message_id")
+    .select("id, post_id, brevo_message_id")
     .eq("status", "sent")
     .is("delivery_status", null)
     .not("brevo_message_id", "is", null);
   if (error) throw new Error(`Failed to load recipients to backfill: ${error.message}`);
-  if (!rows || rows.length === 0) return { checked: 0, updated: 0 };
-
-  const eventsByMessageId = await fetchAllEvents();
 
   let updated = 0;
-  for (const row of rows) {
-    const messageId = row.brevo_message_id;
-    if (!messageId) continue;
-    const events = eventsByMessageId.get(messageId);
-    if (!events || events.length === 0) continue;
+  if (rows && rows.length > 0) {
+    const eventsByMessageId = await fetchAllEvents();
 
-    const sorted = [...events].sort((a, b) => a.date.localeCompare(b.date));
-    let outcomeStatus: string | null = null;
-    let outcomeDetail: string | null = null;
-    let openedAt: string | null = null;
-    let clickedAt: string | null = null;
+    for (const row of rows) {
+      const messageId = row.brevo_message_id;
+      if (!messageId) continue;
+      const events = eventsByMessageId.get(messageId);
+      if (!events || events.length === 0) continue;
 
-    for (const evt of sorted) {
-      const canonical = normalizeBrevoEventName(evt.event);
-      if (!canonical) continue;
-      if (canonical === "opened" && !openedAt) openedAt = evt.date;
-      else if (canonical === "click" && !clickedAt) clickedAt = evt.date;
-      else if (DELIVERY_OUTCOME_EVENTS.has(canonical)) {
-        outcomeStatus = canonical;
-        outcomeDetail = evt.reason ?? outcomeDetail;
+      const sorted = [...events].sort((a, b) => a.date.localeCompare(b.date));
+      let outcomeStatus: string | null = null;
+      let outcomeDetail: string | null = null;
+      let openedAt: string | null = null;
+      let clickedAt: string | null = null;
+
+      for (const evt of sorted) {
+        const canonical = normalizeBrevoEventName(evt.event);
+        if (!canonical) continue;
+        if (canonical === "opened" && !openedAt) openedAt = evt.date;
+        else if (canonical === "click" && !clickedAt) clickedAt = evt.date;
+        else if (DELIVERY_OUTCOME_EVENTS.has(canonical)) {
+          outcomeStatus = canonical;
+          outcomeDetail = evt.reason ?? outcomeDetail;
+        }
       }
+
+      if (!outcomeStatus && !openedAt && !clickedAt) continue;
+
+      const { error: updateErr } = await supabaseAdmin
+        .from("post_recipients")
+        .update({
+          ...(outcomeStatus
+            ? { delivery_status: outcomeStatus, delivery_detail: outcomeDetail }
+            : {}),
+          ...(openedAt ? { opened_at: openedAt } : {}),
+          ...(clickedAt ? { clicked_at: clickedAt } : {}),
+          delivery_updated_at: new Date().toISOString(),
+        })
+        .eq("id", row.id);
+      if (!updateErr) updated++;
     }
-
-    if (!outcomeStatus && !openedAt && !clickedAt) continue;
-
-    const { error: updateErr } = await supabaseAdmin
-      .from("post_recipients")
-      .update({
-        ...(outcomeStatus
-          ? { delivery_status: outcomeStatus, delivery_detail: outcomeDetail }
-          : {}),
-        ...(openedAt ? { opened_at: openedAt } : {}),
-        ...(clickedAt ? { clicked_at: clickedAt } : {}),
-        delivery_updated_at: new Date().toISOString(),
-      })
-      .eq("id", row.id);
-    if (!updateErr) updated++;
   }
 
-  return { checked: rows.length, updated };
+  // Always resync every post's bounced_count against what post_recipients
+  // actually says now — not just posts touched by this run's loop above —
+  // so a post whose bounces were already captured before bounced_count
+  // existed (or by a previous backfill run) still gets its summary count
+  // corrected the next time this is clicked.
+  const { data: bouncedRows, error: bouncedErr } = await supabaseAdmin
+    .from("post_recipients")
+    .select("post_id")
+    .in("delivery_status", [
+      "hard_bounce",
+      "soft_bounce",
+      "blocked",
+      "invalid_email",
+      "spam",
+      "error",
+    ]);
+  if (bouncedErr) {
+    console.error(
+      "backfillDeliveryStatuses: failed to load posts to resync counts for",
+      bouncedErr.message,
+    );
+  } else {
+    const { syncPostBouncedCount } = await import("@/lib/posts-delivery-counts.server");
+    const postIds = new Set((bouncedRows ?? []).map((r) => r.post_id));
+    for (const postId of postIds) {
+      await syncPostBouncedCount(supabaseAdmin, postId);
+    }
+  }
+
+  return { checked: rows?.length ?? 0, updated };
 }
