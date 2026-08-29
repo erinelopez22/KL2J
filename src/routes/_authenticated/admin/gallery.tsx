@@ -38,6 +38,7 @@ import {
   deleteGalleryPhotosBulk,
 } from "@/lib/admin/gallery.functions";
 import { FileDrop } from "@/components/admin/FileDrop";
+import { PublicToggle } from "@/components/admin/PublicToggle";
 import { LocationAutosuggest } from "@/components/LocationAutosuggest";
 import { useConfirm } from "@/components/ConfirmDialogProvider";
 import { AttachmentLightbox, type LightboxItem } from "@/components/AttachmentLightbox";
@@ -67,9 +68,10 @@ type GalleryFolder = {
   date_end: string | null;
   sort_order: number;
   project_id: string | null;
+  is_public: boolean;
 };
 
-type ProjectOption = { id: string; title: string };
+type ProjectOption = { id: string; title: string; is_public: boolean };
 
 const UNSORTED_DROP_ID = "folder:unsorted";
 const FOLDER_DROP_PREFIX = "folder:";
@@ -349,7 +351,10 @@ function AdminGallery() {
   const { data: projects } = useQuery({
     queryKey: ["admin-gallery-projects-picker"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("projects").select("id, title").order("title");
+      const { data, error } = await supabase
+        .from("projects")
+        .select("id, title, is_public")
+        .order("title");
       if (error) throw error;
       return data as ProjectOption[];
     },
@@ -479,6 +484,15 @@ function AdminGallery() {
       setFolderModal(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save folder");
+    }
+  }
+
+  async function toggleFolderPublic(folder: GalleryFolder) {
+    try {
+      await doUpdateFolder({ data: { id: folder.id, is_public: !folder.is_public } });
+      refreshFolders();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update");
     }
   }
 
@@ -613,7 +627,26 @@ function AdminGallery() {
     <>
       {selectedFolder && (
         <div className="mb-4 rounded-lg border border-border bg-muted/30 px-3 py-2.5">
-          <p className="break-words text-sm font-semibold">{selectedFolder.name}</p>
+          <div className="flex items-start justify-between gap-2">
+            <p className="break-words text-sm font-semibold">{selectedFolder.name}</p>
+            {selectedFolder.project_id ? (
+              <span
+                className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-medium uppercase ${
+                  selectedFolderProject?.is_public
+                    ? "bg-emerald-100 text-emerald-700"
+                    : "bg-muted text-muted-foreground"
+                }`}
+                title="This folder's visibility follows its linked project — change the project's Public toggle to update it"
+              >
+                {selectedFolderProject?.is_public ? "Public" : "Hidden"} (via project)
+              </span>
+            ) : (
+              <PublicToggle
+                checked={selectedFolder.is_public}
+                onChange={() => toggleFolderPublic(selectedFolder)}
+              />
+            )}
+          </div>
           {selectedFolderProject && (
             <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
               <Link2 className="h-3 w-3 shrink-0" />
@@ -852,7 +885,11 @@ function AdminGallery() {
           <div className="fixed inset-0 z-50 flex flex-col bg-background lg:hidden">
             <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
               <p className="truncate text-sm font-semibold">
-                {selected === "all" ? "All" : selected === "unsorted" ? "Unsorted" : selectedFolder?.name}
+                {selected === "all"
+                  ? "All"
+                  : selected === "unsorted"
+                    ? "Unsorted"
+                    : selectedFolder?.name}
               </p>
               <button
                 onClick={() => setMobilePopupOpen(false)}
@@ -889,9 +926,9 @@ function AdminGallery() {
                 <div className="mt-3 flex items-start gap-1.5 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
                   <Link2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
                   Linked to a project — its photos/videos stay in sync with that project, but the
-                  folder name is independent, so you can rename it freely. Use "Delete folder"
-                  below to remove it and its photos/videos everywhere, including from that
-                  project's attachments.
+                  folder name is independent, so you can rename it freely. Use "Delete folder" below
+                  to remove it and its photos/videos everywhere, including from that project's
+                  attachments.
                 </div>
               )}
               <div className="mt-4 space-y-3">
@@ -903,8 +940,7 @@ function AdminGallery() {
                     value={folderModal.form.name}
                     placeholder={
                       folderModal.form.project_id
-                        ? (projects?.find((p) => p.id === folderModal.form.project_id)?.title ??
-                          "")
+                        ? (projects?.find((p) => p.id === folderModal.form.project_id)?.title ?? "")
                         : ""
                     }
                     onChange={(e) =>

@@ -353,6 +353,7 @@ export type Database = {
           date_start: string | null;
           description: string | null;
           id: string;
+          is_public: boolean;
           location: string | null;
           name: string;
           project_id: string | null;
@@ -364,6 +365,7 @@ export type Database = {
           date_start?: string | null;
           description?: string | null;
           id?: string;
+          is_public?: boolean;
           location?: string | null;
           name: string;
           project_id?: string | null;
@@ -375,6 +377,7 @@ export type Database = {
           date_start?: string | null;
           description?: string | null;
           id?: string;
+          is_public?: boolean;
           location?: string | null;
           name?: string;
           project_id?: string | null;

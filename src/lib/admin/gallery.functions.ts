@@ -84,6 +84,13 @@ const FolderSchema = z.object({
   // is UNIQUE — so linking to an already-linked project fails with a
   // friendly error.
   project_id: z.string().uuid().nullable().optional(),
+  // Only meaningful for a folder with no project_id — a project-linked
+  // folder's effective visibility always mirrors its project's own
+  // is_public instead (see gallery_folder_is_visible() in the
+  // 20260829000000_gallery-folder-visibility.sql migration), so
+  // updateGalleryFolder below rejects setting this on a linked folder
+  // rather than silently accepting a value that wouldn't take effect.
+  is_public: z.boolean().optional(),
 });
 
 // Default name for a project-linked folder when none was typed — used both
@@ -148,6 +155,18 @@ export const updateGalleryFolder = createServerFn({ method: "POST" })
     const { id, ...patch } = data;
     if (patch.project_id && !patch.name?.trim()) {
       patch.name = await resolveFolderName(supabaseAdmin, patch.project_id);
+    }
+    if (patch.is_public !== undefined) {
+      const linkedProjectId =
+        patch.project_id !== undefined
+          ? patch.project_id
+          : (await supabaseAdmin.from("gallery_folders").select("project_id").eq("id", id).single())
+              .data?.project_id;
+      if (linkedProjectId) {
+        throw new Error(
+          "This folder's visibility follows its linked project — change the project's Public toggle instead.",
+        );
+      }
     }
     const { error } = await supabaseAdmin.from("gallery_folders").update(patch).eq("id", id);
     if (error) throw friendlyFolderError(error, "update folder");
