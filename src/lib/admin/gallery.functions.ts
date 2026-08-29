@@ -3,6 +3,46 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { supabaseAdmin as SupabaseAdmin } from "@/integrations/supabase/client.server";
 
+// Admin views need to see EVERY folder/photo, hidden ones included — but
+// that can no longer come from a loosened "admins can read all" RLS
+// policy on gallery_folders/gallery_photos, because that policy applied
+// to the admin's authenticated session everywhere, including when the
+// same logged-in browser tab views the PUBLIC site — an admin toggling a
+// folder off would still see it there themselves, since RLS has no way to
+// know "this request is the admin panel" vs "this request is someone
+// previewing the public page." Routing admin reads through supabaseAdmin
+// (service role, bypasses RLS entirely) instead decouples the two: public
+// pages' direct client queries now strictly follow is_public, full stop.
+export const listAllGalleryFolders = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { assertRole } = await import("@/lib/admin/roles.server");
+    await assertRole(context.userId, "admin");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin
+      .from("gallery_folders")
+      .select("*")
+      .order("sort_order");
+    if (error) throw new Error(`Failed to load folders: ${error.message}`);
+    return data;
+  });
+
+const ListGalleryPhotosSchema = z.object({ folderId: z.string().uuid().optional() });
+
+export const listAllGalleryPhotos = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => ListGalleryPhotosSchema.parse(data ?? {}))
+  .handler(async ({ data, context }) => {
+    const { assertRole } = await import("@/lib/admin/roles.server");
+    await assertRole(context.userId, "admin");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    let query = supabaseAdmin.from("gallery_photos").select("*").order("sort_order");
+    if (data.folderId) query = query.eq("folder_id", data.folderId);
+    const { data: rows, error } = await query;
+    if (error) throw new Error(`Failed to load photos: ${error.message}`);
+    return rows;
+  });
+
 const AddPhotoSchema = z.object({
   url: z.string().url(),
   storage_path: z.string().min(1),

@@ -36,6 +36,8 @@ import {
   moveGalleryPhotos,
   copyGalleryPhotos,
   deleteGalleryPhotosBulk,
+  listAllGalleryFolders,
+  listAllGalleryPhotos,
 } from "@/lib/admin/gallery.functions";
 import { FileDrop } from "@/components/admin/FileDrop";
 import { PublicToggle } from "@/components/admin/PublicToggle";
@@ -265,6 +267,8 @@ function FolderDropZone({
 function AdminGallery() {
   const queryClient = useQueryClient();
   const doAdd = useServerFn(addGalleryPhoto);
+  const doListAllFolders = useServerFn(listAllGalleryFolders);
+  const doListAllPhotos = useServerFn(listAllGalleryPhotos);
   const doDelete = useServerFn(deleteGalleryPhoto);
   const doUpdatePhoto = useServerFn(updateGalleryPhoto);
   const doCreateFolder = useServerFn(createGalleryFolder);
@@ -327,24 +331,13 @@ function AdminGallery() {
 
   const { data: photos, isLoading } = useQuery({
     queryKey: ["admin-gallery"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("gallery_photos").select("*").order("sort_order");
-      if (error) throw error;
-      return data as Photo[];
-    },
+    queryFn: async () => (await doListAllPhotos({ data: {} })) as Photo[],
   });
   useRealtimeInvalidate("gallery_photos", [["admin-gallery"]]);
 
   const { data: folders } = useQuery({
     queryKey: ["admin-gallery-folders"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("gallery_folders")
-        .select("*")
-        .order("sort_order");
-      if (error) throw error;
-      return data as GalleryFolder[];
-    },
+    queryFn: async () => (await doListAllFolders()) as GalleryFolder[],
   });
   useRealtimeInvalidate("gallery_folders", [["admin-gallery-folders"]]);
 

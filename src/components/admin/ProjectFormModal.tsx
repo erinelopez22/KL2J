@@ -2,7 +2,17 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { X, Trash2, FileText, Video, Image as ImageIcon, Lock, Play, Move, ArrowLeftRight } from "lucide-react";
+import {
+  X,
+  Trash2,
+  FileText,
+  Video,
+  Image as ImageIcon,
+  Lock,
+  Play,
+  Move,
+  ArrowLeftRight,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { createProject, updateProject, deleteProject } from "@/lib/admin/projects.functions";
 import { PhotoPositionEditor } from "@/components/admin/PhotoPositionEditor";
@@ -14,6 +24,8 @@ import {
   addGalleryPhoto,
   deleteGalleryPhoto,
   updateGalleryPhoto,
+  listAllGalleryFolders,
+  listAllGalleryPhotos,
 } from "@/lib/admin/gallery.functions";
 import {
   createSiteMediaUploadUrl,
@@ -230,33 +242,26 @@ function ProjectPhotosTab({ projectId }: { projectId: string }) {
   const doAddPhoto = useServerFn(addGalleryPhoto);
   const doDeletePhoto = useServerFn(deleteGalleryPhoto);
   const doUpdatePhoto = useServerFn(updateGalleryPhoto);
+  const doListAllFolders = useServerFn(listAllGalleryFolders);
+  const doListAllPhotos = useServerFn(listAllGalleryPhotos);
   const [lightbox, setLightbox] = useState<{ items: LightboxItem[]; index: number } | null>(null);
 
+  // Admin-only server-function reads (bypass RLS via service role) — a
+  // hidden folder/its photos must still be manageable here even though
+  // gallery_folders/gallery_photos' RLS now strictly follows is_public.
   const { data: folder } = useQuery({
     queryKey: ["project-gallery-folder", projectId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("gallery_folders")
-        .select("id")
-        .eq("project_id", projectId)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
+      const folders = await doListAllFolders();
+      return folders.find((f) => f.project_id === projectId) ?? null;
     },
   });
   const folderId = folder?.id ?? null;
 
   const { data: photos, isLoading } = useQuery({
     queryKey: ["project-gallery-photos", folderId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("gallery_photos")
-        .select("id, url, storage_path, caption, media_type, sort_order")
-        .eq("folder_id", folderId as string)
-        .order("sort_order");
-      if (error) throw error;
-      return data as ProjectGalleryPhoto[];
-    },
+    queryFn: async () =>
+      (await doListAllPhotos({ data: { folderId: folderId as string } })) as ProjectGalleryPhoto[],
     enabled: !!folderId,
   });
 
@@ -290,7 +295,9 @@ function ProjectPhotosTab({ projectId }: { projectId: string }) {
     if (!(await confirm("Remove this photo/video? This cannot be undone.", { destructive: true })))
       return;
     try {
-      await doDeletePhoto({ data: { id: photo.id, storage_path: photo.storage_path ?? undefined } });
+      await doDeletePhoto({
+        data: { id: photo.id, storage_path: photo.storage_path ?? undefined },
+      });
       refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete");
@@ -528,7 +535,8 @@ export function ProjectFormModal({
         (!project || !f.location.trim()) && inquiry
           ? defaultLocationFromInquiry(inquiry.checklist_responses)
           : f.location,
-      services: (!project || f.services.length === 0) && inquiry ? (inquiry.services ?? []) : f.services,
+      services:
+        (!project || f.services.length === 0) && inquiry ? (inquiry.services ?? []) : f.services,
     }));
   }
 
@@ -565,7 +573,10 @@ export function ProjectFormModal({
       setForm((f) => ({
         ...f,
         inquiry_id: result.id,
-        title: !project || !f.title.trim() ? defaultTitleFromInquiry(presetName.trim(), f.services) : f.title,
+        title:
+          !project || !f.title.trim()
+            ? defaultTitleFromInquiry(presetName.trim(), f.services)
+            : f.title,
       }));
       toast.success("Inquiry created and linked");
       setPresetChannel(null);
@@ -913,8 +924,8 @@ export function ProjectFormModal({
                 Cover photos
               </h3>
               <p className="mb-2 text-[11px] text-muted-foreground/70">
-                Shown as a horizontal row on the public project card and detail popup. The first photo
-                is used wherever only one image fits (e.g. the admin list thumbnail).
+                Shown as a horizontal row on the public project card and detail popup. The first
+                photo is used wherever only one image fits (e.g. the admin list thumbnail).
               </p>
               {form.photo_urls.length > 0 && (
                 <div className="mb-2 flex flex-wrap gap-2">
@@ -993,7 +1004,8 @@ export function ProjectFormModal({
               <div>
                 <label className="block text-sm">
                   <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
-                    Linked inquiry {!project && <span className="text-destructive">(required)</span>}
+                    Linked inquiry{" "}
+                    {!project && <span className="text-destructive">(required)</span>}
                   </span>
                   <select
                     value={form.inquiry_id}
@@ -1325,9 +1337,9 @@ export function ProjectFormModal({
                     ) : canStartUploading ? (
                       <div className="rounded-md border border-dashed border-border p-4 text-center">
                         <p className="mb-2 text-sm text-muted-foreground">
-                          You can start uploading photos and videos now — the project is created
-                          in the background, and you can keep editing everything else before doing
-                          a final save.
+                          You can start uploading photos and videos now — the project is created in
+                          the background, and you can keep editing everything else before doing a
+                          final save.
                         </p>
                         <button
                           type="button"
@@ -1340,8 +1352,8 @@ export function ProjectFormModal({
                       </div>
                     ) : (
                       <p className="text-sm text-muted-foreground">
-                        Fill in the title, location, and linked inquiry above first, then come
-                        back here to add photos and videos before doing a final save.
+                        Fill in the title, location, and linked inquiry above first, then come back
+                        here to add photos and videos before doing a final save.
                       </p>
                     )}
                   </div>

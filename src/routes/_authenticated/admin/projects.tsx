@@ -18,6 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { CoverImage } from "@/components/CoverImage";
 import { MediaRow } from "@/components/MediaRow";
 import { deleteProject, updateProject } from "@/lib/admin/projects.functions";
+import { listAllGalleryFolders, listAllGalleryPhotos } from "@/lib/admin/gallery.functions";
 import { getConfidentialFileUrl } from "@/lib/admin/media.functions";
 import { PublicToggle } from "@/components/admin/PublicToggle";
 import {
@@ -143,31 +144,25 @@ function ConfidentialThumb({
 // its linked folder) — editing happens in ProjectFormModal's Photos &
 // videos tab, or in /admin/gallery directly.
 function ProjectMediaGrid({ projectId }: { projectId: string }) {
+  const doListAllFolders = useServerFn(listAllGalleryFolders);
+  const doListAllPhotos = useServerFn(listAllGalleryPhotos);
+
+  // Admin-only server-function reads (bypass RLS via service role) — see
+  // the comment on listAllGalleryFolders in gallery.functions.ts for why
+  // this can no longer be a direct client query against gallery_folders/
+  // gallery_photos, which now strictly follow is_public.
   const { data: folder } = useQuery({
     queryKey: ["project-gallery-folder", projectId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("gallery_folders")
-        .select("id")
-        .eq("project_id", projectId)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
+      const folders = await doListAllFolders();
+      return folders.find((f) => f.project_id === projectId) ?? null;
     },
   });
   const folderId = folder?.id ?? null;
 
   const { data: photos } = useQuery({
     queryKey: ["project-gallery-photos", folderId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("gallery_photos")
-        .select("id, url, caption, media_type")
-        .eq("folder_id", folderId as string)
-        .order("sort_order");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: async () => doListAllPhotos({ data: { folderId: folderId as string } }),
     enabled: !!folderId,
   });
 
@@ -226,6 +221,7 @@ function AdminProjects() {
   const [sizeFilter, setSizeFilter] = useState<"all" | "major" | "small">("all");
   const [sortKey, setSortKey] = useState<ProjectSortKey>("newest");
   const doDelete = useServerFn(deleteProject);
+  const doListAllFolders = useServerFn(listAllGalleryFolders);
   const confirm = useConfirm();
   const doUpdate = useServerFn(updateProject);
   const doGetConfidentialUrl = useServerFn(getConfidentialFileUrl);
@@ -265,13 +261,8 @@ function AdminProjects() {
   const { data: linkedGalleryFolder } = useQuery({
     queryKey: ["project-linked-gallery-folder", viewingProject?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("gallery_folders")
-        .select("id, name")
-        .eq("project_id", viewingProject!.id)
-        .maybeSingle();
-      if (error) throw error;
-      return data as { id: string; name: string } | null;
+      const folders = await doListAllFolders();
+      return folders.find((f) => f.project_id === viewingProject!.id) ?? null;
     },
     enabled: !!viewingProject?.id,
   });
