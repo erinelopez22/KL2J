@@ -394,7 +394,9 @@ function Hero() {
             <span className="text-xs">Zoom</span>
             <Slider
               value={[heroPosition.zoom]}
-              onValueChange={([zoom]) => setDraftPosition((p) => ({ ...(p ?? savedHeroPosition), zoom }))}
+              onValueChange={([zoom]) =>
+                setDraftPosition((p) => ({ ...(p ?? savedHeroPosition), zoom }))
+              }
               min={1}
               max={3}
               step={0.05}
@@ -652,13 +654,7 @@ function Process() {
   );
 }
 
-function EquipmentDetailModal({
-  item,
-  onClose,
-}: {
-  item: PublicEquipment;
-  onClose: () => void;
-}) {
+function EquipmentDetailModal({ item, onClose }: { item: PublicEquipment; onClose: () => void }) {
   const [lightbox, setLightbox] = useState<{ items: LightboxItem[]; index: number } | null>(null);
   const media = item.media ?? [];
   const visualMedia = media.filter((m) => m.kind !== "document");
@@ -697,7 +693,10 @@ function EquipmentDetailModal({
         {visualMedia.length > 0 && (
           <div className="mt-3">
             <MediaRow
-              media={visualMedia.map((m) => ({ url: m.url, type: m.kind === "video" ? "video" : "image" }))}
+              media={visualMedia.map((m) => ({
+                url: m.url,
+                type: m.kind === "video" ? "video" : "image",
+              }))}
               altText={item.title}
               heightClass="h-[28rem]"
               maxVisible={visualMedia.length > 1 ? 2 : 1}
@@ -900,7 +899,9 @@ function CTA({
   const queryClient = useQueryClient();
   const doUpdateBranding = useServerFn(updateBranding);
 
-  const phones = settings?.contact_phones?.length ? settings.contact_phones : DEFAULT_CONTACT_PHONES;
+  const phones = settings?.contact_phones?.length
+    ? settings.contact_phones
+    : DEFAULT_CONTACT_PHONES;
   const contactEmail = settings?.contact_email || DEFAULT_CONTACT_EMAIL;
   const serviceAreaText = settings?.service_area_text || DEFAULT_SERVICE_AREA_TEXT;
 
@@ -1123,7 +1124,10 @@ function RelatedProjects({ services }: { services: string[] }) {
           const coverPosition = coverPhoto ? p.photo_positions?.[coverPhoto] : undefined;
           const media: { url: string; type: "image" | "video"; position?: typeof coverPosition }[] =
             p.media.length > 0
-              ? p.media.map((m) => ({ url: m.url, type: m.media_type === "video" ? "video" : "image" }))
+              ? p.media.map((m) => ({
+                  url: m.url,
+                  type: m.media_type === "video" ? "video" : "image",
+                }))
               : coverPhoto
                 ? [{ url: coverPhoto, type: "image", position: coverPosition }]
                 : [];
@@ -1399,25 +1403,26 @@ function ContactForm({
               }
             >
               <div className="flex flex-wrap gap-2">
-                {[...(serviceOptions.length > 0 ? serviceOptions : FALLBACK_SERVICES), { title: "Not sure yet" }].map(
-                  (s) => {
-                    const checked = services.includes(s.title);
-                    return (
-                      <button
-                        key={s.title}
-                        type="button"
-                        onClick={() => toggleService(s.title)}
-                        className={`rounded-full border px-3 py-1.5 text-sm transition ${
-                          checked
-                            ? "border-primary/40 bg-primary/10 text-primary"
-                            : "border-border bg-background hover:bg-muted"
-                        }`}
-                      >
-                        {s.title}
-                      </button>
-                    );
-                  },
-                )}
+                {[
+                  ...(serviceOptions.length > 0 ? serviceOptions : FALLBACK_SERVICES),
+                  { title: "Not sure yet" },
+                ].map((s) => {
+                  const checked = services.includes(s.title);
+                  return (
+                    <button
+                      key={s.title}
+                      type="button"
+                      onClick={() => toggleService(s.title)}
+                      className={`rounded-full border px-3 py-1.5 text-sm transition ${
+                        checked
+                          ? "border-primary/40 bg-primary/10 text-primary"
+                          : "border-border bg-background hover:bg-muted"
+                      }`}
+                    >
+                      {s.title}
+                    </button>
+                  );
+                })}
               </div>
             </Field>
             {selectedServiceChecklist.length > 0 && (
@@ -1861,7 +1866,9 @@ function Projects() {
   const selected = data.find((p) => p.id === selectedId) ?? null;
   const allServiceOptions = Array.from(
     new Set(
-      data.flatMap((p) => (p.services?.length > 0 ? p.services : [p.service])).filter((s): s is string => Boolean(s)),
+      data
+        .flatMap((p) => (p.services?.length > 0 ? p.services : [p.service]))
+        .filter((s): s is string => Boolean(s)),
     ),
   ).sort();
   const allStatusOptions = Array.from(
@@ -1897,7 +1904,11 @@ function Projects() {
     // a change, and the modal never reopens.
     lastDeepLinkId.current = null;
     if (search.project) {
-      navigate({ to: "/", search: (prev) => ({ ...prev, project: undefined }), resetScroll: false });
+      navigate({
+        to: "/",
+        search: (prev) => ({ ...prev, project: undefined }),
+        resetScroll: false,
+      });
     }
   }
 
@@ -2054,8 +2065,8 @@ function Projects() {
           onClick={closeProject}
         >
           <div
-            className={`flex w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-card shadow-2xl transition-[max-height] duration-200 ${
-              expanded ? "max-h-[95vh]" : "max-h-[85vh]"
+            className={`flex w-full max-w-4xl flex-col overflow-y-auto rounded-2xl bg-card shadow-2xl transition-[max-height] duration-200 sm:overflow-hidden ${
+              expanded ? "max-h-[95dvh]" : "max-h-[85dvh]"
             }`}
             onClick={(e) => e.stopPropagation()}
           >
@@ -2072,7 +2083,7 @@ function Projects() {
                 />
               </div>
             )}
-            <div className="flex min-h-0 flex-1 flex-col p-6">
+            <div className="flex flex-col p-6 sm:min-h-0 sm:flex-1">
               <div className="flex shrink-0 items-start justify-between gap-4">
                 <div className="flex min-w-0 items-center gap-2">
                   <h3 className="text-xl font-bold">{selected.title}</h3>
@@ -2085,7 +2096,11 @@ function Projects() {
                     aria-label={expanded ? "Shrink" : "Expand"}
                     title={expanded ? "Shrink" : "Expand"}
                   >
-                    {expanded ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+                    {expanded ? (
+                      <Minimize2 className="h-5 w-5" />
+                    ) : (
+                      <Maximize2 className="h-5 w-5" />
+                    )}
                   </button>
                   <button
                     onClick={closeProject}
@@ -2096,10 +2111,16 @@ function Projects() {
                   </button>
                 </div>
               </div>
-              {/* Capped with its own scroll — a long description/services list
-                  must never be able to squeeze the photos section below down
-                  to nothing (it used to, before this cap was added). */}
-              <div className="max-h-72 shrink-0 overflow-y-auto pr-1">
+              {/* Capped with its own scroll on desktop (sm:+) only — a long
+                  description/services list must never be able to squeeze the
+                  photos section below down to nothing there. On mobile the
+                  whole modal scrolls as one unit instead (see the outer
+                  overflow-y-auto above), so this cap is dropped: splitting
+                  the modal into several vh-sized regions is what caused the
+                  photos section to end up with ~0 height in Facebook
+                  Messenger's in-app browser, which doesn't size `vh` the way
+                  a real mobile browser does. */}
+              <div className="pr-1 sm:max-h-72 sm:shrink-0 sm:overflow-y-auto">
                 {selected.location && (
                   <div className="text-sm text-muted-foreground">{selected.location}</div>
                 )}
@@ -2119,11 +2140,11 @@ function Projects() {
                 )}
               </div>
               {selected.media?.length > 0 && (
-                <div className="mt-5 flex min-h-0 flex-1 flex-col">
+                <div className="mt-5 flex flex-col sm:min-h-0 sm:flex-1">
                   <p className="shrink-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Photos &amp; videos
                   </p>
-                  <div className="mt-2 min-h-0 flex-1 overflow-y-auto">
+                  <div className="mt-2 sm:min-h-0 sm:flex-1 sm:overflow-y-auto">
                     <MediaRow
                       media={selected.media.map((m) => ({
                         url: m.url,
@@ -2805,11 +2826,7 @@ function Partners() {
                 />
               </a>
             ) : (
-              <div
-                key={c.id}
-                title={c.name}
-                className="flex h-16 w-32 items-center justify-center"
-              >
+              <div key={c.id} title={c.name} className="flex h-16 w-32 items-center justify-center">
                 <img
                   src={c.logo_url}
                   alt={c.name}
