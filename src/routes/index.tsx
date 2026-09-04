@@ -2079,7 +2079,12 @@ function Projects() {
                     position: selected.photo_positions?.[url],
                   }))}
                   altText={selected.title}
-                  heightClass={expanded ? "h-96" : "h-40"}
+                  // Compressed by default on mobile regardless of `expanded`
+                  // — that header photo was eating most of a phone's
+                  // limited vertical space before the visitor even reached
+                  // the title/description. Desktop (sm:+) keeps its
+                  // existing expand/shrink-driven height unchanged.
+                  heightClass={`h-40 ${expanded ? "sm:h-96" : "sm:h-40"}`}
                 />
               </div>
             )}
