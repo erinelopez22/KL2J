@@ -272,7 +272,12 @@ function ProjectPhotosTab({ projectId }: { projectId: string }) {
     queryClient.invalidateQueries({ queryKey: ["public-gallery"] });
   }
 
-  async function onUploaded(result: { url: string; path?: string; contentType: string }) {
+  async function onUploaded(result: {
+    url: string;
+    path?: string;
+    contentType: string;
+    watermarked?: boolean;
+  }) {
     if (!folderId) return;
     try {
       await doAddPhoto({
@@ -283,6 +288,7 @@ function ProjectPhotosTab({ projectId }: { projectId: string }) {
           folder_id: folderId,
           sort_order: photos?.length ?? 0,
           origin: "project",
+          watermarked: result.watermarked ?? false,
         },
       });
       refresh();
@@ -337,6 +343,7 @@ function ProjectPhotosTab({ projectId }: { projectId: string }) {
         accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime"
         allowExternalLink={false}
         label="Upload a photo or video"
+        allowWatermarkToggle
         onUploaded={onUploaded}
       />
       {isLoading ? (

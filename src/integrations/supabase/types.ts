@@ -404,6 +404,7 @@ export type Database = {
           sort_order: number;
           storage_path: string | null;
           url: string;
+          watermarked: boolean;
         };
         Insert: {
           caption?: string | null;
@@ -415,6 +416,7 @@ export type Database = {
           sort_order?: number;
           storage_path?: string | null;
           url: string;
+          watermarked?: boolean;
         };
         Update: {
           caption?: string | null;
@@ -426,6 +428,7 @@ export type Database = {
           sort_order?: number;
           storage_path?: string | null;
           url?: string;
+          watermarked?: boolean;
         };
         Relationships: [
           {

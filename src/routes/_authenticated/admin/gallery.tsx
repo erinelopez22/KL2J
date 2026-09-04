@@ -15,6 +15,7 @@ import {
   Copy,
   FolderInput,
   Check,
+  Droplet,
 } from "lucide-react";
 import {
   DndContext,
@@ -38,7 +39,11 @@ import {
   deleteGalleryPhotosBulk,
   listAllGalleryFolders,
   listAllGalleryPhotos,
+  applyGalleryPhotoWatermark,
 } from "@/lib/admin/gallery.functions";
+import { createSiteMediaUploadUrl } from "@/lib/admin/media.functions";
+import { uploadFileDirect } from "@/lib/adminDirectUpload";
+import { watermarkImage } from "@/lib/watermarkImage";
 import { FileDrop } from "@/components/admin/FileDrop";
 import { PublicToggle } from "@/components/admin/PublicToggle";
 import { LocationAutosuggest } from "@/components/LocationAutosuggest";
@@ -59,6 +64,7 @@ type Photo = {
   media_type: "photo" | "video";
   folder_id: string | null;
   created_at: string;
+  watermarked: boolean;
 };
 
 type GalleryFolder = {
@@ -277,6 +283,9 @@ function AdminGallery() {
   const doMovePhotos = useServerFn(moveGalleryPhotos);
   const doCopyPhotos = useServerFn(copyGalleryPhotos);
   const doDeletePhotosBulk = useServerFn(deleteGalleryPhotosBulk);
+  const doApplyWatermark = useServerFn(applyGalleryPhotoWatermark);
+  const mintUpload = useServerFn(createSiteMediaUploadUrl);
+  const [watermarking, setWatermarking] = useState(false);
   const confirm = useConfirm();
   const [lightbox, setLightbox] = useState<{ items: LightboxItem[]; index: number } | null>(null);
   const [selected, setSelected] = useState<"all" | "unsorted" | string>("all");
@@ -376,7 +385,12 @@ function AdminGallery() {
     queryClient.invalidateQueries({ queryKey: ["public-gallery-folders"] });
   }
 
-  async function onUploaded(result: { url: string; path?: string; contentType: string }) {
+  async function onUploaded(result: {
+    url: string;
+    path?: string;
+    contentType: string;
+    watermarked?: boolean;
+  }) {
     try {
       await doAdd({
         data: {
@@ -385,6 +399,7 @@ function AdminGallery() {
           sort_order: (photos?.length ?? 0) + 1,
           media_type: result.contentType.startsWith("video/") ? "video" : "photo",
           folder_id: selected !== "all" && selected !== "unsorted" ? selected : null,
+          watermarked: result.watermarked ?? false,
         },
       });
       refresh();
@@ -612,6 +627,78 @@ function AdminGallery() {
     }
   }
 
+  // Retroactively watermarks already-uploaded photos — mirrors the
+  // upload-time checkbox in FileDrop, but here we fetch the existing file
+  // back down first since there's no fresh File object to work with.
+  // Videos and already-watermarked photos in the selection are silently
+  // skipped (counted in the summary toast), not treated as errors.
+  async function handleWatermarkSelected() {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    const selectedPhotos = (photos ?? []).filter((p) => ids.includes(p.id));
+    const eligible = selectedPhotos.filter((p) => p.media_type === "photo" && !p.watermarked);
+    const skippedVideos = selectedPhotos.filter((p) => p.media_type === "video").length;
+    const skippedAlready = selectedPhotos.filter(
+      (p) => p.media_type === "photo" && p.watermarked,
+    ).length;
+
+    if (eligible.length === 0) {
+      toast.error(
+        "Nothing to watermark — the selected item(s) are already watermarked or are videos.",
+      );
+      return;
+    }
+    if (
+      !(await confirm(
+        `Add a watermark to ${eligible.length} photo${eligible.length === 1 ? "" : "s"}? This is permanent — once added, a watermark cannot be removed.`,
+        { destructive: true, confirmLabel: "Add watermark" },
+      ))
+    )
+      return;
+
+    setWatermarking(true);
+    let succeeded = 0;
+    let failed = 0;
+    for (const photo of eligible) {
+      try {
+        const resp = await fetch(photo.url);
+        const blob = await resp.blob();
+        const file = new File([blob], photo.storage_path?.split("/").pop() ?? "photo.jpg", {
+          type: blob.type || "image/jpeg",
+        });
+        const watermarkedFile = await watermarkImage(file);
+        const uploaded = await uploadFileDirect(mintUpload, "site-media", watermarkedFile, {
+          folder: "gallery",
+        });
+        await doApplyWatermark({
+          data: {
+            id: photo.id,
+            url: uploaded.url!,
+            storage_path: uploaded.path,
+            oldStoragePath: photo.storage_path,
+          },
+        });
+        succeeded++;
+      } catch (err) {
+        console.error("Failed to watermark photo", photo.id, err);
+        failed++;
+      }
+    }
+    setWatermarking(false);
+
+    const notes = [
+      skippedAlready > 0 ? `${skippedAlready} already watermarked` : null,
+      skippedVideos > 0 ? `${skippedVideos} video${skippedVideos === 1 ? "" : "s"} skipped` : null,
+      failed > 0 ? `${failed} failed` : null,
+    ].filter(Boolean);
+    toast.success(
+      `Watermarked ${succeeded} photo${succeeded === 1 ? "" : "s"}` +
+        (notes.length > 0 ? ` (${notes.join(", ")})` : ""),
+    );
+    clearSelection();
+    refresh();
+  }
+
   const allVisibleSelected = visible.length > 0 && visible.every((p) => selectedIds.has(p.id));
 
   // Rendered both in-flow on desktop and inside the mobile full-screen
@@ -660,6 +747,7 @@ function AdminGallery() {
           accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime"
           label="Upload a photo or video"
           allowExternalLink={false}
+          allowWatermarkToggle
           onUploaded={onUploaded}
         />
       </div>
@@ -755,6 +843,15 @@ function AdminGallery() {
             className="flex items-center gap-1.5 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-1.5 text-sm text-destructive hover:bg-destructive/10"
           >
             <Trash2 className="h-3.5 w-3.5" /> Delete
+          </button>
+          <button
+            type="button"
+            onClick={handleWatermarkSelected}
+            disabled={watermarking}
+            title="Permanent — a watermark can't be removed once added"
+            className="flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50"
+          >
+            <Droplet className="h-3.5 w-3.5" /> {watermarking ? "Watermarking…" : "Add watermark"}
           </button>
           <button
             type="button"

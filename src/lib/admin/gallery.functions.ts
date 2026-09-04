@@ -51,6 +51,12 @@ const AddPhotoSchema = z.object({
   media_type: z.enum(["photo", "video"]).default("photo"),
   folder_id: z.string().uuid().nullable().optional(),
   origin: z.enum(["manual", "project"]).default("manual"),
+  // Set when this file was watermarked at upload time (FileDrop's
+  // allowWatermarkToggle checkbox) — kept in sync with the same flag the
+  // "Add watermark" bulk action sets on already-uploaded photos, so a
+  // photo watermarked either way is correctly excluded from being
+  // re-offered that action later.
+  watermarked: z.boolean().default(false),
 });
 
 export const addGalleryPhoto = createServerFn({ method: "POST" })
@@ -108,6 +114,53 @@ export const updateGalleryPhoto = createServerFn({ method: "POST" })
       console.error("updateGalleryPhoto failed", error);
       throw new Error(`Failed to update photo: ${error.message}`);
     }
+    return { ok: true };
+  });
+
+// The actual watermarking (Canvas) happens client-side before this is
+// called — see watermarkImage.ts — since server functions have no DOM.
+// This just finalizes it: point the row at the newly-uploaded watermarked
+// file, mark it watermarked, and clean up the now-unused original from
+// storage. There's no counterpart "remove" function — a photo watermarked
+// this way (or via the upload-time checkbox) is permanent by design (see
+// the migration comment), which is why the admin UI confirms this before
+// calling it.
+const ApplyPhotoWatermarkSchema = z.object({
+  id: z.string().uuid(),
+  url: z.string().url(),
+  storage_path: z.string().min(1),
+  oldStoragePath: z.string().min(1).nullable().optional(),
+});
+
+export const applyGalleryPhotoWatermark = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => ApplyPhotoWatermarkSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { assertRole } = await import("@/lib/admin/roles.server");
+    await assertRole(context.userId, "admin");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { error } = await supabaseAdmin
+      .from("gallery_photos")
+      .update({ url: data.url, storage_path: data.storage_path, watermarked: true })
+      .eq("id", data.id);
+    if (error) {
+      console.error("applyGalleryPhotoWatermark failed", error);
+      throw new Error(`Failed to save watermarked photo: ${error.message}`);
+    }
+
+    if (data.oldStoragePath) {
+      const { error: removeErr } = await supabaseAdmin.storage
+        .from("site-media")
+        .remove([data.oldStoragePath]);
+      // Best-effort cleanup — the row update above already succeeded, so a
+      // leftover orphaned file in storage isn't worth failing the whole
+      // action over.
+      if (removeErr) {
+        console.error("applyGalleryPhotoWatermark: failed to remove old file", removeErr);
+      }
+    }
+
     return { ok: true };
   });
 
