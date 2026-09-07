@@ -2065,7 +2065,7 @@ function Projects() {
           onClick={closeProject}
         >
           <div
-            className={`flex w-full max-w-4xl flex-col overflow-y-auto rounded-2xl bg-card shadow-2xl transition-[max-height] duration-200 sm:overflow-hidden ${
+            className={`flex w-full max-w-4xl flex-col overflow-y-auto rounded-2xl bg-card shadow-2xl transition-[max-height] duration-200 ${
               expanded ? "max-h-[95dvh]" : "max-h-[85dvh]"
             }`}
             onClick={(e) => e.stopPropagation()}
@@ -2088,7 +2088,7 @@ function Projects() {
                 />
               </div>
             )}
-            <div className="flex flex-col p-6 sm:min-h-0 sm:flex-1">
+            <div className="flex flex-col p-6">
               <div className="flex shrink-0 items-start justify-between gap-4">
                 <div className="flex min-w-0 items-center gap-2">
                   <h3 className="text-xl font-bold">{selected.title}</h3>
@@ -2116,16 +2116,19 @@ function Projects() {
                   </button>
                 </div>
               </div>
-              {/* Capped with its own scroll on desktop (sm:+) only — a long
-                  description/services list must never be able to squeeze the
-                  photos section below down to nothing there. On mobile the
-                  whole modal scrolls as one unit instead (see the outer
-                  overflow-y-auto above), so this cap is dropped: splitting
-                  the modal into several vh-sized regions is what caused the
-                  photos section to end up with ~0 height in Facebook
-                  Messenger's in-app browser, which doesn't size `vh` the way
-                  a real mobile browser does. */}
-              <div className="pr-1 sm:max-h-72 sm:shrink-0 sm:overflow-y-auto">
+              {/* No longer capped with its own scroll region — the whole
+                  modal scrolls as one unit instead (see the outer
+                  overflow-y-auto above). Originally this had a max-h-72
+                  cap + its own scrollbar so a long description could never
+                  squeeze the photos section below down to nothing, but
+                  splitting the modal into several vh-sized regions is
+                  exactly what caused that squeeze in the first place —
+                  first seen in Facebook Messenger's in-app browser (whose
+                  `vh` sizing doesn't match a real mobile browser's), then
+                  again on desktop simply from browser zoom shrinking the
+                  usable viewport the same way. One continuous scroll has
+                  no "leftover space" left to collapse regardless of cause. */}
+              <div className="pr-1">
                 {selected.location && (
                   <div className="text-sm text-muted-foreground">{selected.location}</div>
                 )}
@@ -2145,11 +2148,11 @@ function Projects() {
                 )}
               </div>
               {selected.media?.length > 0 && (
-                <div className="mt-5 flex flex-col sm:min-h-0 sm:flex-1">
+                <div className="mt-5 flex flex-col">
                   <p className="shrink-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Photos &amp; videos
                   </p>
-                  <div className="mt-2 sm:min-h-0 sm:flex-1 sm:overflow-y-auto">
+                  <div className="mt-2">
                     <MediaRow
                       media={selected.media.map((m) => ({
                         url: m.url,
