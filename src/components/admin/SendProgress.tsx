@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { Loader2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { sendNextRecipient } from "@/lib/admin/posts.functions";
 
 export type SendablePost = {
   id: string;
@@ -9,49 +10,79 @@ export type SendablePost = {
   failed_count: number;
 };
 
-const POLL_INTERVAL_MS = 4000;
+// Not required by Brevo's own limits — their infrastructure paces actual
+// delivery independently of how fast we call their API — just a cheap,
+// deliberate margin between our own send calls.
+const SEND_PAUSE_MS = 300;
+const RETRY_BACKOFF_MS = 2000;
 
-// Sending happens in the background (a cron worker processing roughly one
-// recipient a minute, not this browser tab), so this component only polls
-// and displays progress — it never sends anything itself. It stops polling
-// once the post lands on 'sent' or 'paused' and hands that back to the
-// parent via onStatusChange.
+// Drives the send itself: calls sendNextRecipient back-to-back (each call
+// claims and sends exactly one due recipient) until nothing's left due for
+// this post, showing real per-call progress instead of polling. Stops and
+// hands off to the background cron (an infrequent catch-up net) once
+// nothing more is due right now — which is the normal end state, or the
+// rare case where the daily send cap pushed the rest to a later slot.
 export function SendProgress({
   post,
   onStatusChange,
+  onBusyChange,
 }: {
   post: SendablePost;
   onStatusChange: (status: "sent" | "paused") => void;
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const [progress, setProgress] = useState({
     sent: post.sent_count,
     failed: post.failed_count,
     total: post.total_count,
   });
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const doSendNext = useServerFn(sendNextRecipient);
+  const startedRef = useRef(false);
 
   useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
     let cancelled = false;
+    onBusyChange?.(true);
 
-    async function poll() {
-      const { data, error } = await supabase
-        .from("posts")
-        .select("status, sent_count, failed_count, total_count")
-        .eq("id", post.id)
-        .single();
-      if (cancelled || error || !data) return;
-      setProgress({ sent: data.sent_count, failed: data.failed_count, total: data.total_count });
-      if (data.status === "sent" || data.status === "paused") {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        onStatusChange(data.status);
+    async function loop() {
+      while (!cancelled) {
+        let result: Awaited<ReturnType<typeof doSendNext>>;
+        try {
+          result = await doSendNext({ data: { id: post.id } });
+        } catch {
+          // A queued recipient row is untouched until successfully claimed,
+          // so a network hiccup here is always safe to just retry.
+          await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS));
+          continue;
+        }
+        if (cancelled) return;
+        if (!result.picked) {
+          onBusyChange?.(false);
+          return;
+        }
+        setProgress({
+          sent: result.sentCount,
+          failed: result.failedCount,
+          total: post.total_count,
+        });
+        if (result.circuitBroken) {
+          onBusyChange?.(false);
+          onStatusChange("paused");
+          return;
+        }
+        if (result.done) {
+          onBusyChange?.(false);
+          onStatusChange("sent");
+          return;
+        }
+        await new Promise((r) => setTimeout(r, SEND_PAUSE_MS));
       }
     }
 
-    poll();
-    intervalRef.current = setInterval(poll, POLL_INTERVAL_MS);
+    loop();
     return () => {
       cancelled = true;
-      if (intervalRef.current) clearInterval(intervalRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [post.id]);
@@ -70,8 +101,8 @@ export function SendProgress({
         {progress.sent} sent, {progress.failed} failed of {progress.total}
       </p>
       <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Sending in the background — about one a
-        minute, no need to keep this open
+        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Sending — please keep this open until it
+        finishes
       </p>
     </div>
   );

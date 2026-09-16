@@ -1,8 +1,11 @@
-// Server-only. Invoked by the /api/cron/process-email-queue route, which is
-// hit on a schedule by Cloud Scheduler — NOT by any browser client. Each
-// invocation claims and sends exactly one due recipient, so throughput is
-// governed entirely by how often the scheduler calls in (recommended: every
-// 1 minute), not by anything in this file.
+// Server-only. Invoked two ways: on a schedule by Cloud Scheduler (see
+// /api/cron/process-email-queue), now just an infrequent catch-up net, and
+// directly by the admin UI's "Send" flow (see posts.functions.ts's
+// sendNextRecipient), which calls this back-to-back in a client-driven loop
+// for fast, watchable sends. Each invocation claims and sends exactly one
+// due recipient — optionally scoped to a single post — so it's safe for
+// both callers to run concurrently without double-sending (the claim below
+// is what guarantees that).
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PostType } from "@/lib/postCta";
 
@@ -19,17 +22,23 @@ type ProcessResult =
       email: string;
       outcome: "sent" | "failed";
       circuitBroken: boolean;
+      sentCount: number;
+      failedCount: number;
+      done: boolean;
     };
 
-export async function processNextQueuedEmail(): Promise<ProcessResult> {
+export async function processNextQueuedEmail(postId?: string): Promise<ProcessResult> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   // Only rows belonging to a post that's actually mid-send are eligible —
   // a draft's recipients sit in this same table with status 'pending' but
   // must never be picked up. `posts!inner(status)` performs that join/filter
-  // in the query itself rather than trusting a client-set flag.
+  // in the query itself rather than trusting a client-set flag. When called
+  // from the admin "Send" loop, postId scopes this to just that post so its
+  // progress bar advances promptly instead of waiting behind another post's
+  // queue.
   const nowIso = new Date().toISOString();
-  const { data: candidates, error: findErr } = await supabaseAdmin
+  let query = supabaseAdmin
     .from("post_recipients")
     .select("id, post_id, email, name, attempts, posts!inner(status)")
     .eq("status", "pending")
@@ -37,6 +46,8 @@ export async function processNextQueuedEmail(): Promise<ProcessResult> {
     .lte("scheduled_at", nowIso)
     .order("scheduled_at", { ascending: true })
     .limit(1);
+  if (postId) query = query.eq("post_id", postId);
+  const { data: candidates, error: findErr } = await query;
   if (findErr) throw new Error(`Failed to load queue: ${findErr.message}`);
   const candidate = candidates?.[0];
   if (!candidate) return { picked: false };
@@ -115,7 +126,7 @@ export async function processNextQueuedEmail(): Promise<ProcessResult> {
       .eq("id", candidate.id);
   }
 
-  await syncPostCounts(supabaseAdmin, candidate.post_id);
+  const counts = await syncPostCounts(supabaseAdmin, candidate.post_id);
 
   const circuitBroken =
     outcome === "failed"
@@ -128,10 +139,16 @@ export async function processNextQueuedEmail(): Promise<ProcessResult> {
     email: candidate.email,
     outcome,
     circuitBroken,
+    sentCount: counts.sentCount,
+    failedCount: counts.failedCount,
+    done: counts.done,
   };
 }
 
-async function syncPostCounts(supabaseAdmin: SupabaseClient, postId: string): Promise<void> {
+async function syncPostCounts(
+  supabaseAdmin: SupabaseClient,
+  postId: string,
+): Promise<{ sentCount: number; failedCount: number; done: boolean }> {
   const [{ count: sentCount }, { count: failedCount }, { count: openCount }] = await Promise.all([
     supabaseAdmin
       .from("post_recipients")
@@ -158,6 +175,7 @@ async function syncPostCounts(supabaseAdmin: SupabaseClient, postId: string): Pr
       ...(done ? { status: "sent", sent_at: new Date().toISOString() } : {}),
     })
     .eq("id", postId);
+  return { sentCount: sentCount ?? 0, failedCount: failedCount ?? 0, done };
 }
 
 // Looks at this post's last CIRCUIT_BREAKER_WINDOW outcomes (sent or
