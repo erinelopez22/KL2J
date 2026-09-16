@@ -363,23 +363,6 @@ export const startPostSending = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// Called by the admin "Send" flow's client-driven loop (see
-// SendProgress.tsx) — processes exactly one due recipient for this post and
-// returns immediately, so the browser can call it back-to-back and show
-// real progress instead of waiting on the background cron (now just an
-// infrequent catch-up net; see email-queue-worker.server.ts's module
-// comment). Safe to run alongside the cron worker — both go through the
-// same claim-before-send guard, so they can never double-send a recipient.
-export const sendNextRecipient = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => PostIdInputSchema.parse(data))
-  .handler(async ({ data, context }) => {
-    const { assertRole } = await import("@/lib/admin/roles.server");
-    await assertRole(context.userId, "admin");
-    const { processNextQueuedEmail } = await import("@/lib/admin/email-queue-worker.server");
-    return processNextQueuedEmail(data.id);
-  });
-
 // Un-pauses a batch the circuit breaker stopped: its remaining recipients
 // go back to 'pending' and get fresh schedule slots under today's cap.
 export const resumePausedPost = createServerFn({ method: "POST" })

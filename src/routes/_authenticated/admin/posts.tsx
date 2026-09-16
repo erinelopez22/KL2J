@@ -254,7 +254,6 @@ function PostViewer({
   const doResumePaused = useServerFn(resumePausedPost);
   const doRetryFailed = useServerFn(retryFailedRecipients);
   const [sendActive, setSendActive] = useState(post.status === "sending");
-  const [sendBusy, setSendBusy] = useState(false);
   const [showRecipients, setShowRecipients] = useState(false);
   const cta = ctaForPost(post.type, post.project_ids);
 
@@ -295,7 +294,7 @@ function PostViewer({
     }
     if (
       !(await confirm(
-        `Send this post to ${post.total_count} recipient(s) now? Keep this window open until it finishes.`,
+        `Queue this post to send to ${post.total_count} recipient(s)? It'll go out gradually in the background, not all at once.`,
       ))
     )
       return;
@@ -332,7 +331,7 @@ function PostViewer({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"
-      onClick={sendBusy ? undefined : onClose}
+      onClick={onClose}
     >
       <div
         className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border bg-card shadow-2xl"
@@ -358,10 +357,8 @@ function PostViewer({
           </div>
           <button
             onClick={onClose}
-            disabled={sendBusy}
-            className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-30"
+            className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted"
             aria-label="Close"
-            title={sendBusy ? "Please wait until sending finishes" : undefined}
           >
             <X className="h-5 w-5" />
           </button>
@@ -432,7 +429,6 @@ function PostViewer({
                 setSendActive(false);
                 onChanged();
               }}
-              onBusyChange={setSendBusy}
             />
           )}
 
