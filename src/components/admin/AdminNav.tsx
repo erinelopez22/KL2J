@@ -13,7 +13,6 @@ import {
   FolderKanban,
   Users,
   LogOut,
-  Building2,
   Handshake,
   Star,
   Megaphone,
@@ -24,6 +23,10 @@ import {
   X,
 } from "lucide-react";
 
+// Google Business (GBP) is unused — the nav entry is hidden rather than
+// deleted, so the route/integration underneath (google-business.tsx and
+// its server functions) still exists if it's ever needed again, it's just
+// not reachable from the UI.
 const links = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/admin/preview", label: "Preview", icon: Monitor },
@@ -36,10 +39,12 @@ const links = [
   { to: "/admin/documents", label: "Documents", icon: FileText },
   { to: "/admin/projects", label: "Projects", icon: FolderKanban },
   { to: "/admin/companies", label: "Tied-up Companies", icon: Handshake },
-  { to: "/admin/google-business", label: "Google Business", icon: Building2 },
 ];
 
-async function countRows(table: "inquiries" | "reviews" | "inquiry_comments", filters: [string, string | boolean][]) {
+async function countRows(
+  table: "inquiries" | "reviews" | "inquiry_comments",
+  filters: [string, string | boolean][],
+) {
   let query = supabase.from(table).select("*", { count: "exact", head: true });
   for (const [col, val] of filters) query = query.eq(col, val);
   const { count, error } = await query;
@@ -62,7 +67,11 @@ function useAdminNotifications() {
   });
   const unreadMessages = useQuery({
     queryKey: ["admin-notif-messages"],
-    queryFn: () => countRows("inquiry_comments", [["author_type", "inquirer"], ["is_read", false]]),
+    queryFn: () =>
+      countRows("inquiry_comments", [
+        ["author_type", "inquirer"],
+        ["is_read", false],
+      ]),
     staleTime: 15_000,
   });
 
