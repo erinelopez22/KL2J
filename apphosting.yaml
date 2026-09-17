@@ -20,10 +20,6 @@ env:
   # Gmail account risks getting rate-limited/flagged for this kind of volume.
   - variable: BREVO_API_KEY
     secret: BREVO_API_KEY
-  - variable: GOOGLE_GBP_CLIENT_ID
-    secret: GOOGLE_GBP_CLIENT_ID
-  - variable: GOOGLE_GBP_CLIENT_SECRET
-    secret: GOOGLE_GBP_CLIENT_SECRET
   # Shared secret Cloud Scheduler sends as `Authorization: Bearer <value>`
   # when it hits /api/cron/process-email-queue — see src/routes/api/cron/process-email-queue.ts.
   - variable: CRON_SECRET
